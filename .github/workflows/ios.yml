@@ -1,0 +1,31 @@
+name: iPad build
+
+on:
+  push:
+    branches: [main, "ralph/**"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build iPad app without code signing
+        run: >-
+          xcodebuild
+          -project StoryCycling.xcodeproj
+          -scheme StoryCycling
+          -sdk iphonesimulator
+          -destination 'generic/platform=iOS Simulator'
+          build
+          CODE_SIGNING_ALLOWED=NO
+      - name: Test on iPad simulator
+        run: >-
+          xcodebuild
+          -project StoryCycling.xcodeproj
+          -scheme StoryCycling
+          -sdk iphonesimulator
+          -destination 'platform=iOS Simulator,name=iPad Pro 13-inch (M4)'
+          test
+          CODE_SIGNING_ALLOWED=NO
