@@ -13,5 +13,6 @@ fi
 
 grep -q 'PRODUCT_BUNDLE_IDENTIFIER = com.vikdiel.storycycling;' "$project_file"
 grep -q 'TARGETED_DEVICE_FAMILY = 2;' "$project_file"
+grep -q 'ENABLE_TESTABILITY = YES;' "$project_file"
 
 echo "Preflight passed: project parses, diff has no whitespace errors, and iPad metadata is present."
