@@ -31,14 +31,7 @@ jobs:
           build
           CODE_SIGNING_ALLOWED=NO
       - name: Test on iPad simulator
-        run: >-
-          xcodebuild
-          -project StoryCycling.xcodeproj
-          -scheme StoryCycling
-          -sdk iphonesimulator
-          -destination 'platform=iOS Simulator,name=iPad Pro 13-inch (M4)'
-          test
-          CODE_SIGNING_ALLOWED=NO
+        run: bash scripts/ci/test-on-ipad-simulator.sh
 
   quality-gate:
     name: Quality Gate

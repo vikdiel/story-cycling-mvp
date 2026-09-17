@@ -23,7 +23,7 @@ Die App ist absichtlich auf **Landscape iPad** beschränkt. Der Bundle Identifie
 
 ## CI
 
-Jeder Push auf `main` oder einen `ralph/*`-Branch passiert drei Stufen: **Preflight** (Projektdatei, Metadaten und Pfade), unsignierter iPad-Simulator-**Build samt Unit-Test**, anschließend das zusammenfassende **Quality Gate**. Ein echter iPad-/Bluetooth-Test bleibt lokal oder läuft später über TestFlight.
+Jeder Push auf `main` oder einen `ralph/*`-Branch passiert drei Stufen: **Preflight** (Projektdatei, Metadaten und Pfade), unsignierter iPad-Simulator-**Build samt Unit-Test**, anschließend das zusammenfassende **Quality Gate**. Der Test wählt automatisch ein verfügbares iPad-Simulator-Modell, damit ein Xcode-Update die Pipeline nicht an einem Modellnamen zerlegt. Ein echter iPad-/Bluetooth-Test bleibt lokal oder läuft später über TestFlight.
 
 ## Nächste Schritte
 
