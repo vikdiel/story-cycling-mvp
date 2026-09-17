@@ -7,7 +7,17 @@ on:
     branches: [main]
 
 jobs:
+  preflight:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Validate project and repository invariants
+        run: bash scripts/ci/preflight.sh
+
   build-and-test:
+    needs: preflight
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -29,3 +39,11 @@ jobs:
           -destination 'platform=iOS Simulator,name=iPad Pro 13-inch (M4)'
           test
           CODE_SIGNING_ALLOWED=NO
+
+  quality-gate:
+    name: Quality Gate
+    needs: [preflight, build-and-test]
+    runs-on: macos-latest
+    steps:
+      - name: Confirm all required checks passed
+        run: echo "Quality Gate passed — preflight, build, and unit tests are green."
