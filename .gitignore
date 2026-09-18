@@ -1,0 +1,27 @@
+# Unity generated content — regenerate locally, never commit
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+MemoryCaptures/
+Recordings/
+
+# Unity IDE/editor state
+*.csproj
+*.sln
+*.unityproj
+*.user
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+
+# Xcode per-user state
+*.xcuserstate
+xcuserdata/
