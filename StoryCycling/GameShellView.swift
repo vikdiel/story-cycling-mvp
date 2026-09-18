@@ -4,7 +4,10 @@ struct GameShellView: View {
     @State private var rideIsRunning = false
     @State private var progress = 0.18
     @State private var showsTrainerSheet = false
+    @State private var showsHeartRateSheet = false
+    @State private var virtualGear = 12
     @StateObject private var trainer = TrainerConnectionManager()
+    @StateObject private var heartRate = HeartRateMonitorManager()
 
     var body: some View {
         ZStack {
@@ -29,6 +32,16 @@ struct GameShellView: View {
                         showsTrainerSheet = true
                     } label: {
                         Label(trainer.state.label, systemImage: trainer.state.isConnected ? "checkmark.circle.fill" : "dot.radiowaves.left.and.right")
+                            .font(.subheadline.weight(.medium))
+                            .padding(12)
+                            .background(.thinMaterial, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+
+                    Button {
+                        showsHeartRateSheet = true
+                    } label: {
+                        Label(heartRate.beatsPerMinute.map { "\($0) BPM" } ?? "Puls", systemImage: "heart.fill")
                             .font(.subheadline.weight(.medium))
                             .padding(12)
                             .background(.thinMaterial, in: Capsule())
@@ -76,6 +89,33 @@ struct GameShellView: View {
                         .font(.subheadline)
                         .foregroundStyle(.white.opacity(0.8))
                 }
+
+                if trainer.resistanceRange != nil {
+                    HStack(spacing: 18) {
+                        Button { changeGear(by: -1) } label: {
+                            Image(systemName: "minus.circle.fill")
+                        }
+                        .font(.title)
+                        .accessibilityLabel("Gang leichter")
+
+                        VStack(spacing: 2) {
+                            Text("VIRTUELLER GANG")
+                                .font(.caption2.weight(.bold))
+                                .tracking(1)
+                            Text("\(virtualGear) / 24")
+                                .font(.title2.bold())
+                        }
+
+                        Button { changeGear(by: 1) } label: {
+                            Image(systemName: "plus.circle.fill")
+                        }
+                        .font(.title)
+                        .accessibilityLabel("Gang schwerer")
+                    }
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 10)
+                    .background(.black.opacity(0.24), in: Capsule())
+                }
             }
             .padding(40)
             .foregroundStyle(.white)
@@ -83,6 +123,19 @@ struct GameShellView: View {
         .sheet(isPresented: $showsTrainerSheet) {
             TrainerConnectionSheet(trainer: trainer)
         }
+        .sheet(isPresented: $showsHeartRateSheet) {
+            HeartRateMonitorSheet(monitor: heartRate)
+        }
+    }
+
+    private func changeGear(by change: Int) {
+        let nextGear = min(max(virtualGear + change, 1), 24)
+        guard nextGear != virtualGear else { return }
+        virtualGear = nextGear
+
+        guard let range = trainer.resistanceRange else { return }
+        let fraction = Double(nextGear - 1) / 23
+        trainer.setResistance(range.lowerBound + (range.upperBound - range.lowerBound) * fraction)
     }
 }
 

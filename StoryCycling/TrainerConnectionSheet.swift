@@ -43,6 +43,30 @@ struct TrainerConnectionSheet: View {
                         .disabled(trainer.state.isConnected)
                     }
                 }
+
+                Section("Widerstand") {
+                    if let range = trainer.resistanceRange {
+                        Text("Aktuell: \(trainer.currentResistance?.formatted(.number.precision(.fractionLength(1))) ?? "—")")
+                        HStack {
+                            Button("Leichter") {
+                                trainer.setResistance((trainer.currentResistance ?? range.lowerBound) - 1)
+                            }
+                            Spacer()
+                            Button("Schwerer") {
+                                trainer.setResistance((trainer.currentResistance ?? range.lowerBound) + 1)
+                            }
+                        }
+                        Text("Verfügbarer Bereich: \(range.lowerBound.formatted(.number.precision(.fractionLength(1))))–\(range.upperBound.formatted(.number.precision(.fractionLength(1))))")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text("Widerstand wird verfügbar, sobald der Trainer die unterstützten FTMS-Grenzen meldet")
+                            .foregroundStyle(.secondary)
+                    }
+                    if let error = trainer.resistanceError {
+                        Text(error).foregroundStyle(.red)
+                    }
+                }
             }
             .navigationTitle("KICKR Core")
             .onAppear { trainer.startScan() }
