@@ -6,41 +6,32 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
-    path: Assets/StoryCycling/Scenes/ApostlesClimb.unity
-    guid: 9c9f90aeae05242a9ab7bfff11a162a5
-  - enabled: 1
-    path: Assets/StoryCycling/Scenes/BoKaapSteps.unity
-    guid: 7c994798fd8184326b3f35fdc441235e
-  - enabled: 1
-    path: Assets/StoryCycling/Scenes/CampsBayHillRide.unity
-    guid: d21cc31540fc84182b26031ef6b31bf3
-  - enabled: 1
-    path: Assets/StoryCycling/Scenes/CampsBayPromenade.unity
-    guid: 8f7200e6e14cd4870be939b860e419d8
-  - enabled: 1
     path: Assets/StoryCycling/Scenes/CampsBayTrainerRide.unity
     guid: a6c46c8bd872246f9b692e353eb45bcb
-  - enabled: 1
-    path: Assets/StoryCycling/Scenes/CapeCrownDemo.unity
-    guid: 10c05dd3022454374b8ac30ec68c3a92
-  - enabled: 1
-    path: Assets/StoryCycling/Scenes/CapePointHeadland.unity
-    guid: 2947660bde4a64625af766bbc1264cf2
   - enabled: 1
     path: Assets/StoryCycling/Scenes/CliftonCove.unity
     guid: a36a80ddd9230483b9af41f2823f9258
   - enabled: 1
-    path: Assets/StoryCycling/Scenes/ConstantiaVines.unity
-    guid: 2986875aacd094c8a829cef1bce7cbab
-  - enabled: 1
-    path: Assets/StoryCycling/Scenes/FalseBaySands.unity
-    guid: a5dccbfcebae243fa8ce525479d5734e
+    path: Assets/StoryCycling/Scenes/ApostlesClimb.unity
+    guid: 9c9f90aeae05242a9ab7bfff11a162a5
   - enabled: 1
     path: Assets/StoryCycling/Scenes/HoutBayHarbour.unity
     guid: 5ad02e2899a52492683f33d39bf897df
   - enabled: 1
+    path: Assets/StoryCycling/Scenes/ConstantiaVines.unity
+    guid: 2986875aacd094c8a829cef1bce7cbab
+  - enabled: 1
+    path: Assets/StoryCycling/Scenes/BoKaapSteps.unity
+    guid: 7c994798fd8184326b3f35fdc441235e
+  - enabled: 1
     path: Assets/StoryCycling/Scenes/KirstenboschLoop.unity
     guid: 7ce4d8fa1293f4a52b8cd406db0e8c60
+  - enabled: 1
+    path: Assets/StoryCycling/Scenes/FalseBaySands.unity
+    guid: a5dccbfcebae243fa8ce525479d5734e
+  - enabled: 1
+    path: Assets/StoryCycling/Scenes/CapePointHeadland.unity
+    guid: 2947660bde4a64625af766bbc1264cf2
   - enabled: 1
     path: Assets/StoryCycling/Scenes/TableFoothills.unity
     guid: d34d25c1bc57a4968a46b55848dce4eb

@@ -177,18 +177,26 @@ namespace StoryCycling.Editor
             Debug.Log(scenePath + " saved. Route length " + CapeCrownRoute.Length.ToString("0") + " m.");
         }
 
+        private static readonly string[] SectionScenes = {
+            "Assets/StoryCycling/Scenes/CampsBayTrainerRide.unity",
+            "Assets/StoryCycling/Scenes/CliftonCove.unity",
+            "Assets/StoryCycling/Scenes/ApostlesClimb.unity",
+            "Assets/StoryCycling/Scenes/HoutBayHarbour.unity",
+            "Assets/StoryCycling/Scenes/ConstantiaVines.unity",
+            "Assets/StoryCycling/Scenes/BoKaapSteps.unity",
+            "Assets/StoryCycling/Scenes/KirstenboschLoop.unity",
+            "Assets/StoryCycling/Scenes/FalseBaySands.unity",
+            "Assets/StoryCycling/Scenes/CapePointHeadland.unity",
+            "Assets/StoryCycling/Scenes/TableFoothills.unity"
+        };
+
         private static void SetAllScenesInBuildSettings()
         {
-            var paths = new System.Collections.Generic.List<string>();
-            var scenesDir = "Assets/StoryCycling/Scenes/";
-            if (System.IO.Directory.Exists(scenesDir))
-                foreach (string f in System.IO.Directory.GetFiles(scenesDir, "*.unity"))
-                    paths.Add(f.Replace('\\', '/'));
-            paths.Sort();
             var list = new System.Collections.Generic.List<EditorBuildSettingsScene>();
-            foreach (string p in paths) list.Add(new EditorBuildSettingsScene(p, true));
+            foreach (string p in SectionScenes)
+                if (File.Exists(p)) list.Add(new EditorBuildSettingsScene(p, true));
             EditorBuildSettings.scenes = list.ToArray();
-            Debug.Log("Build settings now include " + list.Count + " scenes.");
+            Debug.Log("Build settings now include " + list.Count + " section scenes.");
         }
     }
 }
