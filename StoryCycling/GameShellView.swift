@@ -3,6 +3,8 @@ import SwiftUI
 struct GameShellView: View {
     @State private var rideIsRunning = false
     @State private var progress = 0.18
+    @State private var showsTrainerSheet = false
+    @StateObject private var trainer = TrainerConnectionManager()
 
     var body: some View {
         ZStack {
@@ -23,10 +25,15 @@ struct GameShellView: View {
                             .font(.largeTitle.bold())
                     }
                     Spacer()
-                    Label("KICKR wird gleich verbunden", systemImage: "dot.radiowaves.left.and.right")
-                        .font(.subheadline.weight(.medium))
-                        .padding(12)
-                        .background(.thinMaterial, in: Capsule())
+                    Button {
+                        showsTrainerSheet = true
+                    } label: {
+                        Label(trainer.state.label, systemImage: trainer.state.isConnected ? "checkmark.circle.fill" : "dot.radiowaves.left.and.right")
+                            .font(.subheadline.weight(.medium))
+                            .padding(12)
+                            .background(.thinMaterial, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
                 }
 
                 Spacer()
@@ -65,13 +72,16 @@ struct GameShellView: View {
                     .foregroundStyle(Color(red: 0.08, green: 0.15, blue: 0.2))
                     .font(.title3.weight(.bold))
 
-                    Text("Bluetooth folgt im nächsten Build")
+                    Text(trainer.state.isConnected ? "KICKR bereit für die erste Fahrt" : "KICKR Core über die Statusanzeige verbinden")
                         .font(.subheadline)
                         .foregroundStyle(.white.opacity(0.8))
                 }
             }
             .padding(40)
             .foregroundStyle(.white)
+        }
+        .sheet(isPresented: $showsTrainerSheet) {
+            TrainerConnectionSheet(trainer: trainer)
         }
     }
 }

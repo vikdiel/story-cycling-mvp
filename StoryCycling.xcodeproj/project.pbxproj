@@ -10,6 +10,8 @@
 		A10000000000000000000002 /* GameShellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000012 /* GameShellView.swift */; };
 		A10000000000000000000003 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000013 /* Assets.xcassets */; };
 		A10000000000000000000004 /* StoryCyclingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000014 /* StoryCyclingTests.swift */; };
+		A10000000000000000000005 /* TrainerConnectionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000017 /* TrainerConnectionManager.swift */; };
+		A10000000000000000000006 /* TrainerConnectionSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000018 /* TrainerConnectionSheet.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -23,6 +25,8 @@
 		A10000000000000000000014 /* StoryCyclingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryCyclingTests.swift; sourceTree = "<group>"; };
 		A10000000000000000000015 /* StoryCycling.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = StoryCycling.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A10000000000000000000016 /* StoryCyclingTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = StoryCyclingTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A10000000000000000000017 /* TrainerConnectionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrainerConnectionManager.swift; sourceTree = "<group>"; };
+		A10000000000000000000018 /* TrainerConnectionSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrainerConnectionSheet.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -32,7 +36,7 @@
 
 /* Begin PBXGroup section */
 		A10000000000000000000032 = {isa = PBXGroup; children = (A10000000000000000000033 /* StoryCycling */, A10000000000000000000034 /* StoryCyclingTests */, A10000000000000000000035 /* Products */); sourceTree = "<group>"; };
-		A10000000000000000000033 /* StoryCycling */ = {isa = PBXGroup; children = (A10000000000000000000011 /* StoryCyclingApp.swift */, A10000000000000000000012 /* GameShellView.swift */, A10000000000000000000013 /* Assets.xcassets */); path = StoryCycling; sourceTree = "<group>"; };
+		A10000000000000000000033 /* StoryCycling */ = {isa = PBXGroup; children = (A10000000000000000000011 /* StoryCyclingApp.swift */, A10000000000000000000012 /* GameShellView.swift */, A10000000000000000000017 /* TrainerConnectionManager.swift */, A10000000000000000000018 /* TrainerConnectionSheet.swift */, A10000000000000000000013 /* Assets.xcassets */); path = StoryCycling; sourceTree = "<group>"; };
 		A10000000000000000000034 /* StoryCyclingTests */ = {isa = PBXGroup; children = (A10000000000000000000014 /* StoryCyclingTests.swift */); path = StoryCyclingTests; sourceTree = "<group>"; };
 		A10000000000000000000035 /* Products */ = {isa = PBXGroup; children = (A10000000000000000000015 /* StoryCycling.app */, A10000000000000000000016 /* StoryCyclingTests.xctest */); name = Products; sourceTree = "<group>"; };
 /* End PBXGroup section */
@@ -51,7 +55,7 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		A10000000000000000000071 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000001 /* StoryCyclingApp.swift in Sources */, A10000000000000000000002 /* GameShellView.swift in Sources */); runOnlyForDeploymentPostprocessing = 0; };
+		A10000000000000000000071 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000001 /* StoryCyclingApp.swift in Sources */, A10000000000000000000002 /* GameShellView.swift in Sources */, A10000000000000000000005 /* TrainerConnectionManager.swift in Sources */, A10000000000000000000006 /* TrainerConnectionSheet.swift in Sources */); runOnlyForDeploymentPostprocessing = 0; };
 		A10000000000000000000073 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000004 /* StoryCyclingTests.swift in Sources */); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
