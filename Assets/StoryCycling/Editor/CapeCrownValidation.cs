@@ -16,12 +16,20 @@ namespace StoryCycling.Editor
             float straight = 2f * CapeCrownRoute.HalfStraight;
             float arc = Mathf.PI * CapeCrownRoute.Radius;
             // Position and tangent must be continuous across all joins, including lap wrap.
-            foreach (float join in new[] { 0f, straight, straight + arc, 2f * straight + arc, length, CapeCrownRoute.HillStart, CapeCrownRoute.HillEnd })
+            foreach (float join in new[] { 0f, straight, straight + arc, 2f * straight + arc, length })
             {
                 CapeCrownRoute.Sample(join - epsilon, out Vector3 before, out Vector3 beforeForward,hillHeight);
                 CapeCrownRoute.Sample(join + epsilon, out Vector3 after, out Vector3 afterForward,hillHeight);
                 Require(Vector3.Distance(before, after) < .025f, "Gap at route join " + join);
                 Require(Vector3.Dot(beforeForward, afterForward) > .999f, "Heading discontinuity at " + join);
+            }
+            foreach (var hill in CapeCrownRoute.Hills)
+            foreach (float join in new[] { hill.start, hill.end })
+            {
+                CapeCrownRoute.Sample(join - epsilon, out Vector3 before, out Vector3 beforeForward,hillHeight);
+                CapeCrownRoute.Sample(join + epsilon, out Vector3 after, out Vector3 afterForward,hillHeight);
+                Require(Vector3.Distance(before, after) < .025f, "Gap at hill join " + join);
+                Require(Vector3.Dot(beforeForward, afterForward) > .999f, "Heading discontinuity at hill " + join);
             }
             // Check full lap surface orientation, lane clearance and near-unit metres.
             for (float d = 0; d < length; d += .5f)

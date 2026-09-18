@@ -114,6 +114,37 @@ namespace StoryCycling
         }
         public void ReviewExpire() { speedAt=powerAt=cadenceAt=heartAt=-100; }
 #endif
+
+        // Demo ride for testing without a trainer. Cross-platform and clearly flagged;
+        // the ride controller never counts demo distance toward training progress.
+        public void StartDemoFeed()
+        {
+            IsTestFeed = true;
+            TrainerConnected = HeartConnected = true;
+            TrainerState = HeartState = "Bereit";
+            TrainerName = "DEMO-FAHRT"; HeartName = "Simuliert";
+            speed = 0; watts = 0; cadence = 0; heart = 120;
+            speedAt = powerAt = cadenceAt = heartAt = Time.realtimeSinceStartup;
+            Revision++;
+        }
+        public void StopDemoFeed()
+        {
+            IsTestFeed = false;
+            TrainerConnected = HeartConnected = false;
+            TrainerState = HeartState = "Nicht verbunden";
+            speedAt = powerAt = cadenceAt = heartAt = -100;
+            Revision++;
+        }
+        public void TickDemo(float kph)
+        {
+            if (!IsTestFeed) return;
+            float now = Time.realtimeSinceStartup;
+            speed = Mathf.Max(0, kph);
+            watts = Mathf.RoundToInt(Mathf.Lerp(90f, 220f, Mathf.Clamp01(kph / 40f)));
+            cadence = Mathf.Lerp(50f, 90f, Mathf.Clamp01(kph / 40f));
+            heart = 128;
+            speedAt = powerAt = cadenceAt = heartAt = now;
+        }
     }
 
     public static class CapeCrownTelemetry

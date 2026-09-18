@@ -13,7 +13,7 @@ namespace StoryCycling
         [SerializeField] private string routeLabel = "CAMPS BAY";
         [SerializeField] private float hillHeight;
         private CapeCrownDevices devices;
-        private float routeDistance, totalMetres, trainingMetres, trainerSpeedKph;
+        private float routeDistance, totalMetres, trainingMetres, trainerSpeedKph, demoSpeed;
         private int laps;
         private bool paused;
         public string RouteLabel => routeLabel;
@@ -28,6 +28,7 @@ namespace StoryCycling
         public bool IsSimulation => devices != null && devices.IsTestFeed;
         public float TrainerSpeedKph => trainerSpeedKph;
         public bool CanStart => devices != null && devices.FreshSpeed;
+        public bool IsDemo => devices != null && devices.IsTestFeed;
         public bool TryStart()
         {
             if(!CanStart)return false;
@@ -38,6 +39,8 @@ namespace StoryCycling
         public void Pause(string reason="Pausiert") { if(!Started)return;paused=true;trainerSpeedKph=0;PauseReason=reason; }
         public bool Resume() { if(!CanStart)return false;paused=false;PauseReason="";return true; }
         public void EndRide() { Started=false;paused=false;trainerSpeedKph=0; }
+        public void StartDemo() { if(devices==null)return; demoSpeed=0; devices.StartDemoFeed(); }
+        public void StopDemo() { if(devices==null)return; devices.StopDemoFeed(); demoSpeed=0; if(Started)EndRide(); }
         public void TogglePause() { if(paused)Resume();else Pause(); }
         private void OnApplicationFocus(bool focus) { if(!focus)Pause("App war im Hintergrund"); }
         private void OnApplicationPause(bool value) { if(value)Pause("App war im Hintergrund"); }
@@ -49,6 +52,11 @@ namespace StoryCycling
         }
         private void Update()
         {
+            if(devices!=null && devices.IsTestFeed)
+            {
+                demoSpeed=Mathf.MoveTowards(demoSpeed,30f,10f*Time.deltaTime);
+                devices.TickDemo(demoSpeed);
+            }
             if(Started && !paused && !CanStart)Pause("Trainerdaten fehlen – bitte Verbindung prüfen");
             trainerSpeedKph=Started && !paused && CanStart?devices.Speed:0;
             bool pedalling=trainerSpeedKph>.1f && (devices.FreshCadence?devices.Cadence>0:devices.FreshPower&&devices.Watts>0);

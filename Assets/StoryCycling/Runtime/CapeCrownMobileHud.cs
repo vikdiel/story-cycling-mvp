@@ -13,7 +13,7 @@ namespace StoryCycling
         private RectTransform safe;
         private GameObject home, hud, settings, pause;
         private Transform list;
-        private Text speed,power,heart,distance,connection,startLabel,trainerLabel,heartLabel,pauseLabel,muteLabel,statusLine;
+        private Text speed,power,heart,distance,connection,startLabel,trainerLabel,heartLabel,pauseLabel,muteLabel,statusLine,demoLabel;
         private Button start,resume;
         private int revision=-1;
         private bool settingsOpen;
@@ -31,7 +31,7 @@ namespace StoryCycling
         }
         private void BuildHome()
         {
-            home=Panel("Start menu",safe,new Vector2(0,.5f),new Vector2(38,0),new Vector2(510,640),ink);
+            home=Panel("Start menu",safe,new Vector2(0,.5f),new Vector2(38,0),new Vector2(510,716),ink);
             Label(home.transform,"CAPE CROWN  /  SOUTH AFRICA",24,new Vector2(30,-32),new Vector2(455,34),teal);
             Label(home.transform,"CAMPS\nBAY",72,new Vector2(28,-84),new Vector2(460,172),paper);
             Label(home.transform,"Dein Winter. Deine Küste.",26,new Vector2(30,-265),new Vector2(450,40),paper);
@@ -40,6 +40,8 @@ namespace StoryCycling
             start=Button(home.transform,"Runde starten",new Vector2(30,-480),new Vector2(450,64),teal,()=>{if(ride.CanStart){ride.TryStart();settingsOpen=false;}else ShowSettings();});
             startLabel=start.GetComponentInChildren<Text>();
             Button(home.transform,"Geräte & Einstellungen",new Vector2(30,-558),new Vector2(450,54),new Color(.16f,.25f,.28f),()=>ShowSettings());
+            var demoButton=Button(home.transform,"Demo-Fahrt (ohne KICKR)",new Vector2(30,-622),new Vector2(450,50),new Color(.40f,.30f,.20f),()=>{ if(ride.IsDemo)ride.StopDemo(); else { ride.StartDemo(); ride.TryStart(); } });
+            demoLabel=demoButton.GetComponentInChildren<Text>();
         }
         private void BuildRide()
         {
@@ -93,13 +95,14 @@ namespace StoryCycling
             Rect a=Screen.safeArea;safe.anchorMin=new Vector2(a.xMin/Screen.width,a.yMin/Screen.height);safe.anchorMax=new Vector2(a.xMax/Screen.width,a.yMax/Screen.height);
             home.SetActive(!ride.Started&&!settingsOpen);hud.SetActive(ride.Started&&!settingsOpen);pause.SetActive(ride.Started&&ride.IsPaused&&!settingsOpen);settings.SetActive(settingsOpen);
             start.interactable=true;startLabel.text=ride.CanStart?"Runde starten":"KICKR verbinden";resume.interactable=ride.CanStart;
-            connection.text=ride.CanStart?"KICKR bereit · Steig aufs Rad":devices.TrainerConnected?"Verbunden · kurz treten für Live-Daten":devices.TrainerState+" · Geräte öffnen";
+            connection.text=ride.IsDemo?"DEMO-FAHRT · simuliert · kein Fortschritt":ride.CanStart?"KICKR bereit · Steig aufs Rad":devices.TrainerConnected?"Verbunden · kurz treten für Live-Daten":devices.TrainerState+" · Geräte öffnen";
             speed.text=devices.FreshSpeed?devices.Speed.ToString("0.0"):"—";power.text=devices.FreshPower?devices.Watts.ToString("0"):"—";heart.text=devices.FreshHeart?devices.Heart.ToString("0"):"—";
             distance.text=$"{ride.TotalMetres/1000:0.00} km    /    Runde {ride.CompletedLaps+1}    /    {CapeCrownRoute.Grade(ride.RouteDistance,ride.HillHeight)*100:+0.0;-0.0;0.0}%";
-            statusLine.text=devices.IsTestFeed?"EDITOR-TEST · KEIN FORTSCHRITT":!devices.FreshSpeed?"Warte auf Trainerdaten":!devices.FreshHeart?"Brustgurt optional · noch kein Puls":"KICKR + PULS  ·  LIVE";
+            statusLine.text=devices.IsTestFeed?"DEMO · KEIN FORTSCHRITT":!devices.FreshSpeed?"Warte auf Trainerdaten":!devices.FreshHeart?"Brustgurt optional · noch kein Puls":"KICKR + PULS  ·  LIVE";
             pauseLabel.text=ride.PauseReason+$"\n{ride.TotalMetres/1000:0.00} km in dieser Fahrt";
             trainerLabel.text=devices.TrainerName+"\n"+devices.TrainerState;heartLabel.text=devices.HeartName+"\n"+devices.HeartState;
             muteLabel.text=music.Muted?"Musik einschalten":"Musik stummschalten";
+            if(demoLabel!=null)demoLabel.text=ride.IsDemo?"Demo beenden":"Demo-Fahrt (ohne KICKR)";
             if(revision!=devices.Revision)RebuildCandidates();
         }
         private void RebuildCandidates()

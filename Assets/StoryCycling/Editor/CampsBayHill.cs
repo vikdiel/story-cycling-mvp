@@ -13,33 +13,37 @@ namespace StoryCycling.Editor
             Material scrub = Mat("Hill fynbos", new Color(.36f,.43f,.28f));
             Material pale = Mat("Lookout stone", new Color(.77f,.73f,.62f));
             Material rail = Mat("Coastal railing", new Color(.14f,.26f,.27f));
-            // Sloping embankments physically support the elevated road. No floating asphalt.
-            foreach (int side in new[] { -1, 1 })
+            // Sloping embankments physically support the elevated road over every climb.
+            foreach (var hill in CapeCrownRoute.Hills)
             {
-                const int samples = 440;
-                var vertices = new Vector3[(samples + 1) * 3];
-                var triangles = new List<int>();
-                for (int i = 0; i <= samples; i++)
+                foreach (int side in new[] { -1, 1 })
                 {
-                    float d = Mathf.Lerp(CapeCrownRoute.HillStart, CapeCrownRoute.HillEnd, i / (float)samples);
-                    for (int j = 0; j < 3; j++)
+                    const int samples = 300;
+                    var vertices = new Vector3[(samples + 1) * 3];
+                    var triangles = new List<int>();
+                    for (int i = 0; i <= samples; i++)
                     {
-                        float offset = side * (8 + j * 9);
-                        Vector3 p = CapeCrownRoute.Position(d,offset,0,relief);
-                        p.y = Mathf.Lerp(p.y - .035f, -.15f, j / 2f);
-                        vertices[i * 3 + j] = p;
+                        float d = Mathf.Lerp(hill.start, hill.end, i / (float)samples);
+                        for (int j = 0; j < 3; j++)
+                        {
+                            float offset = side * (8 + j * 9);
+                            Vector3 p = CapeCrownRoute.Position(d,offset,0,relief);
+                            p.y = Mathf.Lerp(p.y - .035f, -.15f, j / 2f);
+                            vertices[i * 3 + j] = p;
+                        }
+                        if (i == samples) continue;
+                        for (int j = 0; j < 2; j++)
+                        {
+                            int a = i * 3 + j;
+                            if (side == 1) triangles.AddRange(new[] { a,a+3,a+1,a+1,a+3,a+4 });
+                            else triangles.AddRange(new[] { a,a+1,a+3,a+1,a+4,a+3 });
+                        }
                     }
-                    if (i == samples) continue;
-                    for (int j = 0; j < 2; j++)
-                    {
-                        int a = i * 3 + j;
-                        if (side == 1) triangles.AddRange(new[] { a,a+3,a+1,a+1,a+3,a+4 });
-                        else triangles.AddRange(new[] { a,a+1,a+3,a+1,a+4,a+3 });
-                    }
+                    MeshObject(side == 1 ? "Ocean hill embankment" : "Inland hill embankment",null,vertices,triangles.ToArray(),scrub);
                 }
-                MeshObject(side == 1 ? "Ocean hill embankment" : "Inland hill embankment",null,vertices,triangles.ToArray(),scrub);
             }
-            const float summit = (CapeCrownRoute.HillStart + CapeCrownRoute.HillEnd) / 2;
+            var main = CapeCrownRoute.Hills[0];
+            float summit = (main.start + main.end) / 2;
             Vector3 lookout = CapeCrownRoute.Position(summit, 11, 0, relief);
             Box("Summit lookout terrace",lookout + Vector3.down * .25f,new Vector3(7,.45f,12),pale);
             for (int i = 0; i <= 6; i++)
@@ -53,39 +57,48 @@ namespace StoryCycling.Editor
             Box("Lookout sandstone foundation",new Vector3(lookout.x,(lookout.y-.15f)/2,lookout.z),
                 new Vector3(7,lookout.y+.15f,12),earth);
             Wayfinding("OCEAN VIEW",summit-10,11,rail);
-            Wayfinding("COASTAL CLIMB\n6% MAX",215,-7,rail);
+            Wayfinding("COASTAL CLIMB\n5% MAX",main.start,-7,rail);
+            Wayfinding("INLAND RISE\n5% MAX",CapeCrownRoute.Hills[1].start,-7,rail);
             Wayfinding("CAMPS BAY\nBEACH LOOP",36,7,rail);
-            // Low white bollards delineate the bends without turning the road into a motorway.
+            // Low white bollards delineate each climb without turning the road into a motorway.
             Material white = Mat("Coastal bollards",new Color(.89f,.86f,.74f));
-            for (float d = 198; d < 618; d += 18)
+            foreach (var hill in CapeCrownRoute.Hills)
+            for (float d = hill.start - 2; d < hill.end; d += 18)
             {
                 Vector3 p = CapeCrownRoute.Position(d,7.45f,.34f,relief);
                 Box("Hill edge bollard",p,new Vector3(.15f,.7f,.15f),white);
                 Box("Bollard reflector",p+Vector3.up*.18f,new Vector3(.16f,.08f,.16f),rail);
             }
             // Fynbos groups follow the embankment's actual elevation and stay clear of the promenade.
-            for (int i=0;i<22;i++)
+            foreach (var hill in CapeCrownRoute.Hills)
             {
-                float d = 215+i*16;
-                if (Mathf.Abs(d-summit)<30) continue; // keep the viewpoint clear
-                foreach (int side in new[] { -1,1 })
+                int count = Mathf.RoundToInt((hill.end - hill.start) / 16f);
+                for (int i = 0; i < count; i++)
                 {
-                    float offset = side*(13+(i%3)*3);
-                    Vector3 p = CapeCrownRoute.Position(d,offset,0,relief);
-                    p.y = Mathf.Lerp(p.y-.035f,-.15f,(Mathf.Abs(offset)-8)/18);
-                    AddCoastalProp(i%4==0 ? HillRock : HillBush,p,i*47, i%4==0 ? 3.5f : 2.1f,"Hillside fynbos group");
+                    float d = hill.start + 15 + i * 16;
+                    if (Mathf.Abs(d-summit)<30) continue; // keep the viewpoint clear
+                    foreach (int side in new[] { -1,1 })
+                    {
+                        float offset = side*(13+(i%3)*3);
+                        Vector3 p = CapeCrownRoute.Position(d,offset,0,relief);
+                        p.y = Mathf.Lerp(p.y-.035f,-.15f,(Mathf.Abs(offset)-8)/18);
+                        AddCoastalProp(i%4==0 ? HillRock : HillBush,p,i*47, i%4==0 ? 3.5f : 2.1f,"Hillside fynbos group");
+                    }
                 }
             }
+            float half = CapeCrownRoute.HalfStraight;
             for (int i=0;i<8;i++)
             {
-                float z=-120+i*32;
+                float z = -(half-30) + i * (2*(half-30)/7f);
                 AddCoastalProp(HillRock,new Vector3(91+(i%3)*3,-.65f,z),i*31,3.4f,"Beach granite");
             }
             // Restrained colour and a continuous forecourt tie the beach shops together.
             Color[] colors = { new Color(.24f,.51f,.56f),new Color(.75f,.42f,.29f),new Color(.79f,.69f,.42f) };
-            for (int i = 0; i < 9; i++)
+            int cafeCount = Mathf.Max(3, Mathf.FloorToInt((2f * half - 36f) / 18f) + 1);
+            float cafeStart = -(half - 18f);
+            for (int i = 0; i < cafeCount; i++)
             {
-                float z = -72 + 18 * i;
+                float z = cafeStart + 18 * i;
                 Material canvas = Mat("Cafe canopy " + i,colors[i%colors.Length]);
                 Box("Beach cafe awning",new Vector3(38.6f,3.1f,z),new Vector3(2.4f,.12f,7.5f),canvas);
                 for(int end=-1;end<=1;end+=2)

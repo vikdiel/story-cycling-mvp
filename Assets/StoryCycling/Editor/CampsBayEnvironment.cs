@@ -55,15 +55,18 @@ namespace StoryCycling.Editor
             MountainBackdrop(rock);
 
             // Promenade broadens on the beach straight, retaining the proven asphalt loop.
-            Box("Beach promenade extension", new Vector3(58, -.035f, 0), new Vector3(4, .08f, 178), stone);
-            Box("Cafe terrace ribbon", new Vector3(38.4f, -.04f, 0), new Vector3(5.2f, .1f, 176), stone);
+            float half = CapeCrownRoute.HalfStraight;
+            Box("Beach promenade extension", new Vector3(58, -.035f, 0), new Vector3(4, .08f, 2*half+8), stone);
+            Box("Cafe terrace ribbon", new Vector3(38.4f, -.04f, 0), new Vector3(5.2f, .1f, 2*half+6), stone);
             Color[] facades = {new Color(.90f,.83f,.69f),new Color(.81f,.88f,.84f),new Color(.94f,.90f,.78f),new Color(.82f,.59f,.43f)};
             Material glass = Mat("Coastal blue glazing",new Color(.13f,.31f,.36f));
             Material trim = Mat("Warm white joinery",new Color(.94f,.91f,.82f));
             Material rail = Mat("Balcony bronze",new Color(.22f,.27f,.25f));
-            for (int i = 0; i < 9; i++)
+            int cafeCount = Mathf.Max(3, Mathf.FloorToInt((2f * half - 36f) / 18f) + 1);
+            float cafeStart = -(half - 18f);
+            for (int i = 0; i < cafeCount; i++)
             {
-                float z = -72 + 18 * i;
+                float z = cafeStart + 18 * i;
                 GameObject shop = GroundPrefab(CampsBayShops[i % CampsBayShops.Length], Vector3.zero, 90, 18f, "Cafe ground floor " + i);
                 Bounds b = BoundsOf(shop);
                 // Set human-scale height explicitly. Old code only shrank already-small 3 m shops.
@@ -106,16 +109,18 @@ namespace StoryCycling.Editor
             }
 
             Transform palm = CreatePalm(timber, leaf);
-            for (int i = 0; i < 11; i++)
+            int palmCount = Mathf.Max(3, Mathf.FloorToInt((2f * half - 32f) / 16f) + 1);
+            float palmStart = -(half - 16f);
+            for (int i = 0; i < palmCount; i++)
             {
                 Transform instance = i == 0 ? palm : UnityEngine.Object.Instantiate(palm);
                 instance.name = "Promenade palm " + i;
-                instance.position = new Vector3(58.5f, .005f, -80 + i * 16);
+                instance.position = new Vector3(58.5f, .005f, palmStart + i * 16);
                 instance.rotation = Quaternion.Euler(0, i * 53, 0);
                 instance.localScale = Vector3.one * (.92f + (i % 3) * .035f);
                 CoastalProps.Add(instance.gameObject);
                 if (i % 2 == 0)
-                    AddCoastalProp(Bench, new Vector3(56.7f, .01f, -73 + i * 16), 90, 2.2f, "Ocean-facing bench " + i);
+                    AddCoastalProp(Bench, new Vector3(56.7f, .01f, palmStart + 7 + i * 16), 90, 2.2f, "Ocean-facing bench " + i);
             }
 
             // Quiet inland return, grouped planting instead of repetitive towers on a lawn.
@@ -128,9 +133,10 @@ namespace StoryCycling.Editor
                     p.y += CapeCrownRoute.Elevation(d,relief) * weight;
                     AddCoastalProp(Tree,p,j*63,5.5f,"Inland grove");
                 }
-            for (int i = 0; i < 4; i++)
+            int lookoutCount = Mathf.Max(2, Mathf.FloorToInt((2f * half - 60f) / 50f) + 1);
+            for (int i = 0; i < lookoutCount; i++)
                 {
-                    float z = -57 + 38 * i;
+                    float z = -(half - 30) + i * (2 * (half - 30) / Mathf.Max(1, lookoutCount - 1));
                     float d = 2 * CapeCrownRoute.HalfStraight + Mathf.PI * CapeCrownRoute.Radius + CapeCrownRoute.HalfStraight - z;
                     float y = Mathf.Lerp(CapeCrownRoute.Elevation(d,relief)-.035f,-.15f,(10.8f-8)/18);
                     AddCoastalProp(Bench,new Vector3(-58.8f,y,z),-90,2.2f,"Return road lookout");

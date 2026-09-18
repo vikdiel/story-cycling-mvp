@@ -6,30 +6,52 @@ namespace StoryCycling
     public static class CapeCrownRoute
     {
         public const float Radius = 48f;
-        public const float HalfStraight = 85f;
+        public const float HalfStraight = 175f;
         public const float RoadHalfWidth = 5f;
         public const float LaneOffset = -2.2f;
         public static float Length => 4f * HalfStraight + 2f * Mathf.PI * Radius;
 
-        public const float HillStart = 180f;
-        public const float HillEnd = 620f;
+        // Two coastal climbs on the ~1 km loop. Heights scale with hillHeight; the
+        // taller first climb is "Cape Crown", the shorter second is an inland rise.
         public const float CoastalHillHeight = 8f;
+        public static readonly (float start, float end, float weight)[] Hills =
+        {
+            (360f, 660f, .65f),
+            (700f, 920f, .4f)
+        };
+
+        static float Bump(float d, float start, float end)
+        {
+            if (d <= start || d >= end) return 0f;
+            float t = (d - start) / (end - start);
+            float s = Mathf.Sin(Mathf.PI * t);
+            return s * s;
+        }
+
+        static float BumpSlope(float d, float start, float end)
+        {
+            if (d <= start || d >= end) return 0f;
+            float t = (d - start) / (end - start);
+            return Mathf.PI / (end - start) * Mathf.Sin(2f * Mathf.PI * t);
+        }
 
         public static float Elevation(float distance, float hillHeight)
         {
             float d = Mathf.Repeat(distance, Length);
-            if (d <= HillStart || d >= HillEnd) return 0;
-            float wave = Mathf.Sin(Mathf.PI * (d - HillStart) / (HillEnd - HillStart));
-            return hillHeight * wave * wave;
+            float e = 0f;
+            for (int i = 0; i < Hills.Length; i++)
+                e += Bump(d, Hills[i].start, Hills[i].end) * Hills[i].weight;
+            return hillHeight * e;
         }
 
-        // Rise / horizontal centre-line metre. Smooth at the climb, summit and descent joins.
+        // Rise / horizontal centre-line metre. Smooth at every climb, summit and descent join.
         public static float Grade(float distance, float hillHeight)
         {
             float d = Mathf.Repeat(distance, Length);
-            if (d <= HillStart || d >= HillEnd) return 0;
-            return hillHeight * Mathf.PI / (HillEnd - HillStart) *
-                Mathf.Sin(2 * Mathf.PI * (d - HillStart) / (HillEnd - HillStart));
+            float g = 0f;
+            for (int i = 0; i < Hills.Length; i++)
+                g += BumpSlope(d, Hills[i].start, Hills[i].end) * Hills[i].weight;
+            return hillHeight * g;
         }
 
         public static void Sample(float distance, out Vector3 point, out Vector3 forward, float hillHeight = 0f)
