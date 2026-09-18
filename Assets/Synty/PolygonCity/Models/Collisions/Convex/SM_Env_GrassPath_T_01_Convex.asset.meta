@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 3957f9da14ec5454ea7fd7f709e1106f
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 43062158617171966
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 95214
+  packageName: POLYGON - City Pack - Art by Synty
+  packageVersion: 1.12.5
+  assetPath: Assets/Synty/PolygonCity/Models/Collisions/Convex/SM_Env_GrassPath_T_01_Convex.asset
+  uploadId: 998584

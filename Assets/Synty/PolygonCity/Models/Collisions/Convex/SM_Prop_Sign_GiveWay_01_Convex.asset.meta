@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 485f211924b42d64aa33e1775040ea3b
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 43283626452740676
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 95214
+  packageName: POLYGON - City Pack - Art by Synty
+  packageVersion: 1.12.5
+  assetPath: Assets/Synty/PolygonCity/Models/Collisions/Convex/SM_Prop_Sign_GiveWay_01_Convex.asset
+  uploadId: 998584

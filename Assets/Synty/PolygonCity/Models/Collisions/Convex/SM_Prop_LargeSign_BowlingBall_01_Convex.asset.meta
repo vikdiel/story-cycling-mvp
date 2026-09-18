@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: a622cb99b9b9d9d4f90980f197b67e3f
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 43814805656745376
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 95214
+  packageName: POLYGON - City Pack - Art by Synty
+  packageVersion: 1.12.5
+  assetPath: Assets/Synty/PolygonCity/Models/Collisions/Convex/SM_Prop_LargeSign_BowlingBall_01_Convex.asset
+  uploadId: 998584
