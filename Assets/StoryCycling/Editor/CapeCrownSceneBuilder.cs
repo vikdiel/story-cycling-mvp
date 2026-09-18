@@ -26,6 +26,20 @@ namespace StoryCycling.Editor
             new Vector2(0, 250), new Vector2(-60, 200), new Vector2(-130, 240), new Vector2(-190, 160),
             new Vector2(-130, 100), new Vector2(-190, 20), new Vector2(-100, -40), new Vector2(-20, -20)
         };
+        private static readonly string[] LifeCharacters = {
+            Root + "Characters/Character_Male_Hoodie.prefab",
+            Root + "Characters/Character_Female_Coat.prefab",
+            Root + "Characters/Character_BusinessMan_Shirt.prefab",
+            Root + "Characters/Character_Female_Jacket.prefab",
+            Root + "Characters/Character_Male_Jacket.prefab"
+        };
+        private static readonly string[] LifeCars = {
+            Root + "Vehicles/SM_Veh_Car_Sedan_01.prefab",
+            Root + "Vehicles/SM_Veh_Car_Small_01.prefab",
+            Root + "Vehicles/SM_Veh_Car_Taxi_01.prefab",
+            Root + "Vehicles/SM_Veh_Car_Medium_01.prefab",
+            Root + "Vehicles/SM_Veh_Car_Van_01.prefab"
+        };
         private static readonly string[] Buildings = {
             Root + "Buildings/SM_Bld_Shop_03.prefab",
             Root + "Buildings/SM_Bld_Apartment_Stack_01.prefab"
@@ -143,6 +157,7 @@ namespace StoryCycling.Editor
                 director.gameObject.AddComponent<CapeCrownMusic>();
                 director.gameObject.AddComponent<CapeCrownMobileHud>().Configure(director);
                 director.gameObject.AddComponent<CapeCrownMobileQuality>();
+                AddLife(director);
             }
             CapeCrownValidation.ValidateRoute(relief);
             CapeCrownValidation.ValidateCyclist(animation);
@@ -234,6 +249,7 @@ namespace StoryCycling.Editor
             director.gameObject.AddComponent<CapeCrownMusic>();
             director.gameObject.AddComponent<CapeCrownMobileHud>().Configure(director);
             director.gameObject.AddComponent<CapeCrownMobileQuality>();
+            AddLife(director);
             CapeCrownValidation.ValidateRoute(relief);
             CapeCrownValidation.ValidateCyclist(animation);
             AssetDatabase.SaveAssets();
@@ -285,6 +301,47 @@ namespace StoryCycling.Editor
                     roof.transform.rotation = rot;
                     roof.name = "Bo-Kaap roof";
                 }
+            }
+            AddParkedCars();
+        }
+
+        private static void AddLife(CapeCrownRideController director)
+        {
+            var lifeGo = new GameObject("Cape Crown Life");
+            lifeGo.transform.SetParent(director.transform, false);
+            var life = lifeGo.AddComponent<CapeCrownLife>();
+            int count = 12;
+            var walkers = new Transform[count];
+            var dists = new float[count];
+            var offs = new float[count];
+            var dirs = new int[count];
+            for (int i = 0; i < count; i++)
+            {
+                var go = (GameObject)PrefabUtility.InstantiatePrefab(AssetDatabase.LoadAssetAtPath<GameObject>(LifeCharacters[i % LifeCharacters.Length]));
+                go.name = "Pedestrian " + i;
+                go.transform.SetParent(lifeGo.transform, false);
+                go.SetActive(false);
+                walkers[i] = go.transform;
+                dists[i] = (i / (float)count) * CapeCrownRoute.Length;
+                offs[i] = (i % 2 == 0 ? -1f : 1f) * 7.5f;
+                dirs[i] = (i % 3 == 0) ? -1 : 1;
+            }
+            life.Configure(director, walkers, dists, offs, dirs);
+        }
+
+        private static void AddParkedCars(float startOffset = 6f, float spacing = 26f)
+        {
+            for (float d = startOffset; d < CapeCrownRoute.Length; d += spacing)
+            {
+                int idx = Mathf.RoundToInt(d / spacing);
+                int side = (idx % 2 == 0) ? -1 : 1;
+                CapeCrownRoute.Sample(d, out Vector3 p, out Vector3 fwd);
+                Vector3 hf = new Vector3(fwd.x, 0, fwd.z);
+                if (hf.sqrMagnitude < 1e-6f) hf = Vector3.forward;
+                hf.Normalize();
+                float yaw = Mathf.Atan2(hf.x, hf.z) * Mathf.Rad2Deg;
+                Vector3 carPos = p + Vector3.Cross(Vector3.up, hf) * (side * 6.8f);
+                GroundPrefab(LifeCars[idx % LifeCars.Length], carPos, yaw, 5.5f, "Parked car " + idx);
             }
         }
 
