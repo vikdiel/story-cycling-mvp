@@ -11,12 +11,12 @@ namespace StoryCycling
         private CapeCrownDevices devices;
         private CapeCrownMusic music;
         private RectTransform safe;
-        private GameObject home, hud, settings, pause;
+        private GameObject home, hud, settings, pause, routes;
         private Transform list;
         private Text speed,power,heart,distance,connection,startLabel,trainerLabel,heartLabel,pauseLabel,muteLabel,statusLine,demoLabel;
         private Button start,resume;
         private int revision=-1;
-        private bool settingsOpen;
+        private bool settingsOpen, routesOpen;
         private Color ink=new Color(.035f,.095f,.125f,.94f),teal=new Color(.15f,.66f,.62f),paper=new Color(.96f,.94f,.86f);
         public void Configure(CapeCrownRideController controller)=>ride=controller;
         private void Start()
@@ -27,11 +27,11 @@ namespace StoryCycling
             var scaler=root.GetComponent<CanvasScaler>();scaler.uiScaleMode=CanvasScaler.ScaleMode.ScaleWithScreenSize;scaler.referenceResolution=new Vector2(1440,900);scaler.matchWidthOrHeight=.5f;
             safe=Rect("Safe Area",root.transform,Vector2.zero,Vector2.zero,Vector2.zero,Vector2.zero);safe.anchorMin=Vector2.zero;safe.anchorMax=Vector2.one;safe.offsetMin=safe.offsetMax=Vector2.zero;
             if(FindAnyObjectByType<EventSystem>()==null)new GameObject("UI Events",typeof(EventSystem)).AddComponent<InputSystemUIInputModule>().AssignDefaultActions();
-            BuildHome();BuildRide();BuildSettings();BuildPause();
+            BuildHome();BuildRide();BuildSettings();BuildPause();BuildRoutes();
         }
         private void BuildHome()
         {
-            home=Panel("Start menu",safe,new Vector2(0,.5f),new Vector2(38,0),new Vector2(510,716),ink);
+            home=Panel("Start menu",safe,new Vector2(0,.5f),new Vector2(38,0),new Vector2(510,768),ink);
             Label(home.transform,"CAPE CROWN  /  SOUTH AFRICA",24,new Vector2(30,-32),new Vector2(455,34),teal);
             Label(home.transform,"CAMPS\nBAY",72,new Vector2(28,-84),new Vector2(460,172),paper);
             Label(home.transform,"Dein Winter. Deine Küste.",26,new Vector2(30,-265),new Vector2(450,40),paper);
@@ -42,6 +42,7 @@ namespace StoryCycling
             Button(home.transform,"Geräte & Einstellungen",new Vector2(30,-558),new Vector2(450,54),new Color(.16f,.25f,.28f),()=>ShowSettings());
             var demoButton=Button(home.transform,"Demo-Fahrt (ohne KICKR)",new Vector2(30,-622),new Vector2(450,50),new Color(.40f,.30f,.20f),()=>{ if(ride.IsDemo)ride.StopDemo(); else { ride.StartDemo(); ride.TryStart(); } });
             demoLabel=demoButton.GetComponentInChildren<Text>();
+            Button(home.transform,"Routen",new Vector2(30,-674),new Vector2(450,48),new Color(.16f,.25f,.28f),()=>ShowRoutes());
         }
         private void BuildRide()
         {
@@ -89,11 +90,25 @@ namespace StoryCycling
             Button(pause.transform,"Runde beenden",new Vector2(30,-273),new Vector2(550,52),new Color(.16f,.25f,.28f),()=>ride.EndRide());
         }
         public void ShowSettings() { settingsOpen=true;if(ride.Started)ride.Pause("Geräteeinstellungen geöffnet"); }
+        public void ShowRoutes() { routesOpen=true;if(ride.Started)ride.Pause("Route wechseln"); }
+        private void BuildRoutes()
+        {
+            routes=Panel("Routes backdrop",safe,new Vector2(.5f,.5f),Vector2.zero,new Vector2(760,760),ink);
+            Label(routes.transform,"ROUTE WÄHLEN",30,new Vector2(28,-22),new Vector2(700,45),paper);
+            Button(routes.transform,"Schließen",new Vector2(580,-22),new Vector2(150,46),new Color(.16f,.25f,.28f),()=>routesOpen=false);
+            for (int i = 0; i < CapeCrownRoutes.All.Length; i++)
+            {
+                var entry = CapeCrownRoutes.All[i];
+                int col = i % 2, row = i / 2;
+                Button(routes.transform, entry.label, new Vector2(28 + col * 356, -86 - row * 74), new Vector2(340, 62), new Color(.16f,.25f,.28f), () => CapeCrownRoutes.Load(entry.sceneName));
+            }
+            Label(routes.transform,"Runde endet beim Wechsel · Demo zählt keinen Fortschritt",18,new Vector2(28,-470),new Vector2(700,30),new Color(.70f,.76f,.76f));
+        }
         private void Update()
         {
             if(safe==null)return;
             Rect a=Screen.safeArea;safe.anchorMin=new Vector2(a.xMin/Screen.width,a.yMin/Screen.height);safe.anchorMax=new Vector2(a.xMax/Screen.width,a.yMax/Screen.height);
-            home.SetActive(!ride.Started&&!settingsOpen);hud.SetActive(ride.Started&&!settingsOpen);pause.SetActive(ride.Started&&ride.IsPaused&&!settingsOpen);settings.SetActive(settingsOpen);
+            home.SetActive(!ride.Started&&!settingsOpen&&!routesOpen);hud.SetActive(ride.Started&&!settingsOpen&&!routesOpen);pause.SetActive(ride.Started&&ride.IsPaused&&!settingsOpen&&!routesOpen);settings.SetActive(settingsOpen&&!routesOpen);routes.SetActive(routesOpen);
             start.interactable=true;startLabel.text=ride.CanStart?"Runde starten":"KICKR verbinden";resume.interactable=ride.CanStart;
             connection.text=ride.IsDemo?"DEMO-FAHRT · simuliert · kein Fortschritt":ride.CanStart?"KICKR bereit · Steig aufs Rad":devices.TrainerConnected?"Verbunden · kurz treten für Live-Daten":devices.TrainerState+" · Geräte öffnen";
             speed.text=devices.FreshSpeed?devices.Speed.ToString("0.0"):"—";power.text=devices.FreshPower?devices.Watts.ToString("0"):"—";heart.text=devices.FreshHeart?devices.Heart.ToString("0"):"—";
