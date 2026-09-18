@@ -78,7 +78,7 @@ struct GameShellView: View {
                 .padding(28)
                 .background(.black.opacity(0.24), in: RoundedRectangle(cornerRadius: 28))
 
-                RideSceneView(speedKilometersPerHour: trainer.speedKilometersPerHour)
+                CoastalRide3DView(speedKilometersPerHour: trainer.speedKilometersPerHour)
                     .frame(height: 220)
                 HStack(spacing: 28) {
                     RideMetric(value: trainer.speedKilometersPerHour.formatted(.number.precision(.fractionLength(1))), unit: "km/h", title: "GESCHWINDIGKEIT")

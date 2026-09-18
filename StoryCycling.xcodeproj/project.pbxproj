@@ -18,6 +18,7 @@
 		A10000000000000000000009 /* ZwiftClickManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000121 /* ZwiftClickManager.swift */; };
 		A10000000000000000000010 /* RideSceneView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000022 /* RideSceneView.swift */; };
 		A10000000000000000000023 /* ZwiftClickSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000024 /* ZwiftClickSheet.swift */; };
+		A10000000000000000000130 /* CoastalRide3DView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000131 /* CoastalRide3DView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -44,6 +45,7 @@
 		A10000000000000000000121 /* ZwiftClickManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZwiftClickManager.swift; sourceTree = "<group>"; };
 		A10000000000000000000022 /* RideSceneView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RideSceneView.swift; sourceTree = "<group>"; };
 		A10000000000000000000024 /* ZwiftClickSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZwiftClickSheet.swift; sourceTree = "<group>"; };
+		A10000000000000000000131 /* CoastalRide3DView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoastalRide3DView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -85,6 +87,7 @@
 				A10000000000000000000121 /* ZwiftClickManager.swift */,
 				A10000000000000000000024 /* ZwiftClickSheet.swift */,
 				A10000000000000000000022 /* RideSceneView.swift */,
+				A10000000000000000000131 /* CoastalRide3DView.swift */,
 				A10000000000000000000013 /* Assets.xcassets */,
 			);
 			path = StoryCycling;
@@ -207,6 +210,7 @@
 				A10000000000000000000009 /* ZwiftClickManager.swift in Sources */,
 				A10000000000000000000023 /* ZwiftClickSheet.swift in Sources */,
 				A10000000000000000000010 /* RideSceneView.swift in Sources */,
+				A10000000000000000000130 /* CoastalRide3DView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
