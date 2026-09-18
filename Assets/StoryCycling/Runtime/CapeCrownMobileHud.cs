@@ -13,7 +13,7 @@ namespace StoryCycling
         private RectTransform safe;
         private GameObject home, hud, settings, pause, routes;
         private Transform list;
-        private Text speed,power,heart,distance,connection,startLabel,trainerLabel,heartLabel,pauseLabel,muteLabel,statusLine,demoLabel;
+        private Text speed,power,heart,distance,connection,startLabel,trainerLabel,heartLabel,pauseLabel,muteLabel,statusLine,demoLabel,titleLabel;
         private Button start,resume;
         private int revision=-1;
         private bool settingsOpen, routesOpen;
@@ -33,7 +33,7 @@ namespace StoryCycling
         {
             home=Panel("Start menu",safe,new Vector2(0,.5f),new Vector2(38,0),new Vector2(510,768),ink);
             Label(home.transform,"CAPE CROWN  /  SOUTH AFRICA",24,new Vector2(30,-32),new Vector2(455,34),teal);
-            Label(home.transform,"CAMPS\nBAY",72,new Vector2(28,-84),new Vector2(460,172),paper);
+            titleLabel=Label(home.transform,"",72,new Vector2(28,-84),new Vector2(460,172),paper);
             Label(home.transform,"Dein Winter. Deine Küste.",26,new Vector2(30,-265),new Vector2(450,40),paper);
             Label(home.transform,"Promenade · Küstenanstieg · Atlantik\n0,63 km pro Runde  /  8 m Anstieg",23,new Vector2(30,-327),new Vector2(450,68),new Color(.72f,.82f,.82f));
             connection=Label(home.transform,"KICKR verbinden, dann geht es los",21,new Vector2(30,-411),new Vector2(450,56),paper);
@@ -91,6 +91,12 @@ namespace StoryCycling
         }
         public void ShowSettings() { settingsOpen=true;if(ride.Started)ride.Pause("Geräteeinstellungen geöffnet"); }
         public void ShowRoutes() { routesOpen=true;if(ride.Started)ride.Pause("Route wechseln"); }
+        private static string TitleFromLabel(string label)
+        {
+            if (string.IsNullOrEmpty(label)) return "";
+            int idx = label.IndexOf('•');
+            return (idx < 0 ? label : label.Substring(0, idx)).Trim();
+        }
         private void BuildRoutes()
         {
             routes=Panel("Routes backdrop",safe,new Vector2(.5f,.5f),Vector2.zero,new Vector2(760,760),ink);
@@ -118,6 +124,7 @@ namespace StoryCycling
             trainerLabel.text=devices.TrainerName+"\n"+devices.TrainerState;heartLabel.text=devices.HeartName+"\n"+devices.HeartState;
             muteLabel.text=music.Muted?"Musik einschalten":"Musik stummschalten";
             if(demoLabel!=null)demoLabel.text=ride.IsDemo?"Demo beenden":"Demo-Fahrt (ohne KICKR)";
+            if(titleLabel!=null)titleLabel.text=TitleFromLabel(ride.RouteLabel);
             if(revision!=devices.Revision)RebuildCandidates();
         }
         private void RebuildCandidates()

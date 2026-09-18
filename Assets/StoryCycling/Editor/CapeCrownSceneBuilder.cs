@@ -158,6 +158,7 @@ namespace StoryCycling.Editor
                 director.gameObject.AddComponent<CapeCrownMobileHud>().Configure(director);
                 director.gameObject.AddComponent<CapeCrownMobileQuality>();
                 AddLife(director);
+                AddRouteData();
             }
             CapeCrownValidation.ValidateRoute(relief);
             CapeCrownValidation.ValidateCyclist(animation);
@@ -250,6 +251,7 @@ namespace StoryCycling.Editor
             director.gameObject.AddComponent<CapeCrownMobileHud>().Configure(director);
             director.gameObject.AddComponent<CapeCrownMobileQuality>();
             AddLife(director);
+            AddRouteData();
             CapeCrownValidation.ValidateRoute(relief);
             CapeCrownValidation.ValidateCyclist(animation);
             AssetDatabase.SaveAssets();

@@ -25,6 +25,7 @@ namespace StoryCycling
 
         public static float Length => total;
         public static bool IsDefined => pts != null && pts.Length >= 3;
+        public static Vector2[] Waypoints => pts;
 
         public static void Define(params Vector2[] waypoints)
         {

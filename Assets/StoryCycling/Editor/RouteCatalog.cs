@@ -107,6 +107,28 @@ namespace StoryCycling.Editor
             AddParkedCars();
         }
 
+        private static void AddRouteData()
+        {
+            Vector2[] wp = CapeCrownRoute.Waypoints;
+            (float start, float end, float weight)[] hills = CapeCrownRoute.Hills;
+            var go = new GameObject("Route Data").AddComponent<CapeCrownRouteData>();
+            var so = new SerializedObject(go);
+            var wpProp = so.FindProperty("waypoints");
+            wpProp.arraySize = wp.Length;
+            for (int i = 0; i < wp.Length; i++) wpProp.GetArrayElementAtIndex(i).vector2Value = wp[i];
+            var hs = so.FindProperty("hillStart");
+            var he = so.FindProperty("hillEnd");
+            var hw = so.FindProperty("hillWeight");
+            hs.arraySize = he.arraySize = hw.arraySize = hills.Length;
+            for (int i = 0; i < hills.Length; i++)
+            {
+                hs.GetArrayElementAtIndex(i).floatValue = hills[i].start;
+                he.GetArrayElementAtIndex(i).floatValue = hills[i].end;
+                hw.GetArrayElementAtIndex(i).floatValue = hills[i].weight;
+            }
+            so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
         private static void FinishRouteScene(UnityEngine.SceneManagement.Scene scene, string scenePath, string routeLabel, bool skybox)
         {
             Material asphalt = Mat("Asphalt", new Color(.12f, .15f, .18f));
@@ -158,6 +180,7 @@ namespace StoryCycling.Editor
             director.gameObject.AddComponent<CapeCrownMobileHud>().Configure(director);
             director.gameObject.AddComponent<CapeCrownMobileQuality>();
             AddLife(director);
+            AddRouteData();
             CapeCrownValidation.ValidateRoute(relief);
             CapeCrownValidation.ValidateCyclist(animation);
             AssetDatabase.SaveAssets();
