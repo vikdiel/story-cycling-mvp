@@ -1,0 +1,79 @@
+{
+  "project": "Cape Crown — Route Sections & Life",
+  "branchName": "unity-world",
+  "description": "Ten distinct Cape Town-inspired scenic route sections of varying length, each a self-contained scene, populated with alleys, pedestrians and parked cars. Replaces the 'one 100 km continuous route' and 'lap collecting' ideas with bounded, art-directed rides.",
+  "architecture": {
+    "routeModel": "Each section is a bounded closed route (like the current Camps Bay loop) with its own length, elevation profile, scenery theme and biome. No streaming of a 100 km world; sections are selected from a menu.",
+    "builder": "Generalise CapeCrownSceneBuilder into a RouteSectionBuilder that emits a named scene per section from a declarative section definition (route geometry + theme + props).",
+    "life": "A pooled population system (pedestrians, parked cars, moving cars) that spawns only near the rider and despawns with distance, so 10 populated sections never exceed a small active-object budget on iPad.",
+    "agent": "An isolated OpenClaw subagent per section that runs the builder, captures Game-view screenshots, and iterates against a reference, reporting a Go/No-Go to the main chat."
+  },
+  "routeSections": [
+    {"name": "Cape Crown Promenade", "inspiration": "Camps Bay / Sea Point", "lengthKm": 4, "theme": "flat coastal promenade, palms, cafes"},
+    {"name": "Clifton Cove", "inspiration": "Clifton beaches", "lengthKm": 3, "theme": "tucked beaches, granite boulders"},
+    {"name": "The Apostles Climb", "inspiration": "Chapman's Peak", "lengthKm": 6, "theme": "coastal mountain switchbacks, cliffs"},
+    {"name": "Hout Bay Harbour", "inspiration": "Hout Bay", "lengthKm": 4, "theme": "working harbour, boats, market"},
+    {"name": "Constantia Vines", "inspiration": "Constantia wine valley", "lengthKm": 7, "theme": "wine farms, oak-lined lanes"},
+    {"name": "Bo-Kaap Steps", "inspiration": "Bo-Kaap", "lengthKm": 2, "theme": "steep alleys, colourful terraced houses"},
+    {"name": "Kirstenbosch Loop", "inspiration": "Kirstenbosch garden", "lengthKm": 5, "theme": "lush botanical greenery"},
+    {"name": "False Bay Sands", "inspiration": "Muizenberg / False Bay", "lengthKm": 8, "theme": "long beach, surf shacks, boardwalk"},
+    {"name": "Cape Point Headland", "inspiration": "Cape Point", "lengthKm": 9, "theme": "wild fynbos, lighthouse, ocean cliffs"},
+    {"name": "Table Foothills", "inspiration": "Table Mountain foothills", "lengthKm": 6, "theme": "suburban lanes, mountain backdrop"}
+  ],
+  "userStories": [
+    {
+      "id": "SEC-001",
+      "title": "Declarative route-section builder",
+      "description": "As a builder I want each route section defined by data (route geometry, length, elevation, theme, prop set) so adding a new section is a definition, not new code.",
+      "acceptanceCriteria": [
+        "A section definition produces a named scene via the existing menu/build path",
+        "Route geometry, placement and cyclist validations pass for every section",
+        "Each section keeps its own generated asset folder and scene file",
+        "Verified in Unity: build all 10 sections, no validation failures"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Generalise the current CapeCrownSceneBuilder; do not fork per section."
+    },
+    {
+      "id": "SEC-002",
+      "title": "Life population system (pooled)",
+      "description": "As a rider I want pedestrians, parked cars and street-level detail (alleys, crossings) so routes feel lived-in without costing performance.",
+      "acceptanceCriteria": [
+        "Pedestrians walk along sidewalks and alleys; parked cars line the streets",
+        "Active objects are pooled and only exist near the rider (bounded budget on iPad)",
+        "Objects despawn smoothly with distance, no pop-in at the rider",
+        "Verified on device: stable frame time with a populated section"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Reuse Synty City/Generic characters and vehicles already in the project. Pedestrians and cars are cosmetic, no AI cost."
+    },
+    {
+      "id": "SEC-003",
+      "title": "Route selection menu",
+      "description": "As a rider I want to pick a route section from the start menu instead of one fixed scene.",
+      "acceptanceCriteria": [
+        "Start menu lists unlocked sections with length and climb",
+        "Selecting a section loads its scene and starts the ride",
+        "Progress per section is remembered (not yet gated by story km)"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Story gating (races + km) is a later feature; selection UI first."
+    },
+    {
+      "id": "SEC-004",
+      "title": "Section-build subagent (the 'agent')",
+      "description": "As Vik I want an isolated agent that builds and visually verifies a section without burning main-chat tokens.",
+      "acceptanceCriteria": [
+        "A subagent builds a specified section, captures Game-view screenshots from fixed viewpoints",
+        "It reports a Go/No-Go with evidence to the main chat",
+        "Main chat only reviews results, never re-explains the build"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Depends on SEC-001. The subagent orchestrates the builder; it does not invent art style."
+    }
+  ]
+}
