@@ -5,9 +5,11 @@ struct GameShellView: View {
     @State private var progress = 0.18
     @State private var showsTrainerSheet = false
     @State private var showsHeartRateSheet = false
+    @State private var showsClickSheet = false
     @State private var virtualGear = 12
     @StateObject private var trainer = TrainerConnectionManager()
     @StateObject private var heartRate = HeartRateMonitorManager()
+    @StateObject private var click = ZwiftClickManager()
 
     var body: some View {
         ZStack {
@@ -47,6 +49,11 @@ struct GameShellView: View {
                             .background(.thinMaterial, in: Capsule())
                     }
                     .buttonStyle(.plain)
+
+                    Button { showsClickSheet = true } label: {
+                        Label("Click", systemImage: "switch.2")
+                            .font(.subheadline.weight(.medium)).padding(12).background(.thinMaterial, in: Capsule())
+                    }.buttonStyle(.plain)
                 }
 
                 Spacer()
@@ -70,6 +77,11 @@ struct GameShellView: View {
                 }
                 .padding(28)
                 .background(.black.opacity(0.24), in: RoundedRectangle(cornerRadius: 28))
+
+                RideSceneView(speedKilometersPerHour: trainer.speedKilometersPerHour)
+                    .frame(height: 220)
+                Text("\(trainer.speedKilometersPerHour.formatted(.number.precision(.fractionLength(1)))) km/h")
+                    .font(.title3.monospacedDigit().bold())
 
                 HStack(spacing: 16) {
                     Button(rideIsRunning ? "Demo pausieren" : "Demo-Fahrt starten") {
@@ -125,6 +137,12 @@ struct GameShellView: View {
         }
         .sheet(isPresented: $showsHeartRateSheet) {
             HeartRateMonitorSheet(monitor: heartRate)
+        }
+        .sheet(isPresented: $showsClickSheet) {
+            ZwiftClickSheet(click: click)
+        }
+        .onChange(of: click.shiftEventCounter) { _, _ in
+            if let direction = click.lastDirection { changeGear(by: direction == .up ? 1 : -1) }
         }
     }
 

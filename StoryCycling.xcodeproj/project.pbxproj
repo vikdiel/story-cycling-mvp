@@ -15,6 +15,9 @@
 		A10000000000000000000006 /* TrainerConnectionSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000018 /* TrainerConnectionSheet.swift */; };
 		A10000000000000000000007 /* HeartRateMonitorManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000019 /* HeartRateMonitorManager.swift */; };
 		A10000000000000000000008 /* HeartRateMonitorSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000020 /* HeartRateMonitorSheet.swift */; };
+		A10000000000000000000009 /* ZwiftClickManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000121 /* ZwiftClickManager.swift */; };
+		A10000000000000000000010 /* RideSceneView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000022 /* RideSceneView.swift */; };
+		A10000000000000000000023 /* ZwiftClickSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000024 /* ZwiftClickSheet.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -38,6 +41,9 @@
 		A10000000000000000000018 /* TrainerConnectionSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrainerConnectionSheet.swift; sourceTree = "<group>"; };
 		A10000000000000000000019 /* HeartRateMonitorManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeartRateMonitorManager.swift; sourceTree = "<group>"; };
 		A10000000000000000000020 /* HeartRateMonitorSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeartRateMonitorSheet.swift; sourceTree = "<group>"; };
+		A10000000000000000000121 /* ZwiftClickManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZwiftClickManager.swift; sourceTree = "<group>"; };
+		A10000000000000000000022 /* RideSceneView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RideSceneView.swift; sourceTree = "<group>"; };
+		A10000000000000000000024 /* ZwiftClickSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZwiftClickSheet.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -76,6 +82,9 @@
 				A10000000000000000000018 /* TrainerConnectionSheet.swift */,
 				A10000000000000000000019 /* HeartRateMonitorManager.swift */,
 				A10000000000000000000020 /* HeartRateMonitorSheet.swift */,
+				A10000000000000000000121 /* ZwiftClickManager.swift */,
+				A10000000000000000000024 /* ZwiftClickSheet.swift */,
+				A10000000000000000000022 /* RideSceneView.swift */,
 				A10000000000000000000013 /* Assets.xcassets */,
 			);
 			path = StoryCycling;
@@ -195,6 +204,9 @@
 				A10000000000000000000006 /* TrainerConnectionSheet.swift in Sources */,
 				A10000000000000000000007 /* HeartRateMonitorManager.swift in Sources */,
 				A10000000000000000000008 /* HeartRateMonitorSheet.swift in Sources */,
+				A10000000000000000000009 /* ZwiftClickManager.swift in Sources */,
+				A10000000000000000000023 /* ZwiftClickSheet.swift in Sources */,
+				A10000000000000000000010 /* RideSceneView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

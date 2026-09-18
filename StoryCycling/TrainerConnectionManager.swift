@@ -43,12 +43,14 @@ final class TrainerConnectionManager: NSObject, ObservableObject {
     static let fitnessMachineService = CBUUID(string: "1826")
     static let fitnessMachineControlPoint = CBUUID(string: "2AD9")
     static let supportedResistanceLevelRange = CBUUID(string: "2AD6")
+    static let indoorBikeData = CBUUID(string: "2AD2")
 
     @Published private(set) var state: TrainerConnectionState = .notRequested
     @Published private(set) var trainers: [TrainerCandidate] = []
     @Published private(set) var resistanceRange: ClosedRange<Double>?
     @Published private(set) var currentResistance: Double?
     @Published private(set) var resistanceError: String?
+    @Published private(set) var speedKilometersPerHour: Double = 0
 
     private var central: CBCentralManager?
     private var connectedPeripheral: CBPeripheral?
@@ -162,6 +164,7 @@ extension TrainerConnectionManager: CBCentralManagerDelegate {
         controlPoint = nil
         resistanceRange = nil
         currentResistance = nil
+        speedKilometersPerHour = 0
         state = .disconnected
 
         if !intentionallyDisconnected {
@@ -173,7 +176,7 @@ extension TrainerConnectionManager: CBCentralManagerDelegate {
 extension TrainerConnectionManager: CBPeripheralDelegate {
     func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
         guard let service = peripheral.services?.first(where: { $0.uuid == Self.fitnessMachineService }) else { return }
-        peripheral.discoverCharacteristics([Self.fitnessMachineControlPoint, Self.supportedResistanceLevelRange], for: service)
+        peripheral.discoverCharacteristics([Self.fitnessMachineControlPoint, Self.supportedResistanceLevelRange, Self.indoorBikeData], for: service)
     }
 
     func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: Error?) {
@@ -184,6 +187,8 @@ extension TrainerConnectionManager: CBPeripheralDelegate {
                 peripheral.setNotifyValue(true, for: characteristic)
             case Self.supportedResistanceLevelRange:
                 peripheral.readValue(for: characteristic)
+            case Self.indoorBikeData:
+                peripheral.setNotifyValue(true, for: characteristic)
             default:
                 break
             }
@@ -200,6 +205,15 @@ extension TrainerConnectionManager: CBPeripheralDelegate {
             let minimum = Double(int16(at: 0)) / 10
             let maximum = Double(int16(at: 2)) / 10
             if minimum <= maximum { resistanceRange = minimum...maximum }
+        }
+
+        if characteristic.uuid == Self.indoorBikeData, value.count >= 4 {
+            let flags = UInt16(value[value.startIndex]) | (UInt16(value[value.startIndex + 1]) << 8)
+            let hasMoreData = flags & 0x0001 != 0
+            if !hasMoreData {
+                let rawSpeed = UInt16(value[value.startIndex + 2]) | (UInt16(value[value.startIndex + 3]) << 8)
+                speedKilometersPerHour = Double(rawSpeed) / 100
+            }
         }
 
         if characteristic.uuid == Self.fitnessMachineControlPoint, value.count >= 3, value[value.startIndex] == 0x80 {

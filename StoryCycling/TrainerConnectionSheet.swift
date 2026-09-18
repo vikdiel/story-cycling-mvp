@@ -46,15 +46,26 @@ struct TrainerConnectionSheet: View {
 
                 Section("Widerstand") {
                     if let range = trainer.resistanceRange {
-                        Text("Aktuell: \(trainer.currentResistance?.formatted(.number.precision(.fractionLength(1))) ?? "—")")
                         HStack {
-                            Button("Leichter") {
-                                trainer.setResistance((trainer.currentResistance ?? range.lowerBound) - 1)
-                            }
+                            Text("Aktueller Widerstand")
                             Spacer()
-                            Button("Schwerer") {
-                                trainer.setResistance((trainer.currentResistance ?? range.lowerBound) + 1)
+                            Text(trainer.currentResistance?.formatted(.number.precision(.fractionLength(1))) ?? "—")
+                                .font(.title3.bold())
+                        }
+                        HStack {
+                            Button {
+                                trainer.setResistance((trainer.currentResistance ?? range.lowerBound) - 1)
+                            } label: {
+                                Label("Leichter", systemImage: "minus")
                             }
+                            .buttonStyle(.bordered)
+                            Spacer()
+                            Button {
+                                trainer.setResistance((trainer.currentResistance ?? range.lowerBound) + 1)
+                            } label: {
+                                Label("Schwerer", systemImage: "plus")
+                            }
+                            .buttonStyle(.borderedProminent)
                         }
                         Text("Verfügbarer Bereich: \(range.lowerBound.formatted(.number.precision(.fractionLength(1))))–\(range.upperBound.formatted(.number.precision(.fractionLength(1))))")
                             .font(.footnote)
