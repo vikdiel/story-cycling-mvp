@@ -7,32 +7,35 @@ namespace StoryCycling.Editor
     public static class CapeCrownValidation
     {
         [MenuItem("Story Cycling/Validate Loop Geometry")]
-        public static void ValidateRoute()
+        public static void ValidateFlatRoute() => ValidateRoute(0);
+
+        public static void ValidateRoute(float hillHeight)
         {
             const float epsilon = .01f;
             float length = CapeCrownRoute.Length;
             float straight = 2f * CapeCrownRoute.HalfStraight;
             float arc = Mathf.PI * CapeCrownRoute.Radius;
             // Position and tangent must be continuous across all joins, including lap wrap.
-            foreach (float join in new[] { 0f, straight, straight + arc, 2f * straight + arc, length })
+            foreach (float join in new[] { 0f, straight, straight + arc, 2f * straight + arc, length, CapeCrownRoute.HillStart, CapeCrownRoute.HillEnd })
             {
-                CapeCrownRoute.Sample(join - epsilon, out Vector3 before, out Vector3 beforeForward);
-                CapeCrownRoute.Sample(join + epsilon, out Vector3 after, out Vector3 afterForward);
+                CapeCrownRoute.Sample(join - epsilon, out Vector3 before, out Vector3 beforeForward,hillHeight);
+                CapeCrownRoute.Sample(join + epsilon, out Vector3 after, out Vector3 afterForward,hillHeight);
                 Require(Vector3.Distance(before, after) < .025f, "Gap at route join " + join);
                 Require(Vector3.Dot(beforeForward, afterForward) > .999f, "Heading discontinuity at " + join);
             }
             // Check full lap surface orientation, lane clearance and near-unit metres.
             for (float d = 0; d < length; d += .5f)
             {
-                Vector3 left = CapeCrownRoute.Position(d, -5f);
-                Vector3 right = CapeCrownRoute.Position(d, 5f);
-                Vector3 next = CapeCrownRoute.Position(d + .1f, -5f);
+                Require(Mathf.Abs(CapeCrownRoute.Grade(d,hillHeight)) <= .06f, "Grade exceeds 6 percent");
+                Vector3 left = CapeCrownRoute.Position(d, -5f,0,hillHeight);
+                Vector3 right = CapeCrownRoute.Position(d, 5f,0,hillHeight);
+                Vector3 next = CapeCrownRoute.Position(d + .1f, -5f,0,hillHeight);
                 Require(Vector3.Cross(next-left, right-left).y > 0f, "Downward road triangle");
                 Require(Mathf.Abs(Vector3.Distance(left,right)-10f) < .001f, "Incorrect road width");
-                Vector3 rider = CapeCrownRoute.Position(d, CapeCrownRoute.LaneOffset);
+                Vector3 rider = CapeCrownRoute.Position(d, CapeCrownRoute.LaneOffset,0,hillHeight);
                 Require(Vector3.Distance(left,rider) > 2f && Vector3.Distance(right,rider) > 2f, "Rider outside lane");
-                float advanced = CapeCrownRoute.Advance(d,.01f,CapeCrownRoute.LaneOffset);
-                float travelled = Vector3.Distance(rider,CapeCrownRoute.Position(advanced,CapeCrownRoute.LaneOffset));
+                float advanced = CapeCrownRoute.Advance(d,.01f,CapeCrownRoute.LaneOffset,hillHeight);
+                float travelled = Vector3.Distance(rider,CapeCrownRoute.Position(advanced,CapeCrownRoute.LaneOffset,0,hillHeight));
                 Require(Mathf.Abs(travelled-.01f) < .001f, "Speed changes in bends");
             }
             GameObject road = GameObject.Find("Continuous asphalt");
@@ -44,7 +47,7 @@ namespace StoryCycling.Editor
                 Require(Vector3.Distance(v[1], v[v.Length-1]) < .001f, "Asphalt seam right");
                 Require(AssetDatabase.Contains(mesh), "Road mesh is not persisted");
             }
-            Debug.Log("Loop geometry PASS: four smooth joins, 10 m width, closed asphalt, left lane, metre-based speed.");
+            Debug.Log($"Loop geometry PASS (hill {hillHeight} m): four smooth joins, 10 m width, closed asphalt, left lane, metre-based speed.");
         }
         private static void Require(bool condition,string message)
         {

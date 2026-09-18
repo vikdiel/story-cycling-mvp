@@ -1,5 +1,4 @@
 using UnityEngine;
-using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
 namespace StoryCycling
@@ -11,76 +10,72 @@ namespace StoryCycling
         [SerializeField] private Transform[] wheels;
         [SerializeField] private Text telemetry;
         [SerializeField] private CapeCrownCyclistAnimation cyclistAnimation;
-        [SerializeField] private string routeLabel = "CAPE CROWN • COASTAL LOOP";
-        [SerializeField] private float trainerSpeedKph;
-        [SerializeField] private bool keyboardSimulation = true;
-        private float routeDistance;
-        private float totalMetres;
-        private bool demoCruise;
+        [SerializeField] private string routeLabel = "CAMPS BAY";
+        [SerializeField] private float hillHeight;
+        private CapeCrownDevices devices;
+        private float routeDistance, totalMetres, trainingMetres, trainerSpeedKph;
         private int laps;
-
+        private bool paused;
+        public string RouteLabel => routeLabel;
+        public bool Started { get; private set; }
+        public string PauseReason { get; private set; }
+        public float RouteDistance => routeDistance;
+        public float TotalMetres => totalMetres;
+        public float TrainingMetres => trainingMetres;
+        public int CompletedLaps => laps;
+        public float HillHeight => hillHeight;
+        public bool IsPaused => paused;
+        public bool IsSimulation => devices != null && devices.IsTestFeed;
         public float TrainerSpeedKph => trainerSpeedKph;
-        public void SetTrainerSpeed(float speedKph)
+        public bool CanStart => devices != null && devices.FreshSpeed;
+        public bool TryStart()
         {
-            keyboardSimulation = false;
-            demoCruise = false;
-            trainerSpeedKph = float.IsNaN(speedKph) || float.IsInfinity(speedKph) ? 0f : Mathf.Clamp(speedKph, 0f, 90f);
+            if(!CanStart)return false;
+            Started=true;paused=false;PauseReason="";
+            routeDistance=totalMetres=trainingMetres=0; laps=0;
+            PlaceRider();UpdateCamera(true);return true;
         }
-
+        public void Pause(string reason="Pausiert") { if(!Started)return;paused=true;trainerSpeedKph=0;PauseReason=reason; }
+        public bool Resume() { if(!CanStart)return false;paused=false;PauseReason="";return true; }
+        public void EndRide() { Started=false;paused=false;trainerSpeedKph=0; }
+        public void TogglePause() { if(paused)Resume();else Pause(); }
+        private void OnApplicationFocus(bool focus) { if(!focus)Pause("App war im Hintergrund"); }
+        private void OnApplicationPause(bool value) { if(value)Pause("App war im Hintergrund"); }
         private void Start()
         {
-            PlaceRider();
-            UpdateCamera(true);
+            devices=FindAnyObjectByType<CapeCrownDevices>();
+            if(telemetry!=null)telemetry.transform.root.gameObject.SetActive(false);
+            PlaceRider();UpdateCamera(true);
         }
-
         private void Update()
         {
-            bool pedalling = !keyboardSimulation && trainerSpeedKph > .1f;
-            if (keyboardSimulation)
-            {
-                Keyboard k = Keyboard.current;
-                if (k != null && k.spaceKey.wasPressedThisFrame) demoCruise = !demoCruise;
-                bool accelerate = k != null && (k.wKey.isPressed || k.upArrowKey.isPressed);
-                bool brake = k != null && (k.sKey.isPressed || k.downArrowKey.isPressed);
-                if (brake) demoCruise = false;
-                float target = brake ? 0f : accelerate ? 50f : demoCruise ? 25f : 0f;
-                trainerSpeedKph = Mathf.MoveTowards(trainerSpeedKph, target, (brake ? 25f : accelerate ? 12f : 3f) * Time.deltaTime);
-                pedalling = !brake && (accelerate || demoCruise);
-            }
-            float metres = trainerSpeedKph / 3.6f * Time.deltaTime;
-            totalMetres += metres;
-            routeDistance = CapeCrownRoute.Advance(routeDistance, metres, CapeCrownRoute.LaneOffset);
-            if (routeDistance >= CapeCrownRoute.Length)
-            {
-                laps += Mathf.FloorToInt(routeDistance / CapeCrownRoute.Length);
-                routeDistance = Mathf.Repeat(routeDistance, CapeCrownRoute.Length);
-            }
+            if(Started && !paused && !CanStart)Pause("Trainerdaten fehlen – bitte Verbindung prüfen");
+            trainerSpeedKph=Started && !paused && CanStart?devices.Speed:0;
+            bool pedalling=trainerSpeedKph>.1f && (devices.FreshCadence?devices.Cadence>0:devices.FreshPower&&devices.Watts>0);
+            float metres=trainerSpeedKph/3.6f*Time.deltaTime;
+            totalMetres+=metres;
+            if(!IsSimulation)trainingMetres+=metres;
+            routeDistance=CapeCrownRoute.Advance(routeDistance,metres,CapeCrownRoute.LaneOffset,hillHeight);
+            if(routeDistance>=CapeCrownRoute.Length) { laps+=Mathf.FloorToInt(routeDistance/CapeCrownRoute.Length);routeDistance=Mathf.Repeat(routeDistance,CapeCrownRoute.Length); }
             PlaceRider();
-            if (cyclistAnimation != null) cyclistAnimation.Tick(trainerSpeedKph, routeDistance, pedalling, Time.deltaTime);
-            if (wheels != null)
-                foreach (Transform wheel in wheels)
-                    if (wheel != null) wheel.Rotate(Vector3.right, metres / 0.34f * Mathf.Rad2Deg, Space.Self);
-            if (telemetry != null)
-                telemetry.text = routeLabel + $"\n{trainerSpeedKph:0} km/h    {totalMetres / 1000f:0.00} km    Runde {laps + 1}\n" +
-                    (keyboardSimulation ? "DEMO • W/↑ fahren · S/↓ bremsen · Leertaste 25 km/h" : "TRAINER");
+            if(cyclistAnimation!=null)cyclistAnimation.Tick(trainerSpeedKph,routeDistance,pedalling,Time.deltaTime,devices!=null&&devices.FreshCadence?devices.Cadence:-1);
+            if(wheels!=null)foreach(var wheel in wheels)if(wheel!=null)wheel.Rotate(Vector3.right,metres/.34f*Mathf.Rad2Deg,Space.Self);
         }
-
         private void PlaceRider()
         {
-            if (rider == null) return;
-            CapeCrownRoute.Sample(routeDistance, out _, out Vector3 forward);
-            rider.SetPositionAndRotation(CapeCrownRoute.Position(routeDistance, CapeCrownRoute.LaneOffset, 0.045f), Quaternion.LookRotation(forward, Vector3.up));
+            if(rider==null)return;
+            CapeCrownRoute.Sample(routeDistance,out _,out Vector3 forward,hillHeight);
+            rider.SetPositionAndRotation(CapeCrownRoute.Position(routeDistance,CapeCrownRoute.LaneOffset,.045f,hillHeight),Quaternion.LookRotation(forward,Vector3.up));
         }
-
-        private void LateUpdate() => UpdateCamera(false);
+        private void LateUpdate()=>UpdateCamera(false);
         private void UpdateCamera(bool snap)
         {
-            if (rider == null || rideCamera == null) return;
-            Vector3 position = rider.position - rider.forward * 5.8f + Vector3.up * 2.6f;
-            float blend = snap ? 1f : 1f - Mathf.Exp(-8f * Time.deltaTime);
-            rideCamera.position = Vector3.Lerp(rideCamera.position, position, blend);
-            Vector3 look = CapeCrownRoute.Position(routeDistance + 7f, CapeCrownRoute.LaneOffset, 1.15f);
-            rideCamera.rotation = Quaternion.Slerp(rideCamera.rotation, Quaternion.LookRotation(look - rideCamera.position, Vector3.up), blend);
+            if(rider==null||rideCamera==null)return;
+            Vector3 position=rider.position-rider.forward*5.8f+Vector3.up*2.6f;
+            float blend=snap?1:1-Mathf.Exp(-8*Time.deltaTime);
+            rideCamera.position=Vector3.Lerp(rideCamera.position,position,blend);
+            Vector3 look=CapeCrownRoute.Position(routeDistance+7,CapeCrownRoute.LaneOffset,1.15f,hillHeight);
+            rideCamera.rotation=Quaternion.Slerp(rideCamera.rotation,Quaternion.LookRotation(look-rideCamera.position,Vector3.up),blend);
         }
     }
 }

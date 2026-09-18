@@ -12,6 +12,7 @@ namespace StoryCycling.Editor
     public static partial class CapeCrownSceneBuilder
     {
         private static string Generated;
+        private static float relief;
         private const string Root = "Assets/Synty/PolygonCity/Prefabs/";
         private static readonly string[] Buildings = {
             Root + "Buildings/SM_Bld_Shop_03.prefab",
@@ -26,15 +27,19 @@ namespace StoryCycling.Editor
         [MenuItem("Story Cycling/Build Camps Bay Promenade")]
         public static void BuildCampsBay() => BuildWorld(true);
 
-        private static void BuildWorld(bool campsBay)
+        [MenuItem("Story Cycling/Build Camps Bay Trainer Ride")]
+        public static void BuildHillRide() => BuildWorld(true, true);
+
+        private static void BuildWorld(bool campsBay, bool hill = false)
         {
             if (EditorApplication.isPlaying) throw new InvalidOperationException("Stop Play Mode before building.");
             foreach (string path in campsBay ? CampsBayAssets : new[] { Buildings[0], Buildings[1], Tree })
                 if (AssetDatabase.LoadAssetAtPath<GameObject>(path) == null)
                     throw new InvalidOperationException("Missing asset: " + path);
             if (!Application.isBatchMode && !EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
-            Generated = campsBay ? "Assets/StoryCycling/GeneratedCampsBay" : "Assets/StoryCycling/GeneratedLoop";
-            string scenePath = campsBay ? "Assets/StoryCycling/Scenes/CampsBayPromenade.unity" : "Assets/StoryCycling/Scenes/CapeCrownLoop.unity";
+            relief = hill ? CapeCrownRoute.CoastalHillHeight : 0;
+            Generated = hill ? "Assets/StoryCycling/GeneratedTrainerRide" : campsBay ? "Assets/StoryCycling/GeneratedCampsBay" : "Assets/StoryCycling/GeneratedLoop";
+            string scenePath = hill ? "Assets/StoryCycling/Scenes/CampsBayTrainerRide.unity" : campsBay ? "Assets/StoryCycling/Scenes/CampsBayPromenade.unity" : "Assets/StoryCycling/Scenes/CapeCrownLoop.unity";
             Directory.CreateDirectory(Generated);
             Directory.CreateDirectory("Assets/StoryCycling/Scenes");
             AssetDatabase.Refresh();
@@ -54,18 +59,20 @@ namespace StoryCycling.Editor
                 Box("Central green", new Vector3(0,-.07f,0), new Vector3(65,.1f,188), grass);
             }
 
+            if (hill) BuildCoastalHill();
+
             // Every strip is sampled from the same path as the rider. No prefab pivots.
-            Strip("Continuous asphalt", -5f, 5f, .02f, 0, CapeCrownRoute.Length, asphalt);
-            Strip("Inner promenade", -8f, -5f, .005f, 0, CapeCrownRoute.Length, paving);
-            Strip("Outer promenade", 5f, 8f, .005f, 0, CapeCrownRoute.Length, paving);
-            Strip("Inner edge", -4.65f, -4.52f, .03f, 0, CapeCrownRoute.Length, white);
-            Strip("Outer edge", 4.52f, 4.65f, .03f, 0, CapeCrownRoute.Length, white);
+            Strip("Continuous asphalt", -4f, 4f, .02f, 0, CapeCrownRoute.Length, asphalt);
+            Strip("Inner promenade", -8f, -4f, .005f, 0, CapeCrownRoute.Length, paving);
+            Strip("Outer promenade", 4f, 8f, .005f, 0, CapeCrownRoute.Length, paving);
+            Strip("Inner edge", -3.7f, -3.57f, .03f, 0, CapeCrownRoute.Length, white);
+            Strip("Outer edge", 3.57f, 3.7f, .03f, 0, CapeCrownRoute.Length, white);
             int dashCount = Mathf.RoundToInt(CapeCrownRoute.Length / 8f);
             float dashSpacing = CapeCrownRoute.Length / dashCount;
             for (int i = 0; i < dashCount; i++)
                 Strip("Centre dash " + i, -.07f, .07f, .035f, i * dashSpacing, i * dashSpacing + 3f, white);
-            for (int i = 0; i < 10; i++)
-                Box("Start stripe", new Vector3(43.5f + i, .04f, -75f), new Vector3(1,.015f,.6f), i % 2 == 0 ? white : asphalt);
+            for (int i = 0; i < 8; i++)
+                Box("Start stripe", new Vector3(44.5f + i, .04f, -75f), new Vector3(1,.015f,.6f), i % 2 == 0 ? white : asphalt);
 
             // Bounded, measured city frontage; keep the entire cycling corridor clear.
             if (!campsBay) for (int i = 0; i < 7; i++)
@@ -86,6 +93,13 @@ namespace StoryCycling.Editor
             camera.fieldOfView = 58;
             camera.nearClipPlane = .1f;
             camera.farClipPlane = 700;
+            camera.allowHDR = false;
+            cameraObject.AddComponent<UnityEngine.Rendering.Universal.UniversalAdditionalCameraData>().renderPostProcessing=true;
+            var volume=new GameObject("Coastal colour grade").AddComponent<Volume>();volume.isGlobal=true;
+            var profile=ScriptableObject.CreateInstance<VolumeProfile>();
+            var grade=profile.Add<UnityEngine.Rendering.Universal.ColorAdjustments>(true);
+            grade.postExposure.Override(.15f);grade.contrast.Override(8);grade.saturation.Override(5);
+            profile=Save(profile);AssetDatabase.AddObjectToAsset(grade,profile);volume.sharedProfile=profile;
             camera.clearFlags = campsBay ? CameraClearFlags.Skybox : CameraClearFlags.SolidColor;
             camera.backgroundColor = new Color(.48f,.72f,.87f);
             CapeCrownRoute.Sample(0, out _, out Vector3 forward);
@@ -95,16 +109,24 @@ namespace StoryCycling.Editor
 
             var director = new GameObject("Cape Crown Ride Director").AddComponent<CapeCrownRideController>();
             SerializedObject data = new SerializedObject(director);
+            data.FindProperty("hillHeight").floatValue = relief;
             data.FindProperty("rider").objectReferenceValue = rider;
             data.FindProperty("cyclistAnimation").objectReferenceValue = animation;
-            data.FindProperty("routeLabel").stringValue = campsBay ? "CAMPS BAY • PROMENADE" : "CAPE CROWN • COASTAL LOOP";
+            data.FindProperty("routeLabel").stringValue = hill ? "CAMPS BAY • OCEAN & HILL" : campsBay ? "CAMPS BAY • PROMENADE" : "CAPE CROWN • COASTAL LOOP";
             data.FindProperty("rideCamera").objectReferenceValue = camera.transform;
-            data.FindProperty("telemetry").objectReferenceValue = Hud();
+            data.FindProperty("telemetry").objectReferenceValue = null;
             var array = data.FindProperty("wheels");
             array.arraySize = wheels.Length;
             for (int i=0;i<wheels.Length;i++) array.GetArrayElementAtIndex(i).objectReferenceValue = wheels[i];
             data.ApplyModifiedPropertiesWithoutUndo();
-            CapeCrownValidation.ValidateRoute();
+            if (campsBay)
+            {
+                new GameObject("Cape Crown Devices").AddComponent<CapeCrownDevices>();
+                director.gameObject.AddComponent<CapeCrownMusic>();
+                director.gameObject.AddComponent<CapeCrownMobileHud>().Configure(director);
+                director.gameObject.AddComponent<CapeCrownMobileQuality>();
+            }
+            CapeCrownValidation.ValidateRoute(relief);
             CapeCrownValidation.ValidateCyclist(animation);
             if (campsBay) ValidateCampsBayPlacement();
             AssetDatabase.SaveAssets();
@@ -112,7 +134,7 @@ namespace StoryCycling.Editor
             EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(scenePath,true) };
             // Reopen the actual saved scene: references must survive serialization, not just exist in memory.
             var reopened = EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Single);
-            CapeCrownValidation.ValidateRoute();
+            CapeCrownValidation.ValidateRoute(relief);
             bool foundRig = false;
             foreach (GameObject go in reopened.GetRootGameObjects())
             {
@@ -123,7 +145,7 @@ namespace StoryCycling.Editor
                 if (go.GetComponent<CapeCrownRideController>() != null) Selection.activeGameObject = go;
             }
             if (!foundRig) throw new InvalidOperationException("Cyclist rig lost after scene save.");
-            Debug.Log(scenePath + " saved and set as build scene. Play: W/Up = accelerate, S/Down = brake, Space = demo cruise. Bluetooth is not yet bridged in Unity.");
+            Debug.Log(scenePath + " saved and set as build scene. Trainer-driven ride. Start via menu after fresh KICKR data.");
         }
 
         // Existing instructions remain usable, but produce the new scene.
@@ -138,8 +160,8 @@ namespace StoryCycling.Editor
             for (int i=0;i<=count;i++)
             {
                 float d = Mathf.Lerp(start,end,i/(float)count);
-                vertices[2*i] = CapeCrownRoute.Position(d,left,height);
-                vertices[2*i+1] = CapeCrownRoute.Position(d,right,height);
+                vertices[2*i] = CapeCrownRoute.Position(d,left,height,relief);
+                vertices[2*i+1] = CapeCrownRoute.Position(d,right,height,relief);
                 if (i==count) continue;
                 int a=2*i, t=6*i;
                 triangles[t]=a; triangles[t+1]=a+2; triangles[t+2]=a+1;
@@ -288,15 +310,15 @@ namespace StoryCycling.Editor
         private static void Lighting()
         {
             RenderSettings.ambientMode=AmbientMode.Trilight;
-            RenderSettings.ambientSkyColor=new Color(.65f,.75f,.83f);
-            RenderSettings.ambientEquatorColor=new Color(.53f,.57f,.59f);
-            RenderSettings.ambientGroundColor=new Color(.29f,.31f,.28f);
+            RenderSettings.ambientSkyColor=new Color(.76f,.83f,.87f);
+            RenderSettings.ambientEquatorColor=new Color(.70f,.66f,.59f);
+            RenderSettings.ambientGroundColor=new Color(.43f,.39f,.32f);
             RenderSettings.fog=true; RenderSettings.fogMode=FogMode.Linear;
             RenderSettings.fogStartDistance=200; RenderSettings.fogEndDistance=650;
             RenderSettings.fogColor=new Color(.48f,.72f,.87f);
             Light sun=new GameObject("Afternoon sun").AddComponent<Light>();
-            sun.type=LightType.Directional; sun.color=new Color(1,.91f,.76f); sun.intensity=1.2f;
-            sun.shadows=LightShadows.Soft; sun.transform.rotation=Quaternion.Euler(48,-35,0);
+            sun.type=LightType.Directional; sun.color=new Color(1,.85f,.65f); sun.intensity=1.65f;
+            sun.shadows=LightShadows.Soft; sun.transform.rotation=Quaternion.Euler(24,-65,0);
         }
         private static Text Hud()
         {

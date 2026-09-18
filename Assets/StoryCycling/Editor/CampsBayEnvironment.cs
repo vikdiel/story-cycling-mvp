@@ -56,21 +56,53 @@ namespace StoryCycling.Editor
 
             // Promenade broadens on the beach straight, retaining the proven asphalt loop.
             Box("Beach promenade extension", new Vector3(58, -.035f, 0), new Vector3(4, .08f, 178), stone);
-            Box("Cafe terrace ribbon", new Vector3(37, -.04f, 0), new Vector3(6, .1f, 166), stone);
+            Box("Cafe terrace ribbon", new Vector3(38.4f, -.04f, 0), new Vector3(5.2f, .1f, 176), stone);
+            Color[] facades = {new Color(.90f,.83f,.69f),new Color(.81f,.88f,.84f),new Color(.94f,.90f,.78f),new Color(.82f,.59f,.43f)};
+            Material glass = Mat("Coastal blue glazing",new Color(.13f,.31f,.36f));
+            Material trim = Mat("Warm white joinery",new Color(.94f,.91f,.82f));
+            Material rail = Mat("Balcony bronze",new Color(.22f,.27f,.25f));
             for (int i = 0; i < 9; i++)
             {
                 float z = -72 + 18 * i;
-                GameObject shop = GroundPrefab(CampsBayShops[i % CampsBayShops.Length], Vector3.zero, 90, 15.5f, "Cafe frontage " + i);
+                GameObject shop = GroundPrefab(CampsBayShops[i % CampsBayShops.Length], Vector3.zero, 90, 18f, "Cafe ground floor " + i);
                 Bounds b = BoundsOf(shop);
-                shop.transform.localScale *= Mathf.Min(1, 8f / b.size.y);
+                // Set human-scale height explicitly. Old code only shrank already-small 3 m shops.
+                shop.transform.localScale *= Mathf.Min(4.3f / b.size.y,16f / b.size.z);
                 b = BoundsOf(shop);
-                // Shop windows face local +Z in these Synty models; +90 yaw faces the beach (+X).
-                shop.transform.position += new Vector3(33.5f - b.max.x, -.14f - b.min.y, z - b.center.z);
-                CoastalShops.Add(shop); CoastalProps.Add(shop);
-                AddCoastalProp(CafeTable, new Vector3(36.5f, .01f, z - 2.8f), 90, 2.7f, "Cafe terrace table " + i);
-                AddCoastalProp(Umbrella, new Vector3(36.5f, .01f, z + 2.8f), 0, 2.8f, "Cafe parasol " + i);
-                Box("Terrace planter", new Vector3(39, .30f, z + 6.8f), new Vector3(.7f, .65f, 1.8f), accent);
-                Box("Planter greenery", new Vector3(39, .7f, z + 6.8f), new Vector3(.65f, .3f, 1.65f), leaf);
+                shop.transform.position += new Vector3(37.2f - b.max.x, -.14f - b.min.y, z - b.center.z);
+                b=BoundsOf(shop);
+                Transform building = new GameObject("Promenade villa " + i).transform;
+                shop.transform.SetParent(building,true);
+                Material plaster=Mat("Villa plaster "+i,facades[i%facades.Length]);
+                float upperHeight=i%3==1?5.6f:3.4f;
+                float roof=b.max.y+upperHeight;
+                Part(building,PrimitiveType.Cube,new Vector3(b.center.x,b.max.y+upperHeight/2,z),new Vector3(b.size.x,upperHeight,b.size.z),plaster);
+                Part(building,PrimitiveType.Cube,new Vector3(b.center.x,roof+.18f,z),new Vector3(b.size.x+.3f,.36f,b.size.z+.3f),trim);
+                int bays=Mathf.Max(2,Mathf.FloorToInt(b.size.z/3));
+                for(int floor=0;floor<(upperHeight>4?2:1);floor++)
+                for(int bay=0;bay<bays;bay++)
+                {
+                    float wz=z+(bay-(bays-1)*.5f)*(b.size.z/bays);
+                    float wy=b.max.y+1.65f+floor*2.6f;
+                    Part(building,PrimitiveType.Cube,new Vector3(37.26f,wy,wz),new Vector3(.14f,2.05f,2.05f),trim);
+                    Part(building,PrimitiveType.Cube,new Vector3(37.35f,wy,wz),new Vector3(.07f,1.75f,1.7f),glass);
+                    Part(building,PrimitiveType.Cube,new Vector3(37.41f,wy,wz),new Vector3(.07f,1.8f,.075f),trim);
+                }
+                Part(building,PrimitiveType.Cube,new Vector3(37.7f,b.max.y+.05f,z),new Vector3(1.25f,.16f,b.size.z),trim);
+                Part(building,PrimitiveType.Cube,new Vector3(38.22f,b.max.y+1.05f,z),new Vector3(.06f,.08f,b.size.z),rail);
+                for(float bz=z-b.size.z/2;bz<=z+b.size.z/2;bz+=1.25f)
+                    Part(building,PrimitiveType.Cube,new Vector3(38.22f,b.max.y+.55f,bz),new Vector3(.055f,1,.055f),rail);
+                // End facade gets windows as well: no blank warehouse wall facing the arriving rider.
+                for(int w=0;w<2;w++) {
+                    float x=b.center.x+(w==0?-1.5f:1.5f);
+                    Part(building,PrimitiveType.Cube,new Vector3(x,b.max.y+1.65f,b.min.z-.06f),new Vector3(1.7f,2.05f,.12f),trim);
+                    Part(building,PrimitiveType.Cube,new Vector3(x,b.max.y+1.65f,b.min.z-.14f),new Vector3(1.4f,1.75f,.06f),glass);
+                }
+                CoastalShops.Add(building.gameObject);CoastalProps.Add(building.gameObject);
+                AddCoastalProp(CafeTable,new Vector3(39.8f,.01f,z-2.6f),90,2.5f,"Cafe terrace table "+i);
+                AddCoastalProp(Umbrella,new Vector3(39.8f,.01f,z+2.6f),0,2.6f,"Cafe parasol "+i);
+                Box("Terrace planter",new Vector3(40.5f,.30f,z+6.8f),new Vector3(.65f,.65f,1.8f),accent);
+                Box("Planter greenery",new Vector3(40.5f,.7f,z+6.8f),new Vector3(.6f,.3f,1.65f),leaf);
             }
 
             Transform palm = CreatePalm(timber, leaf);
@@ -89,31 +121,38 @@ namespace StoryCycling.Editor
             // Quiet inland return, grouped planting instead of repetitive towers on a lawn.
             foreach (Vector3 centre in new[] { new Vector3(-24, 0, -56), new Vector3(-16, 0, 6), new Vector3(-23, 0, 63) })
                 for (int j = 0; j < 3; j++)
-                    AddCoastalProp(Tree, centre + new Vector3((j % 2) * 6, -.14f, j * 8), j * 63, 5.5f, "Inland grove");
+                    {
+                    Vector3 p = centre + new Vector3((j % 2) * 6, -.14f, j * 8);
+                    float d = 2 * CapeCrownRoute.HalfStraight + Mathf.PI * CapeCrownRoute.Radius + CapeCrownRoute.HalfStraight - p.z;
+                    float weight = Mathf.Clamp01(1 - (p.x + CapeCrownRoute.Radius - 8) / 18);
+                    p.y += CapeCrownRoute.Elevation(d,relief) * weight;
+                    AddCoastalProp(Tree,p,j*63,5.5f,"Inland grove");
+                }
             for (int i = 0; i < 4; i++)
-                AddCoastalProp(Bench, new Vector3(-58.8f, -.14f, -57 + 38 * i), -90, 2.2f, "Return road lookout");
+                {
+                    float z = -57 + 38 * i;
+                    float d = 2 * CapeCrownRoute.HalfStraight + Mathf.PI * CapeCrownRoute.Radius + CapeCrownRoute.HalfStraight - z;
+                    float y = Mathf.Lerp(CapeCrownRoute.Elevation(d,relief)-.035f,-.15f,(10.8f-8)/18);
+                    AddCoastalProp(Bench,new Vector3(-58.8f,y,z),-90,2.2f,"Return road lookout");
+                }
 
             // Curbs are continuous and remain outside the full 10 m ride corridor.
-            Strip("Inner limestone curb", -5.24f, -5.03f, .09f, 0, CapeCrownRoute.Length, stone);
-            Strip("Outer limestone curb", 5.03f, 5.24f, .09f, 0, CapeCrownRoute.Length, stone);
+            Strip("Inner limestone curb", -4.24f, -4.03f, .09f, 0, CapeCrownRoute.Length, stone);
+            Strip("Outer limestone curb", 4.03f, 4.24f, .09f, 0, CapeCrownRoute.Length, stone);
         }
 
         private static float ShoreX(float z) => 107 + 7 * Mathf.Cos(z * Mathf.PI / 340);
 
         private static void CoastalSky()
         {
-            Shader shader = Shader.Find("Skybox/Procedural");
-            if (shader == null) throw new InvalidOperationException("Procedural sky shader unavailable.");
-            var sky = new Material(shader) { name = "Camps Bay afternoon sky" };
-            sky.SetFloat("_AtmosphereThickness", .8f);
-            sky.SetFloat("_Exposure", 1.05f);
-            sky.SetFloat("_SunSize", .025f);
-            sky.SetFloat("_SunDisk", 1);
-            sky.EnableKeyword("_SUNDISK_SIMPLE");
-            sky.SetColor("_SkyTint", new Color(.5f, .5f, .5f));
-            sky.SetColor("_GroundColor", new Color(.47f, .53f, .57f));
-            RenderSettings.skybox = Save(sky);
-            RenderSettings.fogColor = new Color(.58f, .72f, .80f);
+            Shader shader = Shader.Find("CapeCrown/CoastalSky");
+            if(shader==null)throw new InvalidOperationException("Coastal sky shader missing");
+            var sky=new Material(shader){name="Camps Bay golden evening"};
+            sky.SetColor("_Zenith",new Color(.28f,.61f,.80f));
+            sky.SetColor("_Horizon",new Color(.98f,.85f,.73f));
+            sky.SetVector("_SunDirection",new Vector4(.82f,.27f,.51f,0));
+            RenderSettings.skybox=Save(sky);
+            RenderSettings.fogColor=new Color(.88f,.83f,.71f);
         }
 
         private static void AddCoastalProp(string path, Vector3 position, float yaw, float size, string name)
@@ -141,8 +180,12 @@ namespace StoryCycling.Editor
         private static void MountainBackdrop(Material material)
         {
             // Faceted sandstone ridge to suggest the Twelve Apostles, well beyond the ride corridor.
-            float[] xs = { -88, -130, -190, -228, -300, -430 };
-            float[] profile = { -.15f, 9, 70, 73, 31, 1 };
+            float[] xs = relief > 0
+                ? new[] { -88f, -118f, -155f, -177f, -192f, -212f, -240f, -290f, -365f, -460f }
+                : new[] { -88f, -130f, -190f, -228f, -300f, -430f };
+            float[] profile = relief > 0
+                ? new[] { -.15f, 3f, 16f, 28f, 46f, 49f, 42f, 26f, 12f, 1f }
+                : new[] { -.15f, 9f, 70f, 73f, 31f, 1f };
             var vertices = new List<Vector3>();
             var triangles = new List<int>();
             for (int row = 0; row < 40; row++)
@@ -159,8 +202,10 @@ namespace StoryCycling.Editor
         private static Vector3 RidgePoint(int row, int col, float[] xs, float[] profile)
         {
             float height = profile[col];
-            if (col > 0) height *= .83f + .30f * Mathf.Abs(Mathf.Sin(row * 1.13f)) + .12f * Mathf.Sin(row * .32f);
-            return new Vector3(xs[col], height, -440 + row * 22);
+            if (col > 0) height *= relief > 0
+                ? .68f + .34f * Mathf.Abs(Mathf.Sin(row * .36f)) + .11f * Mathf.Sin(row * 1.17f + col*.6f)
+                : .83f + .30f * Mathf.Abs(Mathf.Sin(row * 1.13f)) + .12f * Mathf.Sin(row * .32f);
+            return new Vector3(xs[col] + (relief > 0 && col > 0 ? Mathf.Sin(row*.8f+col)*7 : 0), height, -440 + row * 22);
         }
 
         private static Transform CreatePalm(Material trunk, Material leaves)
@@ -223,7 +268,7 @@ namespace StoryCycling.Editor
             for (int i = 0; i < CoastalShops.Count; i++)
             {
                 Bounds a = BoundsOf(CoastalShops[i]);
-                if (a.max.x > 33.51f || a.size.y > 8.01f || Mathf.Abs(a.min.y + .14f) > .01f)
+                if (a.max.x > 38.4f || a.size.y > 10.8f || a.size.y < 6f || Mathf.Abs(a.min.y + .14f) > .01f)
                     throw new InvalidOperationException("Invalid frontage alignment: " + CoastalShops[i].name);
                 for (int j = i + 1; j < CoastalShops.Count; j++)
                     if (a.Intersects(BoundsOf(CoastalShops[j])))

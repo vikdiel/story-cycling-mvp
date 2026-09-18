@@ -13,3 +13,24 @@ jobs:
       - uses: actions/checkout@v4
       - name: Validate Cape Crown world dependencies
         run: bash scripts/ci/unity-world-preflight.sh
+
+  native-ios-compile:
+    name: Native Bluetooth iOS compile
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: Assets/StoryCycling/Plugins
+      - name: Typecheck native bridge against iPhoneOS SDK
+        run: |
+          IOS_SDK_PATH="$(xcrun --sdk iphoneos --show-sdk-path)"
+          xcrun --sdk iphoneos clang++ -fsyntax-only -fobjc-arc -fmodules \
+            -target arm64-apple-ios15.0 -isysroot "$IOS_SDK_PATH" \
+            Assets/StoryCycling/Plugins/iOS/CapeCrownBluetooth.mm
+
+  source-gate:
+    name: Unity Source Gate (not device runtime)
+    needs: [world-preflight, native-ios-compile]
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Assets and native iOS syntax passed. Unity runtime and physical BLE are separate gates."

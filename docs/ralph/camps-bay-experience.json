@@ -1,0 +1,72 @@
+{
+  "project": "Cape Crown — Camps Bay rider experience",
+  "branchName": "unity-world",
+  "description": "Trainer-driven coastal ride: corrected architecture and light, honest telemetry HUD, start/device menus and calm original music. Physical KICKR/HR validation remains a device gate. Click/hill control is separate unfinished integration, not implied by pairing.",
+  "userStories": [
+    {
+      "id": "CBX-001",
+      "title": "Trainer telemetry",
+      "description": "BLE scan/connect/disconnect for KICKR FTMS and heart rate; bounded parsers; stale samples become unavailable; no fabricated metrics",
+      "acceptanceCriteria": [
+        "BLE scan/connect/disconnect for KICKR FTMS and heart rate; bounded parsers; stale samples become unavailable; no fabricated metrics",
+        "Typecheck passes",
+        "Verify in Unity Game view and runtime checks"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Implemented native scan/connect/disconnect and FTMS/HR parsing; Unity compile, editor parser fixtures and native macOS syntax pass. Physical iPad BLE gate pending; keep false."
+    },
+    {
+      "id": "CBX-002",
+      "title": "Trainer-only ride and menus",
+      "description": "Start requires fresh trainer data; pause/resume/end; no touch or keyboard propulsion in player builds; disconnected riding cannot earn distance",
+      "acceptanceCriteria": [
+        "Start requires fresh trainer data; pause/resume/end; no touch or keyboard propulsion in player builds; disconnected riding cannot earn distance",
+        "Typecheck passes",
+        "Verify in Unity Game view and runtime checks"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "PASS: Unity full-lap test, start gate, menu controls, fresh/stale/zero data, pause and no simulated training distance. Real iPad BLE is tracked separately in CBX-001."
+    },
+    {
+      "id": "CBX-003",
+      "title": "Camps Bay scale and light",
+      "description": "Larger consistent shop fronts and coastal architecture; warm soft sunlight; mobile profile; saved scene and measured clearance",
+      "acceptanceCriteria": [
+        "Larger consistent shop fronts and coastal architecture; warm soft sunlight; mobile profile; saved scene and measured clearance",
+        "Typecheck passes",
+        "Verify in Unity Game view and runtime checks"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "PASS: saved trainer scene, 7–10m frontage, clearance/overlap/route assertions, full lap and rendered coast/climb/descent reviewed under Mobile URP."
+    },
+    {
+      "id": "CBX-004",
+      "title": "Music and audio settings",
+      "description": "Original ambient loop; persisted mute/volume; fades and pauses with app focus; no third-party audio dependency",
+      "acceptanceCriteria": [
+        "Original ambient loop; persisted mute/volume; fades and pauses with app focus; no third-party audio dependency",
+        "Typecheck passes",
+        "Verify in Unity Game view and runtime checks"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": "PASS: original 64-second loop generated; AudioSource playing, mute and volume checks passed in editor. iPad speaker balance remains device QA."
+    },
+    {
+      "id": "CBX-005",
+      "title": "Verified iPad delivery",
+      "description": "Editor compile; full lap using explicitly labeled editor-only fixture; menu QA and captures; iOS export checked separately from device testing",
+      "acceptanceCriteria": [
+        "Editor compile; full lap using explicitly labeled editor-only fixture; menu QA and captures; iOS export checked separately from device testing",
+        "Typecheck passes",
+        "Verify in Unity Game view and runtime checks"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "Unity iOS export PASS with 0 errors; iPad/landscape/native source/framework/plist verified, telemetry callback retained and editor fixture absent from IL2CPP. iPhoneOS SDK CI pending; signed device build is not claimed."
+    }
+  ]
+}

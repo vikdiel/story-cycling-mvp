@@ -22,11 +22,11 @@ namespace StoryCycling
             cranks = arms; pedals = platforms;
         }
 
-        public void Tick(float speedKph, float distance, bool pedalling, float deltaTime)
+        public void Tick(float speedKph, float distance, bool pedalling, float deltaTime, float measuredCadence = -1)
         {
             if (!IsConfigured) return;
-            // Cosmetic cadence until a real cadence channel is bridged; do not expose as telemetry.
-            float target = pedalling && speedKph > .1f ? Mathf.Lerp(35, 95, Mathf.Clamp01(speedKph / 40)) : 0;
+            // Measured cadence drives the rig; cosmetic fallback only when the trainer omits it.
+            float target = pedalling && speedKph > .1f ? (measuredCadence >= 0 ? measuredCadence : Mathf.Lerp(35, 95, Mathf.Clamp01(speedKph / 40))) : 0;
             cadence = Mathf.MoveTowards(cadence, target, 180 * deltaTime);
             phase = Mathf.Repeat(phase + cadence / 60 * Mathf.PI * 2 * deltaTime, Mathf.PI * 2);
             ApplyPose(phase);

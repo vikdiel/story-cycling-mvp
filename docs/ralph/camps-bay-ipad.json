@@ -1,0 +1,49 @@
+{
+  "project": "Story Cycling – Camps Bay hill and iPad visual beta",
+  "branchName": "unity-world",
+  "description": "Polish the coastal scene; add a rideable low hill; prepare the first independent Unity iPad visual beta. Bluetooth bridge and store submission are not claimed.",
+  "userStories": [
+    {
+      "id": "CBI-001",
+      "title": "Continuous coastal hill",
+      "description": "Shared road, rider and camera climb eight metres with smooth joins; flat loop remains available",
+      "acceptanceCriteria": [
+        "Full-lap route assertions pass at 0 m and 8 m relief",
+        "Slope does not exceed 6 percent; shoulder supports the raised asphalt",
+        "Editor visual review of coast, climb and descent",
+        "Unity typecheck passes"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Route and hill verified through trainer-experience full-lap review; eight metres, <6% grade."
+    },
+    {
+      "id": "CBI-002",
+      "title": "iPad ride controls",
+      "description": "Safe-area touch controls and mobile quality for the visual test build",
+      "acceptanceCriteria": [
+        "Hold accelerate and brake; cruise and pause work without a keyboard",
+        "Focus loss releases held inputs and stops simulation",
+        "Mobile URP profile and landscape safe area checked",
+        "Unity typecheck passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Superseded by Vik: product is KICKR-driven. Touch acceleration must not ship; touch is only menus/pairing/pause."
+    },
+    {
+      "id": "CBI-003",
+      "title": "Repeatable iPad export",
+      "description": "One menu generates the new scene and an unsigned Xcode project",
+      "acceptanceCriteria": [
+        "iPad-only ARM64 IL2CPP, Metal, landscape and unique bundle ID",
+        "Export succeeds with iOS Build Support or reports actionable missing module",
+        "Report separately: Unity export versus Xcode signing and actual device FPS",
+        "Unity typecheck passes"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Unity export successful 2026-09-18; signed Xcode/device validation remains separate."
+    }
+  ]
+}
