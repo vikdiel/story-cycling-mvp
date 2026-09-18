@@ -14,6 +14,18 @@ namespace StoryCycling.Editor
         private static string Generated;
         private static float relief;
         private const string Root = "Assets/Synty/PolygonCity/Prefabs/";
+        private const float StadiumHalf = 175f;   // Camps Bay straight half-length (beach z-span)
+        private static readonly Vector2[] CampsBayWaypoints = {
+            new Vector2(48, -175), new Vector2(48, 0), new Vector2(48, 175),
+            new Vector2(0, 223), new Vector2(-48, 175), new Vector2(-48, 0), new Vector2(-48, -175),
+            new Vector2(0, -223)
+        };
+        private static readonly Vector2[] BoKaapWaypoints = {
+            new Vector2(0, 0), new Vector2(70, 40), new Vector2(140, 0), new Vector2(190, 70),
+            new Vector2(130, 140), new Vector2(190, 200), new Vector2(120, 250), new Vector2(50, 200),
+            new Vector2(0, 250), new Vector2(-60, 200), new Vector2(-130, 240), new Vector2(-190, 160),
+            new Vector2(-130, 100), new Vector2(-190, 20), new Vector2(-100, -40), new Vector2(-20, -20)
+        };
         private static readonly string[] Buildings = {
             Root + "Buildings/SM_Bld_Shop_03.prefab",
             Root + "Buildings/SM_Bld_Apartment_Stack_01.prefab"
@@ -44,6 +56,8 @@ namespace StoryCycling.Editor
             Directory.CreateDirectory("Assets/StoryCycling/Scenes");
             AssetDatabase.Refresh();
             assetId = 0;
+            CapeCrownRoute.Define(CampsBayWaypoints);
+            CapeCrownRoute.Hills = new[] { (360f, 660f, .65f), (700f, 920f, .4f) };
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             Material asphalt = Mat("Asphalt", new Color(.12f, .15f, .18f));
             Material white = Mat("RoadPaint", new Color(.94f, .91f, .78f));
@@ -155,6 +169,124 @@ namespace StoryCycling.Editor
         // Existing instructions remain usable, but produce the new scene.
         [MenuItem("Story Cycling/Build Cape Crown Vertical Slice")]
         public static void BuildCapeCrownVerticalSlice() => BuildLoop();
+
+        [MenuItem("Story Cycling/Build Bo-Kaap Steps")]
+        public static void BuildBoKaap()
+        {
+            if (EditorApplication.isPlaying) throw new InvalidOperationException("Stop Play Mode before building.");
+            if (!Application.isBatchMode && !EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
+            relief = CapeCrownRoute.CoastalHillHeight;
+            Generated = "Assets/StoryCycling/GeneratedBoKaap";
+            string scenePath = "Assets/StoryCycling/Scenes/BoKaapSteps.unity";
+            Directory.CreateDirectory(Generated);
+            Directory.CreateDirectory("Assets/StoryCycling/Scenes");
+            AssetDatabase.Refresh();
+            assetId = 0;
+            CapeCrownRoute.Define(BoKaapWaypoints);
+            CapeCrownRoute.Hills = new[] { (250f, 550f, .65f), (650f, 950f, .6f) };
+            var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            BuildBoKaapEnvironment();
+            // Road + rider + HUD + save (same core as Camps Bay; dedup tracked in SEC-001).
+            Material asphalt = Mat("Asphalt", new Color(.12f, .15f, .18f));
+            Material white = Mat("RoadPaint", new Color(.94f, .91f, .78f));
+            Strip("Continuous asphalt", -4f, 4f, .02f, 0, CapeCrownRoute.Length, asphalt);
+            Strip("Inner edge", -3.7f, -3.57f, .03f, 0, CapeCrownRoute.Length, white);
+            Strip("Outer edge", 3.57f, 3.7f, .03f, 0, CapeCrownRoute.Length, white);
+            int dashCount = Mathf.RoundToInt(CapeCrownRoute.Length / 8f);
+            float dashSpacing = CapeCrownRoute.Length / dashCount;
+            for (int i = 0; i < dashCount; i++)
+                Strip("Centre dash " + i, -.07f, .07f, .035f, i * dashSpacing, i * dashSpacing + 3f, white);
+            Lighting();
+            CoastalSky();
+            Transform rider = AnimatedCyclist(out Transform[] wheels, out CapeCrownCyclistAnimation animation);
+            GameObject cameraObject = new GameObject("Ride Camera", typeof(Camera), typeof(AudioListener));
+            cameraObject.tag = "MainCamera";
+            Camera camera = cameraObject.GetComponent<Camera>();
+            camera.fieldOfView = 58; camera.nearClipPlane = .1f; camera.farClipPlane = 700; camera.allowHDR = false;
+            cameraObject.AddComponent<UnityEngine.Rendering.Universal.UniversalAdditionalCameraData>().renderPostProcessing = true;
+            var volume = new GameObject("Coastal colour grade").AddComponent<Volume>(); volume.isGlobal = true;
+            var profile = ScriptableObject.CreateInstance<VolumeProfile>();
+            var grade = profile.Add<UnityEngine.Rendering.Universal.ColorAdjustments>(true);
+            grade.postExposure.Override(.2f); grade.contrast.Override(12); grade.saturation.Override(12);
+            var bloom = profile.Add<UnityEngine.Rendering.Universal.Bloom>(true);
+            bloom.intensity.Override(.35f); bloom.threshold.Override(.92f);
+            var vignette = profile.Add<UnityEngine.Rendering.Universal.Vignette>(true);
+            vignette.intensity.Override(.28f); vignette.smoothness.Override(.4f);
+            profile = Save(profile); AssetDatabase.AddObjectToAsset(grade, profile); AssetDatabase.AddObjectToAsset(bloom, profile); AssetDatabase.AddObjectToAsset(vignette, profile); volume.sharedProfile = profile;
+            camera.clearFlags = CameraClearFlags.Skybox;
+            CapeCrownRoute.Sample(0, out _, out Vector3 forward);
+            rider.SetPositionAndRotation(CapeCrownRoute.Position(0, CapeCrownRoute.LaneOffset, .045f), Quaternion.LookRotation(forward));
+            camera.transform.position = rider.position - forward * 5.8f + Vector3.up * 2.6f;
+            camera.transform.LookAt(rider.position + forward * 7 + Vector3.up * 1.15f);
+            var director = new GameObject("Cape Crown Ride Director").AddComponent<CapeCrownRideController>();
+            SerializedObject data = new SerializedObject(director);
+            data.FindProperty("hillHeight").floatValue = relief;
+            data.FindProperty("rider").objectReferenceValue = rider;
+            data.FindProperty("cyclistAnimation").objectReferenceValue = animation;
+            data.FindProperty("routeLabel").stringValue = "BO-KAAP • STEPS";
+            data.FindProperty("rideCamera").objectReferenceValue = camera.transform;
+            data.FindProperty("telemetry").objectReferenceValue = null;
+            var array = data.FindProperty("wheels");
+            array.arraySize = wheels.Length;
+            for (int i = 0; i < wheels.Length; i++) array.GetArrayElementAtIndex(i).objectReferenceValue = wheels[i];
+            data.ApplyModifiedPropertiesWithoutUndo();
+            new GameObject("Cape Crown Devices").AddComponent<CapeCrownDevices>();
+            director.gameObject.AddComponent<CapeCrownMusic>();
+            director.gameObject.AddComponent<CapeCrownMobileHud>().Configure(director);
+            director.gameObject.AddComponent<CapeCrownMobileQuality>();
+            CapeCrownValidation.ValidateRoute(relief);
+            CapeCrownValidation.ValidateCyclist(animation);
+            AssetDatabase.SaveAssets();
+            EditorSceneManager.SaveScene(scene, scenePath);
+            EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(scenePath, true) };
+            var reopened = EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Single);
+            CapeCrownValidation.ValidateRoute(relief);
+            bool foundRig = false;
+            foreach (GameObject go in reopened.GetRootGameObjects())
+            {
+                CapeCrownCyclistAnimation rig = go.GetComponentInChildren<CapeCrownCyclistAnimation>();
+                if (rig != null) { CapeCrownValidation.ValidateCyclist(rig); foundRig = true; }
+                foreach (MeshFilter mesh in go.GetComponentsInChildren<MeshFilter>())
+                    if (mesh.sharedMesh == null) throw new InvalidOperationException("Mesh lost after save: " + mesh.name);
+                if (go.GetComponent<CapeCrownRideController>() != null) Selection.activeGameObject = go;
+            }
+            if (!foundRig) throw new InvalidOperationException("Cyclist rig lost after scene save.");
+            Debug.Log(scenePath + " saved. Route length " + CapeCrownRoute.Length.ToString("0") + " m.");
+        }
+
+        private static void BuildBoKaapEnvironment()
+        {
+            Material ground = Mat("Bo-Kaap ground", new Color(.46f, .44f, .42f));
+            Box("Bo-Kaap ground", new Vector3(0, -0.6f, 0), new Vector3(900, 1, 900), ground);
+            Color[] palette = {
+                new Color(.96f, .42f, .56f), new Color(.30f, .72f, .52f), new Color(.36f, .55f, .86f),
+                new Color(.95f, .76f, .26f), new Color(.44f, .80f, .74f), new Color(.90f, .50f, .30f),
+                new Color(.72f, .52f, .82f)
+            };
+            Material trim = Mat("Bo-Kaap trim", new Color(.97f, .94f, .86f));
+            float spacing = 9f;
+            for (float d = 0; d < CapeCrownRoute.Length; d += spacing)
+            {
+                CapeCrownRoute.Sample(d, out Vector3 point, out Vector3 forward);
+                Vector3 fwd = new Vector3(forward.x, 0, forward.z).normalized;
+                Vector3 right = Vector3.Cross(Vector3.up, fwd).normalized;
+                Quaternion rot = Quaternion.LookRotation(fwd, Vector3.up);
+                for (int side = -1; side <= 1; side += 2)
+                {
+                    int idx = Mathf.RoundToInt(d / spacing) * 2 + (side < 0 ? 0 : 1);
+                    float w = 4f + (idx % 3) * 2f;
+                    float h = 3f + ((idx / 2) % 3) * 1.5f;
+                    int colorIdx = idx % palette.Length;
+                    Vector3 pos = point + right * (side * 10f) + Vector3.up * (h / 2f - 0.15f);
+                    GameObject house = Part(null, PrimitiveType.Cube, pos, new Vector3(6f, h, w), Mat("Bo-Kaap house " + colorIdx, palette[colorIdx]));
+                    house.transform.rotation = rot;
+                    house.name = "Bo-Kaap house";
+                    GameObject roof = Part(null, PrimitiveType.Cube, pos + Vector3.up * (h / 2f + 0.18f), new Vector3(6.4f, 0.35f, w + 0.4f), trim);
+                    roof.transform.rotation = rot;
+                    roof.name = "Bo-Kaap roof";
+                }
+            }
+        }
 
         private static void Strip(string name, float left, float right, float height, float start, float end, Material material)
         {

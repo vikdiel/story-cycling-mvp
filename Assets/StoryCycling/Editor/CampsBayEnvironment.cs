@@ -55,7 +55,7 @@ namespace StoryCycling.Editor
             MountainBackdrop(rock);
 
             // Promenade broadens on the beach straight, retaining the proven asphalt loop.
-            float half = CapeCrownRoute.HalfStraight;
+            float half = StadiumHalf;
             Box("Beach promenade extension", new Vector3(58, -.035f, 0), new Vector3(4, .08f, 2*half+8), stone);
             Box("Cafe terrace ribbon", new Vector3(38.4f, -.04f, 0), new Vector3(5.2f, .1f, 2*half+6), stone);
             Color[] facades = {
@@ -123,12 +123,12 @@ namespace StoryCycling.Editor
             {
                 Transform instance = i == 0 ? palm : UnityEngine.Object.Instantiate(palm);
                 instance.name = "Promenade palm " + i;
-                instance.position = new Vector3(58.5f, .005f, palmStart + i * 16);
+                instance.position = new Vector3(62f, .005f, palmStart + i * 16);
                 instance.rotation = Quaternion.Euler(0, i * 53, 0);
                 instance.localScale = Vector3.one * (.92f + (i % 3) * .035f);
                 CoastalProps.Add(instance.gameObject);
                 if (i % 2 == 0)
-                    AddCoastalProp(Bench, new Vector3(56.7f, .01f, palmStart + 7 + i * 16), 90, 2.2f, "Ocean-facing bench " + i);
+                    AddCoastalProp(Bench, new Vector3(60.2f, .01f, palmStart + 7 + i * 16), 90, 2.2f, "Ocean-facing bench " + i);
             }
 
             // Quiet inland return: continuous planting along the longer straight.
@@ -137,20 +137,15 @@ namespace StoryCycling.Editor
                 float cz = -(half - 18) + g * (2 * (half - 18) / 5f);
                 for (int j = 0; j < 3; j++)
                 {
-                    Vector3 p = new Vector3(-22 + (g % 2) * 8, 0, cz) + new Vector3((j % 2) * 6, -.14f, j * 8);
-                    float d = 2 * CapeCrownRoute.HalfStraight + Mathf.PI * CapeCrownRoute.Radius + CapeCrownRoute.HalfStraight - p.z;
-                    float weight = Mathf.Clamp01(1 - (p.x + CapeCrownRoute.Radius - 8) / 18);
-                    p.y += CapeCrownRoute.Elevation(d, relief) * weight;
+                    Vector3 p = new Vector3(-22 + (g % 2) * 8, -.14f, cz) + new Vector3((j % 2) * 6, 0, j * 8);
                     AddCoastalProp(Tree, p, g * 37 + j * 63, 5.5f, "Inland grove");
                 }
             }
-            int lookoutCount = Mathf.Max(2, Mathf.FloorToInt((2f * half - 60f) / 50f) + 1);
-            for (int i = 0; i < lookoutCount; i++)
+            for (int i = 0; i < 6; i++)
                 {
-                    float z = -(half - 30) + i * (2 * (half - 30) / Mathf.Max(1, lookoutCount - 1));
-                    float d = 2 * CapeCrownRoute.HalfStraight + Mathf.PI * CapeCrownRoute.Radius + CapeCrownRoute.HalfStraight - z;
-                    float y = Mathf.Lerp(CapeCrownRoute.Elevation(d,relief)-.035f,-.15f,(10.8f-8)/18);
-                    AddCoastalProp(Bench,new Vector3(-58.8f,y,z),-90,2.2f,"Return road lookout");
+                    float d = 520 + i * 58;
+                    Vector3 p = CapeCrownRoute.Position(d, 10.8f, -0.12f, relief);
+                    AddCoastalProp(Bench, p, -90, 2.2f, "Return road lookout");
                 }
 
             // Curbs are continuous and remain outside the full 10 m ride corridor.

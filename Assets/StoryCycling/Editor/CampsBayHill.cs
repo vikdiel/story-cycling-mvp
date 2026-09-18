@@ -86,7 +86,7 @@ namespace StoryCycling.Editor
                     }
                 }
             }
-            float half = CapeCrownRoute.HalfStraight;
+            float half = StadiumHalf;
             for (int i=0;i<8;i++)
             {
                 float z = -(half-30) + i * (2*(half-30)/7f);

@@ -6,7 +6,7 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
-    path: Assets/StoryCycling/Scenes/CampsBayTrainerRide.unity
-    guid: a6c46c8bd872246f9b692e353eb45bcb
+    path: Assets/StoryCycling/Scenes/BoKaapSteps.unity
+    guid: 7c994798fd8184326b3f35fdc441235e
   m_configObjects:
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}

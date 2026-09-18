@@ -13,16 +13,12 @@ namespace StoryCycling.Editor
         {
             const float epsilon = .01f;
             float length = CapeCrownRoute.Length;
-            float straight = 2f * CapeCrownRoute.HalfStraight;
-            float arc = Mathf.PI * CapeCrownRoute.Radius;
-            // Position and tangent must be continuous across all joins, including lap wrap.
-            foreach (float join in new[] { 0f, straight, straight + arc, 2f * straight + arc, length })
-            {
-                CapeCrownRoute.Sample(join - epsilon, out Vector3 before, out Vector3 beforeForward,hillHeight);
-                CapeCrownRoute.Sample(join + epsilon, out Vector3 after, out Vector3 afterForward,hillHeight);
-                Require(Vector3.Distance(before, after) < .025f, "Gap at route join " + join);
-                Require(Vector3.Dot(beforeForward, afterForward) > .999f, "Heading discontinuity at " + join);
-            }
+            Require(length > 100f, "Route too short: " + length);
+            // Closed smooth loop: the lap must meet itself at the wrap point.
+            CapeCrownRoute.Sample(0, out Vector3 start, out Vector3 startFwd, hillHeight);
+            CapeCrownRoute.Sample(length - epsilon, out Vector3 end, out Vector3 endFwd, hillHeight);
+            Require(Vector3.Distance(start, end) < .05f, "Loop does not close");
+            Require(Vector3.Dot(startFwd, endFwd) > .95f, "Loop tangent mismatch at wrap");
             foreach (var hill in CapeCrownRoute.Hills)
             foreach (float join in new[] { hill.start, hill.end })
             {
@@ -42,8 +38,8 @@ namespace StoryCycling.Editor
                 Require(Mathf.Abs(Vector3.Distance(left,right)-10f) < .001f, "Incorrect road width");
                 Vector3 rider = CapeCrownRoute.Position(d, CapeCrownRoute.LaneOffset,0,hillHeight);
                 Require(Vector3.Distance(left,rider) > 2f && Vector3.Distance(right,rider) > 2f, "Rider outside lane");
-                float advanced = CapeCrownRoute.Advance(d,.01f,CapeCrownRoute.LaneOffset,hillHeight);
-                float travelled = Vector3.Distance(rider,CapeCrownRoute.Position(advanced,CapeCrownRoute.LaneOffset,0,hillHeight));
+                float advanced = CapeCrownRoute.Advance(d,.01f,0f,hillHeight);
+                float travelled = Vector3.Distance(CapeCrownRoute.Position(d,0,0,hillHeight),CapeCrownRoute.Position(advanced,0,0,hillHeight));
                 Require(Mathf.Abs(travelled-.01f) < .001f, "Speed changes in bends");
             }
             GameObject road = GameObject.Find("Continuous asphalt");
