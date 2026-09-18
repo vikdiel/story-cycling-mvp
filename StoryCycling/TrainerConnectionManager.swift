@@ -56,18 +56,24 @@ final class TrainerConnectionManager: NSObject, ObservableObject {
     private var central: CBCentralManager?
     private var connectedPeripheral: CBPeripheral?
     private var intentionallyDisconnected = false
+    private var scanRequested = false
     private var controlPoint: CBCharacteristic?
     private var pendingResistance: Int16?
 
     func startScan() {
+        scanRequested = true
         ensureCentralManager()
         guard let central else { return }
 
         guard central.state == .poweredOn else {
-            state = .bluetoothUnavailable(reason(for: central.state))
+            state = .ready
             return
         }
 
+        beginScan(with: central)
+    }
+
+    private func beginScan(with central: CBCentralManager) {
         trainers = []
         intentionallyDisconnected = false
         state = .scanning
@@ -83,6 +89,7 @@ final class TrainerConnectionManager: NSObject, ObservableObject {
         ensureCentralManager()
         guard let central else { return }
 
+        scanRequested = false
         intentionallyDisconnected = false
         central.stopScan()
         state = .connecting(trainer.displayName)
@@ -91,6 +98,7 @@ final class TrainerConnectionManager: NSObject, ObservableObject {
 
     func disconnect() {
         intentionallyDisconnected = true
+        scanRequested = false
         central?.stopScan()
 
         if let connectedPeripheral {
@@ -135,7 +143,11 @@ final class TrainerConnectionManager: NSObject, ObservableObject {
 extension TrainerConnectionManager: CBCentralManagerDelegate {
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
         if central.state == .poweredOn {
-            if case .bluetoothUnavailable = state { state = .ready }
+            if scanRequested {
+                beginScan(with: central)
+            } else if case .bluetoothUnavailable = state {
+                state = .ready
+            }
         } else {
             state = .bluetoothUnavailable(reason(for: central.state))
         }
