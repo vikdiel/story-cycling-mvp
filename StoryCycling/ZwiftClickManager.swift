@@ -23,10 +23,23 @@ final class ZwiftClickManager: NSObject, ObservableObject {
     private var syncRX: CBCharacteristic?
     private var plusPressed = false
     private var minusPressed = false
+    private var scanRequested = false
 
     func connect() {
-        if central == nil { central = CBCentralManager(delegate: self, queue: .main) }
-        guard let central, central.state == .poweredOn else { state = .unavailable("Bluetooth ist für Zwift Click nicht verfügbar"); return }
+        scanRequested = true
+        if central == nil {
+            central = CBCentralManager(delegate: self, queue: .main)
+            state = .scanning
+            return
+        }
+        guard let central, central.state == .poweredOn else {
+            state = .scanning
+            return
+        }
+        beginScan(with: central)
+    }
+
+    private func beginScan(with central: CBCentralManager) {
         state = .scanning
         central.scanForPeripherals(withServices: nil, options: nil)
     }
@@ -36,13 +49,20 @@ final class ZwiftClickManager: NSObject, ObservableObject {
         syncRX = nil
         plusPressed = false
         minusPressed = false
+        scanRequested = false
         state = .idle
     }
     private func shift(_ direction: ShiftDirection) { lastDirection = direction; shiftEventCounter += 1 }
 }
 
 extension ZwiftClickManager: CBCentralManagerDelegate {
-    func centralManagerDidUpdateState(_ central: CBCentralManager) { if central.state != .poweredOn { state = .unavailable("Bluetooth ist für Zwift Click nicht verfügbar") } }
+    func centralManagerDidUpdateState(_ central: CBCentralManager) {
+        guard central.state == .poweredOn else {
+            state = .unavailable("Bluetooth ist für Zwift Click nicht verfügbar")
+            return
+        }
+        if scanRequested { beginScan(with: central) }
+    }
     func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String: Any], rssi RSSI: NSNumber) {
         let name = peripheral.name ?? (advertisementData[CBAdvertisementDataLocalNameKey] as? String) ?? ""
         guard name.localizedCaseInsensitiveContains("Zwift Click") else { return }
