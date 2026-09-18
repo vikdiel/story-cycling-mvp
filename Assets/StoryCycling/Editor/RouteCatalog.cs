@@ -59,6 +59,18 @@ namespace StoryCycling.Editor
             FinishRouteScene(scene, scenePath, label, true);
         }
 
+        private static readonly string[] GenericBuildings = {
+            Root + "Buildings/SM_Bld_Shop_01.prefab", Root + "Buildings/SM_Bld_Shop_02.prefab",
+            Root + "Buildings/SM_Bld_Shop_03.prefab", Root + "Buildings/SM_Bld_Shop_04.prefab",
+            Root + "Buildings/SM_Bld_Shop_05.prefab", Root + "Buildings/SM_Bld_Shop_06.prefab",
+            Root + "Buildings/SM_Bld_Apartment_01.prefab", Root + "Buildings/SM_Bld_Apartment_03.prefab",
+            Root + "Buildings/SM_Bld_OfficeSquare_01.prefab", Root + "Buildings/SM_Bld_OfficeSquare_03.prefab",
+            Root + "Buildings/SM_Bld_Apartment_Corner_01.prefab", Root + "Buildings/SM_Bld_Shop_Corner_01.prefab"
+        };
+        private const string LampPole = Root + "Props/SM_Prop_LightPole_Lights_01.prefab";
+        private const string TrafficLightPrefab = Root + "Props/SM_Prop_TrafficLight_01.prefab";
+        private const string GiveWaySign = Root + "Props/SM_Prop_Sign_GiveWay_01.prefab";
+
         private static void BuildGenericEnvironment(int theme)
         {
             Color[] groundColors = {
@@ -67,34 +79,22 @@ namespace StoryCycling.Editor
                 new Color(.45f, .52f, .38f), new Color(.55f, .54f, .50f)
             };
             Box("Section ground", new Vector3(0, -0.6f, 0), new Vector3(1600, 1, 1600), Mat("Section ground", groundColors[theme % groundColors.Length]));
-            Color[] palette = {
-                new Color(.96f, .42f, .56f), new Color(.30f, .72f, .52f), new Color(.36f, .55f, .86f),
-                new Color(.95f, .76f, .26f), new Color(.44f, .80f, .74f), new Color(.90f, .50f, .30f),
-                new Color(.72f, .52f, .82f)
-            };
-            Material trim = Mat("Section trim", new Color(.97f, .94f, .86f));
-            float spacing = 11f;
-            for (float d = 0; d < CapeCrownRoute.Length; d += spacing)
+            // Varied Synty buildings lining both sides, with occasional gaps.
+            float spacing = 15f;
+            for (float d = 6f; d < CapeCrownRoute.Length; d += spacing)
             {
-                CapeCrownRoute.Sample(d, out Vector3 point, out Vector3 forward);
-                Vector3 fwd = new Vector3(forward.x, 0, forward.z).normalized;
-                Vector3 right = Vector3.Cross(Vector3.up, fwd).normalized;
-                Quaternion rot = Quaternion.LookRotation(fwd, Vector3.up);
-                for (int side = -1; side <= 1; side += 2)
-                {
-                    int idx = Mathf.RoundToInt(d / spacing) * 2 + (side < 0 ? 0 : 1);
-                    float w = 4f + (idx % 3) * 2f;
-                    float h = 3f + ((idx / 2) % 3) * 1.5f;
-                    int colorIdx = idx % palette.Length;
-                    Vector3 pos = point + right * (side * 11f) + Vector3.up * (h / 2f - 0.15f);
-                    GameObject house = Part(null, PrimitiveType.Cube, pos, new Vector3(6f, h, w), Mat("Section house " + colorIdx, palette[colorIdx]));
-                    house.transform.rotation = rot;
-                    house.name = "Section house";
-                    GameObject roof = Part(null, PrimitiveType.Cube, pos + Vector3.up * (h / 2f + 0.18f), new Vector3(6.4f, 0.35f, w + 0.4f), trim);
-                    roof.transform.rotation = rot;
-                    roof.name = "Section roof";
-                }
+                int idx = Mathf.RoundToInt(d / spacing);
+                if (idx % 6 == 4) continue;
+                int side = (idx % 2 == 0) ? -1 : 1;
+                float footprint = 12f + (idx % 3) * 4f;
+                AddRoadsidePrefab(GenericBuildings[idx % GenericBuildings.Length], d, side * 11.5f, footprint, "Building " + idx);
             }
+            // Street lamps along the road.
+            for (float d = 14f; d < CapeCrownRoute.Length; d += 28f)
+                AddRoadsidePrefab(LampPole, d, ((Mathf.RoundToInt(d / 28f)) % 2 == 0 ? -1 : 1) * 6.3f, 2.4f, "Street lamp");
+            // Intersections: side streets, traffic lights and give-way signs.
+            for (float d = 140f; d < CapeCrownRoute.Length; d += 260f)
+                AddIntersection(d);
             // Scattered trees inland and seaward for depth.
             for (float d = 18f; d < CapeCrownRoute.Length; d += 22f)
             {
@@ -105,6 +105,30 @@ namespace StoryCycling.Editor
                 AddCoastalProp(Tree, new Vector3(p.x + off.x, -0.14f, p.z + off.z), d * 31f, 5.5f, "Section tree");
             }
             AddParkedCars();
+        }
+
+        private static void AddRoadsidePrefab(string path, float distance, float offset, float footprint, string name)
+        {
+            CapeCrownRoute.Sample(distance, out Vector3 p, out Vector3 fwd);
+            Vector3 hf = new Vector3(fwd.x, 0, fwd.z);
+            if (hf.sqrMagnitude < 1e-6f) hf = Vector3.forward;
+            hf.Normalize();
+            float yaw = Mathf.Atan2(hf.x, hf.z) * Mathf.Rad2Deg;
+            Vector3 pos = p + Vector3.Cross(Vector3.up, hf) * offset;
+            GroundPrefab(path, pos, yaw + 90f, footprint, name);
+        }
+
+        private static void AddIntersection(float distance)
+        {
+            CapeCrownRoute.Sample(distance, out Vector3 p, out Vector3 fwd);
+            Vector3 hf = new Vector3(fwd.x, 0, fwd.z).normalized;
+            Material asphalt = Mat("Side street", new Color(.13f, .16f, .19f));
+            var street = Part(null, PrimitiveType.Cube, p + Vector3.up * 0.005f, new Vector3(44f, .04f, 8f), asphalt);
+            street.transform.rotation = Quaternion.LookRotation(hf, Vector3.up);
+            street.name = "Side street";
+            AddRoadsidePrefab(TrafficLightPrefab, distance, 6f, 2.4f, "Traffic light");
+            AddRoadsidePrefab(TrafficLightPrefab, distance, -6f, 2.4f, "Traffic light");
+            AddRoadsidePrefab(GiveWaySign, distance, 4.2f, 1.8f, "Give-way sign");
         }
 
         private static void AddRouteData()
