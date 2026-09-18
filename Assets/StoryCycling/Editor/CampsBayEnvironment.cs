@@ -131,16 +131,19 @@ namespace StoryCycling.Editor
                     AddCoastalProp(Bench, new Vector3(56.7f, .01f, palmStart + 7 + i * 16), 90, 2.2f, "Ocean-facing bench " + i);
             }
 
-            // Quiet inland return, grouped planting instead of repetitive towers on a lawn.
-            foreach (Vector3 centre in new[] { new Vector3(-24, 0, -56), new Vector3(-16, 0, 6), new Vector3(-23, 0, 63) })
+            // Quiet inland return: continuous planting along the longer straight.
+            for (int g = 0; g < 6; g++)
+            {
+                float cz = -(half - 18) + g * (2 * (half - 18) / 5f);
                 for (int j = 0; j < 3; j++)
-                    {
-                    Vector3 p = centre + new Vector3((j % 2) * 6, -.14f, j * 8);
+                {
+                    Vector3 p = new Vector3(-22 + (g % 2) * 8, 0, cz) + new Vector3((j % 2) * 6, -.14f, j * 8);
                     float d = 2 * CapeCrownRoute.HalfStraight + Mathf.PI * CapeCrownRoute.Radius + CapeCrownRoute.HalfStraight - p.z;
                     float weight = Mathf.Clamp01(1 - (p.x + CapeCrownRoute.Radius - 8) / 18);
-                    p.y += CapeCrownRoute.Elevation(d,relief) * weight;
-                    AddCoastalProp(Tree,p,j*63,5.5f,"Inland grove");
+                    p.y += CapeCrownRoute.Elevation(d, relief) * weight;
+                    AddCoastalProp(Tree, p, g * 37 + j * 63, 5.5f, "Inland grove");
                 }
+            }
             int lookoutCount = Mathf.Max(2, Mathf.FloorToInt((2f * half - 60f) / 50f) + 1);
             for (int i = 0; i < lookoutCount; i++)
                 {

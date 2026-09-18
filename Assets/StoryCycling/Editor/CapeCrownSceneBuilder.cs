@@ -98,8 +98,12 @@ namespace StoryCycling.Editor
             var volume=new GameObject("Coastal colour grade").AddComponent<Volume>();volume.isGlobal=true;
             var profile=ScriptableObject.CreateInstance<VolumeProfile>();
             var grade=profile.Add<UnityEngine.Rendering.Universal.ColorAdjustments>(true);
-            grade.postExposure.Override(.15f);grade.contrast.Override(8);grade.saturation.Override(5);
-            profile=Save(profile);AssetDatabase.AddObjectToAsset(grade,profile);volume.sharedProfile=profile;
+            grade.postExposure.Override(.2f);grade.contrast.Override(12);grade.saturation.Override(12);
+            var bloom=profile.Add<UnityEngine.Rendering.Universal.Bloom>(true);
+            bloom.intensity.Override(.35f);bloom.threshold.Override(.92f);
+            var vignette=profile.Add<UnityEngine.Rendering.Universal.Vignette>(true);
+            vignette.intensity.Override(.28f);vignette.smoothness.Override(.4f);
+            profile=Save(profile);AssetDatabase.AddObjectToAsset(grade,profile);AssetDatabase.AddObjectToAsset(bloom,profile);AssetDatabase.AddObjectToAsset(vignette,profile);volume.sharedProfile=profile;
             camera.clearFlags = campsBay ? CameraClearFlags.Skybox : CameraClearFlags.SolidColor;
             camera.backgroundColor = new Color(.48f,.72f,.87f);
             CapeCrownRoute.Sample(0, out _, out Vector3 forward);
@@ -325,15 +329,15 @@ namespace StoryCycling.Editor
         private static void Lighting()
         {
             RenderSettings.ambientMode=AmbientMode.Trilight;
-            RenderSettings.ambientSkyColor=new Color(.76f,.83f,.87f);
-            RenderSettings.ambientEquatorColor=new Color(.70f,.66f,.59f);
-            RenderSettings.ambientGroundColor=new Color(.43f,.39f,.32f);
+            RenderSettings.ambientSkyColor=new Color(.62f,.74f,.88f);
+            RenderSettings.ambientEquatorColor=new Color(.82f,.68f,.52f);
+            RenderSettings.ambientGroundColor=new Color(.45f,.38f,.30f);
             RenderSettings.fog=true; RenderSettings.fogMode=FogMode.Linear;
-            RenderSettings.fogStartDistance=200; RenderSettings.fogEndDistance=650;
-            RenderSettings.fogColor=new Color(.48f,.72f,.87f);
-            Light sun=new GameObject("Afternoon sun").AddComponent<Light>();
-            sun.type=LightType.Directional; sun.color=new Color(1,.85f,.65f); sun.intensity=1.65f;
-            sun.shadows=LightShadows.Soft; sun.transform.rotation=Quaternion.Euler(24,-65,0);
+            RenderSettings.fogStartDistance=160; RenderSettings.fogEndDistance=720;
+            RenderSettings.fogColor=new Color(.92f,.78f,.64f);
+            Light sun=new GameObject("Golden hour sun").AddComponent<Light>();
+            sun.type=LightType.Directional; sun.color=new Color(1f,.76f,.48f); sun.intensity=1.45f;
+            sun.shadows=LightShadows.Soft; sun.transform.rotation=Quaternion.Euler(18,-55,0);
         }
         private static Text Hud()
         {
