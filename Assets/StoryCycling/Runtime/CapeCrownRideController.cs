@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 namespace StoryCycling
 {
@@ -26,9 +27,9 @@ namespace StoryCycling
         {
             if (keyboardSimulation)
             {
-                float input = Input.GetAxis("Vertical");
-                if (Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.UpArrow)) input = 1f;
-                if (Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.DownArrow)) input = -1f;
+                // This project is configured for Unity's new Input System only.
+                // The legacy Input API silently prevented the desktop test ride from moving.
+                float input = ReadKeyboardInput();
                 trainerSpeedKph = Mathf.Clamp(trainerSpeedKph + input * 22f * Time.deltaTime, 0f, 55f);
                 trainerSpeedKph = Mathf.MoveTowards(trainerSpeedKph, 0f, 3f * Time.deltaTime);
             }
@@ -36,6 +37,15 @@ namespace StoryCycling
             if (rider == null) return;
             rider.position += Vector3.forward * (trainerSpeedKph / 3.6f) * Time.deltaTime;
             rider.Rotate(0f, 0f, Mathf.Sin(Time.time * trainerSpeedKph * 0.16f) * 0.08f);
+        }
+
+        private static float ReadKeyboardInput()
+        {
+            Keyboard keyboard = Keyboard.current;
+            if (keyboard == null) return 0f;
+            if (keyboard.wKey.isPressed || keyboard.upArrowKey.isPressed) return 1f;
+            if (keyboard.sKey.isPressed || keyboard.downArrowKey.isPressed) return -1f;
+            return 0f;
         }
 
         private void LateUpdate()
