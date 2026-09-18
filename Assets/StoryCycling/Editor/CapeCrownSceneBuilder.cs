@@ -109,8 +109,13 @@ namespace StoryCycling.Editor
         {
             GameObject cyclist = new GameObject("Player Cyclist");
             cyclist.transform.position = new Vector3(0f, 0.03f, 7f);
-            GameObject rider = Spawn(Rider, cyclist.transform.position, new Vector3(0f, 180f, 0f), Vector3.one, "Cyclist");
-            if (rider != null) rider.transform.SetParent(cyclist.transform, true);
+            GameObject rider = Spawn(Rider, cyclist.transform.position, Vector3.zero, Vector3.one, "Cyclist");
+            if (rider != null)
+            {
+                rider.transform.SetParent(cyclist.transform, false);
+                rider.transform.localPosition = new Vector3(0f, 0.42f, -0.1f);
+                rider.transform.localRotation = Quaternion.identity;
+            }
 
             Material frame = MaterialWithColor("Cape Crown Frame", new Color(0.07f, 0.84f, 0.91f));
             Material tire = MaterialWithColor("Cape Crown Tires", new Color(0.03f, 0.04f, 0.06f));
@@ -119,16 +124,17 @@ namespace StoryCycling.Editor
                 GameObject wheel = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
                 wheel.name = side < 0 ? "Rear Wheel" : "Front Wheel";
                 wheel.transform.SetParent(cyclist.transform, false);
-                wheel.transform.localPosition = new Vector3(side * 0.68f, 0.39f, 0.08f);
-                wheel.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+                // Road direction is +Z: front and rear wheels must follow that axis.
+                wheel.transform.localPosition = new Vector3(0f, 0.39f, side * 0.68f);
+                wheel.transform.localRotation = Quaternion.Euler(0f, 0f, 90f);
                 wheel.transform.localScale = new Vector3(0.08f, 0.42f, 0.42f);
                 wheel.GetComponent<Renderer>().sharedMaterial = tire;
             }
             GameObject frameBar = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
             frameBar.name = "Bike Frame";
             frameBar.transform.SetParent(cyclist.transform, false);
-            frameBar.transform.localPosition = new Vector3(0f, 0.72f, 0.08f);
-            frameBar.transform.localRotation = Quaternion.Euler(0f, 0f, 90f);
+            frameBar.transform.localPosition = new Vector3(0f, 0.72f, 0f);
+            frameBar.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
             frameBar.transform.localScale = new Vector3(0.07f, 0.72f, 0.07f);
             frameBar.GetComponent<Renderer>().sharedMaterial = frame;
             return cyclist.transform;
