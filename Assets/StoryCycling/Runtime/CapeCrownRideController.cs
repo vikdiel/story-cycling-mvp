@@ -13,6 +13,7 @@ namespace StoryCycling
         [SerializeField] private string routeLabel = "CAMPS BAY";
         [SerializeField] private float hillHeight;
         private CapeCrownDevices devices;
+        private CapeCrownMusic music;
         private float routeDistance, totalMetres, trainingMetres, trainerSpeedKph, demoSpeed;
         private int laps;
         private bool paused;
@@ -34,11 +35,13 @@ namespace StoryCycling
             if(!CanStart)return false;
             Started=true;paused=false;PauseReason="";
             routeDistance=totalMetres=trainingMetres=0; laps=0;
-            PlaceRider();UpdateCamera(true);return true;
+            PlaceRider();UpdateCamera(true);
+            if(music!=null)music.SetRiding(true);
+            return true;
         }
         public void Pause(string reason="Pausiert") { if(!Started)return;paused=true;trainerSpeedKph=0;PauseReason=reason; }
         public bool Resume() { if(!CanStart)return false;paused=false;PauseReason="";return true; }
-        public void EndRide() { Started=false;paused=false;trainerSpeedKph=0; }
+        public void EndRide() { Started=false;paused=false;trainerSpeedKph=0; if(music!=null)music.SetRiding(false); }
         public void StartDemo() { if(devices==null)return; demoSpeed=0; devices.StartDemoFeed(); }
         public void StopDemo() { if(devices==null)return; devices.StopDemoFeed(); demoSpeed=0; if(Started)EndRide(); }
         public void TogglePause() { if(paused)Resume();else Pause(); }
@@ -47,6 +50,7 @@ namespace StoryCycling
         private void Start()
         {
             devices=FindAnyObjectByType<CapeCrownDevices>();
+            music=GetComponent<CapeCrownMusic>();
             if(telemetry!=null)telemetry.transform.root.gameObject.SetActive(false);
             PlaceRider();UpdateCamera(true);
         }

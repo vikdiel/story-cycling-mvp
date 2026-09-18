@@ -58,7 +58,15 @@ namespace StoryCycling.Editor
             float half = CapeCrownRoute.HalfStraight;
             Box("Beach promenade extension", new Vector3(58, -.035f, 0), new Vector3(4, .08f, 2*half+8), stone);
             Box("Cafe terrace ribbon", new Vector3(38.4f, -.04f, 0), new Vector3(5.2f, .1f, 2*half+6), stone);
-            Color[] facades = {new Color(.90f,.83f,.69f),new Color(.81f,.88f,.84f),new Color(.94f,.90f,.78f),new Color(.82f,.59f,.43f)};
+            Color[] facades = {
+                new Color(.96f,.72f,.35f),
+                new Color(.88f,.42f,.32f),
+                new Color(.35f,.68f,.74f),
+                new Color(.80f,.62f,.82f),
+                new Color(.58f,.78f,.62f),
+                new Color(.91f,.55f,.48f),
+                new Color(.48f,.64f,.82f)
+            };
             Material glass = Mat("Coastal blue glazing",new Color(.13f,.31f,.36f));
             Material trim = Mat("Warm white joinery",new Color(.94f,.91f,.82f));
             Material rail = Mat("Balcony bronze",new Color(.22f,.27f,.25f));
@@ -77,7 +85,8 @@ namespace StoryCycling.Editor
                 Transform building = new GameObject("Promenade villa " + i).transform;
                 shop.transform.SetParent(building,true);
                 Material plaster=Mat("Villa plaster "+i,facades[i%facades.Length]);
-                float upperHeight=i%3==1?5.6f:3.4f;
+                float[] heights = {4.4f, 2.8f, 5.8f, 3.6f};
+                float upperHeight=heights[i%heights.Length];
                 float roof=b.max.y+upperHeight;
                 Part(building,PrimitiveType.Cube,new Vector3(b.center.x,b.max.y+upperHeight/2,z),new Vector3(b.size.x,upperHeight,b.size.z),plaster);
                 Part(building,PrimitiveType.Cube,new Vector3(b.center.x,roof+.18f,z),new Vector3(b.size.x+.3f,.36f,b.size.z+.3f),trim);
@@ -103,7 +112,6 @@ namespace StoryCycling.Editor
                 }
                 CoastalShops.Add(building.gameObject);CoastalProps.Add(building.gameObject);
                 AddCoastalProp(CafeTable,new Vector3(39.8f,.01f,z-2.6f),90,2.5f,"Cafe terrace table "+i);
-                AddCoastalProp(Umbrella,new Vector3(39.8f,.01f,z+2.6f),0,2.6f,"Cafe parasol "+i);
                 Box("Terrace planter",new Vector3(40.5f,.30f,z+6.8f),new Vector3(.65f,.65f,1.8f),accent);
                 Box("Planter greenery",new Vector3(40.5f,.7f,z+6.8f),new Vector3(.6f,.3f,1.65f),leaf);
             }

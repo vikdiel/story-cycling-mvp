@@ -177,15 +177,21 @@ namespace StoryCycling.Editor
 
         private static Transform AnimatedCyclist(out Transform[] wheels, out CapeCrownCyclistAnimation animation)
         {
-            Transform anchor = new GameObject("Cyclist • animated prototype").transform;
+            Transform anchor = new GameObject("Cyclist • stylised").transform;
             Transform root = new GameObject("Visual lean pivot").transform;
             root.SetParent(anchor, false);
             animation = anchor.gameObject.AddComponent<CapeCrownCyclistAnimation>();
-            Material teal=Mat("Bike",new Color(.06f,.61f,.65f));
-            Material dark=Mat("Rubber",new Color(.035f,.045f,.055f));
-            Material metal=Mat("Spokes",new Color(.55f,.62f,.65f));
-            Material jersey=Mat("Jersey",new Color(.92f,.34f,.13f));
+            Material frame=Mat("Bike frame",new Color(.05f,.75f,.80f));
+            Material accent=Mat("Frame accent",new Color(.95f,.42f,.13f));
+            Material tire=Mat("Tires",new Color(.04f,.05f,.06f));
+            Material rim=Mat("Rims",new Color(.90f,.45f,.12f));
+            Material spokes=Mat("Spokes",new Color(.62f,.68f,.72f));
+            Material jersey=Mat("Jersey",new Color(.95f,.38f,.15f));
+            Material sleeve=Mat("Sleeve",new Color(.96f,.94f,.86f));
+            Material shorts=Mat("Shorts",new Color(.10f,.14f,.20f));
             Material skin=Mat("Skin",new Color(.55f,.32f,.20f));
+            Material helmet=Mat("Helmet",new Color(.96f,.94f,.86f));
+            Material dark=Mat("Saddle grips",new Color(.07f,.08f,.10f));
             Vector3 rear=new Vector3(0,.34f,-.53f), front=new Vector3(0,.34f,.53f);
             Vector3 crank=new Vector3(0,.32f,0), seat=new Vector3(0,.88f,-.18f), neck=new Vector3(0,.85f,.39f);
             wheels=new Transform[2];
@@ -193,24 +199,35 @@ namespace StoryCycling.Editor
             {
                 Transform wheel=new GameObject(i==0?"Rear wheel":"Front wheel").transform;
                 wheel.SetParent(root,false); wheel.localPosition=i==0?rear:front; wheels[i]=wheel;
-                // Ring in the YZ plane, axle along X. No flattened cylinders.
                 for(int j=0;j<32;j++)
                 {
                     float a=j*Mathf.PI*2/32, b=(j+1)*Mathf.PI*2/32;
-                    Tube(wheel,new Vector3(0,Mathf.Cos(a),Mathf.Sin(a))*.32f,new Vector3(0,Mathf.Cos(b),Mathf.Sin(b))*.32f,.022f,dark);
-                    if(j%4==0) Tube(wheel,Vector3.zero,new Vector3(0,Mathf.Cos(a),Mathf.Sin(a))*.30f,.004f,metal);
+                    Tube(wheel,new Vector3(0,Mathf.Cos(a),Mathf.Sin(a))*.32f,new Vector3(0,Mathf.Cos(b),Mathf.Sin(b))*.32f,.024f,tire);
+                    if(j%2==0) Tube(wheel,new Vector3(0,Mathf.Cos(a),Mathf.Sin(a))*.27f,new Vector3(0,Mathf.Cos(b),Mathf.Sin(b))*.27f,.012f,rim);
+                    if(j%4==0) Tube(wheel,Vector3.zero,new Vector3(0,Mathf.Cos(a),Mathf.Sin(a))*.26f,.004f,spokes);
                 }
             }
-            Tube(root,rear,seat,.025f,teal); Tube(root,seat,crank,.025f,teal); Tube(root,crank,rear,.025f,teal);
-            Tube(root,seat,neck,.025f,teal); Tube(root,neck,crank,.025f,teal); Tube(root,neck,front,.025f,teal);
-            Tube(root,neck,new Vector3(0,1.0f,.43f),.022f,metal);
-            Tube(root,new Vector3(-.23f,1,.43f),new Vector3(.23f,1,.43f),.025f,dark);
-            Part(root,PrimitiveType.Cube,seat+Vector3.up*.05f,new Vector3(.16f,.06f,.25f),dark);
-            // Deliberately posed cyclist, no upright/T-pose character attached to a bike.
-            Vector3 hip=new Vector3(0,1.02f,-.18f), shoulder=new Vector3(0,1.42f,.17f);
-            Tube(root,hip,shoulder,.13f,jersey);
-            Part(root,PrimitiveType.Sphere,new Vector3(0,1.61f,.23f),new Vector3(.23f,.26f,.25f),skin);
-            Part(root,PrimitiveType.Sphere,new Vector3(0,1.72f,.23f),new Vector3(.27f,.15f,.30f),teal);
+            // Complete diamond frame with a coloured fork and rear triangle.
+            Tube(root,crank,neck,.03f,frame);
+            Tube(root,seat,neck,.03f,frame);
+            Tube(root,crank,seat,.03f,accent);
+            Tube(root,rear,seat,.022f,accent);
+            Tube(root,rear,crank,.022f,frame);
+            Tube(root,front,neck,.03f,frame);
+            // Chainring, saddle and drop bars.
+            Part(root,PrimitiveType.Cylinder,crank+Vector3.right*.03f,new Vector3(.03f,.14f,.14f),spokes);
+            Part(root,PrimitiveType.Cube,seat+Vector3.up*.05f,new Vector3(.15f,.06f,.26f),dark);
+            Tube(root,neck,new Vector3(0,1.03f,.44f),.022f,frame);
+            Tube(root,new Vector3(-.24f,1.0f,.46f),new Vector3(.24f,1.0f,.46f),.022f,dark);
+            Tube(root,new Vector3(-.24f,1.0f,.46f),new Vector3(-.24f,.93f,.52f),.014f,dark);
+            Tube(root,new Vector3(.24f,1.0f,.46f),new Vector3(.24f,.93f,.52f),.014f,dark);
+            // Posed rider: leaning torso, sleeved arms to the drops, proper helmet.
+            Vector3 hip=new Vector3(0,1.02f,-.18f), shoulder=new Vector3(0,1.44f,.17f);
+            Tube(root,hip,shoulder,.14f,jersey);
+            Tube(root,shoulder,new Vector3(0,1.50f,.16f),.11f,sleeve);
+            Part(root,PrimitiveType.Sphere,new Vector3(0,1.62f,.23f),new Vector3(.20f,.22f,.22f),skin);
+            Part(root,PrimitiveType.Sphere,new Vector3(0,1.70f,.22f),new Vector3(.30f,.17f,.32f),helmet);
+            Part(root,PrimitiveType.Sphere,new Vector3(0,1.79f,.18f),new Vector3(.17f,.06f,.20f),accent);
             var thighs = new Transform[2];
             var shins = new Transform[2];
             var feet = new Transform[2];
@@ -220,19 +237,17 @@ namespace StoryCycling.Editor
             for(int side=-1;side<=1;side+=2)
             {
                 float x=side*.13f;
-                Vector3 elbow=new Vector3(side*.2f,1.15f,.31f), hand=new Vector3(side*.21f,1,.43f);
-                Tube(root,shoulder+Vector3.right*x,elbow,.045f,jersey); Tube(root,elbow,hand,.035f,skin);
+                Vector3 elbow=new Vector3(side*.2f,1.18f,.30f), hand=new Vector3(side*.23f,.96f,.52f);
+                Tube(root,shoulder+Vector3.right*x,elbow,.05f,sleeve); Tube(root,elbow,hand,.036f,skin);
                 int index = side == -1 ? 0 : 1;
                 Vector3 knee=new Vector3(x,.67f,.16f), foot=new Vector3(x,.20f,-.03f);
-                thighs[index] = Tube(root,hip+Vector3.right*x,knee,.065f,dark);
+                thighs[index] = Tube(root,hip+Vector3.right*x,knee,.07f,shorts);
                 shins[index] = Tube(root,knee,foot,.045f,skin);
-                feet[index] = Part(root,PrimitiveType.Cube,foot,new Vector3(.11f,.08f,.23f),dark).transform;
-                cranks[index] = Tube(root,crank,foot,.014f,metal);
-                pedals[index] = Part(root,PrimitiveType.Cube,foot,new Vector3(.16f,.025f,.1f),metal).transform;
+                feet[index] = Part(root,PrimitiveType.Cube,foot,new Vector3(.12f,.08f,.25f),dark).transform;
+                cranks[index] = Tube(root,crank,foot,.014f,spokes);
+                pedals[index] = Part(root,PrimitiveType.Cube,foot,new Vector3(.17f,.025f,.11f),accent).transform;
                 moving.AddRange(new[] { thighs[index], shins[index], feet[index], cranks[index], pedals[index] });
             }
-            // Keep the procedural rider inexpensive: batch static pieces by material,
-            // but preserve independent wheel transforms for rotation.
             foreach (Transform wheel in wheels) BatchParts(wheel, null);
             BatchParts(root, moving.ToArray());
             animation.Configure(root, thighs, shins, feet, cranks, pedals);
