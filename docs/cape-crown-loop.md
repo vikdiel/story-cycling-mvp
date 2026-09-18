@@ -1,5 +1,9 @@
 # Cape Crown loop — rebuild
 
+For the new beach art/animation pass see [Camps Bay promenade](camps-bay-promenade.md).
+The user confirmed one complete lap, acceleration and braking on the baseline
+loop on 2026-09-18. This is not visual acceptance of the new promenade scene.
+
 1. On `unity-world`, pull changes. Stop Unity Play Mode.
 2. **Story Cycling → Build Cape Crown Loop**. This saves and opens
    `Assets/StoryCycling/Scenes/CapeCrownLoop.unity` and sets it as the build scene.

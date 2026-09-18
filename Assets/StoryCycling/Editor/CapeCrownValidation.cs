@@ -50,5 +50,32 @@ namespace StoryCycling.Editor
         {
             if(!condition) throw new InvalidOperationException("Cape Crown geometry failed: " + message);
         }
+
+        public static void ValidateCyclist(CapeCrownCyclistAnimation rig)
+        {
+            Require(rig != null && rig.IsConfigured, "Cyclist animation references missing (possibly batched away)");
+            // Full crank cycle: knees must remain reachable, limb lengths constant and feet above asphalt.
+            for (int step = 0; step < 72; step++)
+            {
+                float phase = step * Mathf.PI * 2 / 72;
+                Vector3 left = CapeCrownCyclistAnimation.PedalPosition(-1, phase);
+                Vector3 right = CapeCrownCyclistAnimation.PedalPosition(1, phase + Mathf.PI);
+                Require(Mathf.Abs(left.y + right.y - .64f) < .001f && Mathf.Abs(left.z + right.z) < .001f,
+                    "Pedals must be opposite, not move in lockstep");
+                for (int side = -1; side <= 1; side += 2)
+                {
+                    Vector3 pedal = side == -1 ? left : right;
+                    Vector3 ankle = pedal + Vector3.up * .07f;
+                    Vector3 hip = new Vector3(side * .13f, 1.02f, -.18f);
+                    Vector3 knee = CapeCrownCyclistAnimation.KneePosition(hip, ankle);
+                    Require(Vector3.Distance(hip, ankle) < CapeCrownCyclistAnimation.LegLength * 2, "Pedal out of leg reach");
+                    Require(Mathf.Abs(Vector3.Distance(hip, knee) - CapeCrownCyclistAnimation.LegLength) < .001f, "Thigh stretches");
+                    Require(Mathf.Abs(Vector3.Distance(knee, ankle) - CapeCrownCyclistAnimation.LegLength) < .001f, "Shin stretches");
+                    Require(pedal.y > .1f, "Pedal clips asphalt");
+                }
+            }
+            rig.ApplyPose(0);
+            Debug.Log("Cyclist rig PASS: live transforms, opposing pedals, reachable constant-length limbs for full crank cycle.");
+        }
     }
 }

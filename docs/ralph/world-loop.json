@@ -14,7 +14,7 @@
       ],
       "priority": 1,
       "passes": false,
-      "notes": "Implemented; Unity execution/visual acceptance pending. Source preflight is not sufficient."
+      "notes": "Implemented; Unity execution/visual acceptance pending. Source preflight is not sufficient. 2026-09-18: user confirmed full lap, acceleration and braking in baseline loop; requested improved asset placement and less rigid cyclist. iPad performance and new art pass remain unverified."
     },
     {
       "id": "WORLD-002",
@@ -28,7 +28,7 @@
       ],
       "priority": 2,
       "passes": false,
-      "notes": "Implemented; Unity execution/visual acceptance pending. Source preflight is not sufficient."
+      "notes": "Implemented; Unity execution/visual acceptance pending. Source preflight is not sufficient. 2026-09-18: user confirmed full lap, acceleration and braking in baseline loop; requested improved asset placement and less rigid cyclist. iPad performance and new art pass remain unverified."
     },
     {
       "id": "WORLD-003",
@@ -43,7 +43,7 @@
       ],
       "priority": 3,
       "passes": false,
-      "notes": "Implemented; Unity execution/visual acceptance pending. Source preflight is not sufficient."
+      "notes": "Implemented; Unity execution/visual acceptance pending. Source preflight is not sufficient. 2026-09-18: user confirmed full lap, acceleration and braking in baseline loop; requested improved asset placement and less rigid cyclist. iPad performance and new art pass remain unverified."
     }
   ]
 }

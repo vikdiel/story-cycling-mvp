@@ -1,0 +1,39 @@
+{
+  "project": "Cape Crown",
+  "branchName": "unity-world",
+  "description": "Camps Bay inspired promenade and animated cyclist; retain the user-confirmed loop and braking",
+  "userStories": [
+    {
+      "id": "BAY-001",
+      "title": "Separate Camps Bay scene with curated frontage",
+      "description": "As a rider I want a coherent beach promenade instead of scattered city assets.",
+      "acceptanceCriteria": [
+        "New scene and generated asset directory do not overwrite the tested loop",
+        "Beach, palms, cafe terrace and mountain backdrop have distinct spatial zones",
+        "Editor validates grounded frontage, height limits, no building overlap and full-lap road clearance",
+        "Verify full lap and cafe/beach composition in Unity Game view",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Implemented; local dependency/syntax checks are separate from pending Unity compile, render and placement execution."
+    },
+    {
+      "id": "BAY-002",
+      "title": "Pedal animation and visual cornering",
+      "description": "As a rider I want a cyclist who pedals, coasts and leans rather than remaining rigid.",
+      "acceptanceCriteria": [
+        "Opposing pedals, fixed-length legs and feet remain connected throughout a crank cycle",
+        "Braking stops pedalling but wheels keep rolling until speed is zero",
+        "Visual banking does not bank the route anchor or camera",
+        "Save/reopen retains all moving rig references",
+        "Verify accelerating, braking, stopping and a full bend in Unity Game view",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Production-function editor assertions added; Unity execution and iPad performance unverified. Cadence is cosmetic, not BLE telemetry."
+    }
+  ]
+}

@@ -2,8 +2,8 @@
 from pathlib import Path
 import re
 root = Path('Assets/StoryCycling')
-builder = (root/'Editor/CapeCrownSceneBuilder.cs').read_text()
-paths = re.findall(r'Root \+ "([^"]+\.prefab)"', builder)
+builders = '\n'.join(p.read_text() for p in (root/'Editor').glob('*.cs'))
+paths = set(re.findall(r'Root \+ "([^"]+\.prefab)"', builders))
 assert paths, 'No art dependencies found'
 for path in paths:
     assert (Path('Assets/Synty/PolygonCity/Prefabs')/path).is_file(), path

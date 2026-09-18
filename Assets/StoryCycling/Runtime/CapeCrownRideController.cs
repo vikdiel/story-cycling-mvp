@@ -10,6 +10,8 @@ namespace StoryCycling
         [SerializeField] private Transform rideCamera;
         [SerializeField] private Transform[] wheels;
         [SerializeField] private Text telemetry;
+        [SerializeField] private CapeCrownCyclistAnimation cyclistAnimation;
+        [SerializeField] private string routeLabel = "CAPE CROWN • COASTAL LOOP";
         [SerializeField] private float trainerSpeedKph;
         [SerializeField] private bool keyboardSimulation = true;
         private float routeDistance;
@@ -33,6 +35,7 @@ namespace StoryCycling
 
         private void Update()
         {
+            bool pedalling = !keyboardSimulation && trainerSpeedKph > .1f;
             if (keyboardSimulation)
             {
                 Keyboard k = Keyboard.current;
@@ -42,6 +45,7 @@ namespace StoryCycling
                 if (brake) demoCruise = false;
                 float target = brake ? 0f : accelerate ? 50f : demoCruise ? 25f : 0f;
                 trainerSpeedKph = Mathf.MoveTowards(trainerSpeedKph, target, (brake ? 25f : accelerate ? 12f : 3f) * Time.deltaTime);
+                pedalling = !brake && (accelerate || demoCruise);
             }
             float metres = trainerSpeedKph / 3.6f * Time.deltaTime;
             totalMetres += metres;
@@ -52,11 +56,12 @@ namespace StoryCycling
                 routeDistance = Mathf.Repeat(routeDistance, CapeCrownRoute.Length);
             }
             PlaceRider();
+            if (cyclistAnimation != null) cyclistAnimation.Tick(trainerSpeedKph, routeDistance, pedalling, Time.deltaTime);
             if (wheels != null)
                 foreach (Transform wheel in wheels)
                     if (wheel != null) wheel.Rotate(Vector3.right, metres / 0.34f * Mathf.Rad2Deg, Space.Self);
             if (telemetry != null)
-                telemetry.text = $"{trainerSpeedKph:0} km/h    {totalMetres / 1000f:0.00} km    Runde {laps + 1}\n" +
+                telemetry.text = routeLabel + $"\n{trainerSpeedKph:0} km/h    {totalMetres / 1000f:0.00} km    Runde {laps + 1}\n" +
                     (keyboardSimulation ? "DEMO • W/↑ fahren · S/↓ bremsen · Leertaste 25 km/h" : "TRAINER");
         }
 

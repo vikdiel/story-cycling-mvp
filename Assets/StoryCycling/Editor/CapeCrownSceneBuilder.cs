@@ -9,10 +9,9 @@ using UnityEngine.UI;
 
 namespace StoryCycling.Editor
 {
-    public static class CapeCrownSceneBuilder
+    public static partial class CapeCrownSceneBuilder
     {
-        private const string ScenePath = "Assets/StoryCycling/Scenes/CapeCrownLoop.unity";
-        private const string Generated = "Assets/StoryCycling/GeneratedLoop";
+        private static string Generated;
         private const string Root = "Assets/Synty/PolygonCity/Prefabs/";
         private static readonly string[] Buildings = {
             Root + "Buildings/SM_Bld_Shop_03.prefab",
@@ -22,13 +21,20 @@ namespace StoryCycling.Editor
         private static int assetId;
 
         [MenuItem("Story Cycling/Build Cape Crown Loop")]
-        public static void BuildLoop()
+        public static void BuildLoop() => BuildWorld(false);
+
+        [MenuItem("Story Cycling/Build Camps Bay Promenade")]
+        public static void BuildCampsBay() => BuildWorld(true);
+
+        private static void BuildWorld(bool campsBay)
         {
             if (EditorApplication.isPlaying) throw new InvalidOperationException("Stop Play Mode before building.");
-            foreach (string path in new[] { Buildings[0], Buildings[1], Tree })
+            foreach (string path in campsBay ? CampsBayAssets : new[] { Buildings[0], Buildings[1], Tree })
                 if (AssetDatabase.LoadAssetAtPath<GameObject>(path) == null)
                     throw new InvalidOperationException("Missing asset: " + path);
             if (!Application.isBatchMode && !EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
+            Generated = campsBay ? "Assets/StoryCycling/GeneratedCampsBay" : "Assets/StoryCycling/GeneratedLoop";
+            string scenePath = campsBay ? "Assets/StoryCycling/Scenes/CampsBayPromenade.unity" : "Assets/StoryCycling/Scenes/CapeCrownLoop.unity";
             Directory.CreateDirectory(Generated);
             Directory.CreateDirectory("Assets/StoryCycling/Scenes");
             AssetDatabase.Refresh();
@@ -40,9 +46,13 @@ namespace StoryCycling.Editor
             Material grass = Mat("CoastalGrass", new Color(.37f, .48f, .31f));
             Material sand = Mat("Sand", new Color(.77f, .69f, .49f));
             Material ocean = Mat("Atlantic", new Color(.08f, .39f, .52f));
-            Box("Island", new Vector3(0,-.65f,0), new Vector3(148,1,330), sand);
-            Box("Atlantic", new Vector3(0,-1.3f,0), new Vector3(1800,.2f,1800), ocean);
-            Box("Central green", new Vector3(0,-.07f,0), new Vector3(65,.1f,188), grass);
+            if (campsBay) BuildCampsBayEnvironment();
+            else
+            {
+                Box("Island", new Vector3(0,-.65f,0), new Vector3(148,1,330), sand);
+                Box("Atlantic", new Vector3(0,-1.3f,0), new Vector3(1800,.2f,1800), ocean);
+                Box("Central green", new Vector3(0,-.07f,0), new Vector3(65,.1f,188), grass);
+            }
 
             // Every strip is sampled from the same path as the rider. No prefab pivots.
             Strip("Continuous asphalt", -5f, 5f, .02f, 0, CapeCrownRoute.Length, asphalt);
@@ -58,24 +68,25 @@ namespace StoryCycling.Editor
                 Box("Start stripe", new Vector3(43.5f + i, .04f, -75f), new Vector3(1,.015f,.6f), i % 2 == 0 ? white : asphalt);
 
             // Bounded, measured city frontage; keep the entire cycling corridor clear.
-            for (int i = 0; i < 7; i++)
+            if (!campsBay) for (int i = 0; i < 7; i++)
             {
                 GroundPrefab(Buildings[i % 2], new Vector3(22,0,-66 + i * 22), 90, 16f, "City frontage");
                 GroundPrefab(Tree, new Vector3(37,0,-66 + i * 22), 0, 4f, "Promenade tree");
                 GroundPrefab(Tree, new Vector3(-37,0,-66 + i * 22), i * 40, 4f, "Coastal tree");
             }
-            for (int i = 0; i < 12; i++)
+            if (!campsBay) for (int i = 0; i < 12; i++)
                 GroundPrefab(Tree, new Vector3(-15 + (i % 3)*11,0,-70 + (i/3)*44), i*31, 5f, "Park tree");
 
             Lighting();
-            Transform rider = Cyclist(out Transform[] wheels);
+            if (campsBay) CoastalSky();
+            Transform rider = AnimatedCyclist(out Transform[] wheels, out CapeCrownCyclistAnimation animation);
             GameObject cameraObject = new GameObject("Ride Camera", typeof(Camera), typeof(AudioListener));
             cameraObject.tag = "MainCamera";
             Camera camera = cameraObject.GetComponent<Camera>();
             camera.fieldOfView = 58;
             camera.nearClipPlane = .1f;
             camera.farClipPlane = 700;
-            camera.clearFlags = CameraClearFlags.SolidColor;
+            camera.clearFlags = campsBay ? CameraClearFlags.Skybox : CameraClearFlags.SolidColor;
             camera.backgroundColor = new Color(.48f,.72f,.87f);
             CapeCrownRoute.Sample(0, out _, out Vector3 forward);
             rider.SetPositionAndRotation(CapeCrownRoute.Position(0,CapeCrownRoute.LaneOffset,.045f), Quaternion.LookRotation(forward));
@@ -85,6 +96,8 @@ namespace StoryCycling.Editor
             var director = new GameObject("Cape Crown Ride Director").AddComponent<CapeCrownRideController>();
             SerializedObject data = new SerializedObject(director);
             data.FindProperty("rider").objectReferenceValue = rider;
+            data.FindProperty("cyclistAnimation").objectReferenceValue = animation;
+            data.FindProperty("routeLabel").stringValue = campsBay ? "CAMPS BAY • PROMENADE" : "CAPE CROWN • COASTAL LOOP";
             data.FindProperty("rideCamera").objectReferenceValue = camera.transform;
             data.FindProperty("telemetry").objectReferenceValue = Hud();
             var array = data.FindProperty("wheels");
@@ -92,11 +105,25 @@ namespace StoryCycling.Editor
             for (int i=0;i<wheels.Length;i++) array.GetArrayElementAtIndex(i).objectReferenceValue = wheels[i];
             data.ApplyModifiedPropertiesWithoutUndo();
             CapeCrownValidation.ValidateRoute();
+            CapeCrownValidation.ValidateCyclist(animation);
+            if (campsBay) ValidateCampsBayPlacement();
             AssetDatabase.SaveAssets();
-            EditorSceneManager.SaveScene(scene, ScenePath);
-            EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(ScenePath,true) };
-            Selection.activeGameObject = director.gameObject;
-            Debug.Log("CapeCrownLoop saved and set as build scene. Play: W/Up = accelerate, S/Down = brake, Space = demo cruise. Bluetooth is not yet bridged in Unity.");
+            EditorSceneManager.SaveScene(scene, scenePath);
+            EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(scenePath,true) };
+            // Reopen the actual saved scene: references must survive serialization, not just exist in memory.
+            var reopened = EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Single);
+            CapeCrownValidation.ValidateRoute();
+            bool foundRig = false;
+            foreach (GameObject go in reopened.GetRootGameObjects())
+            {
+                CapeCrownCyclistAnimation rig = go.GetComponentInChildren<CapeCrownCyclistAnimation>();
+                if (rig != null) { CapeCrownValidation.ValidateCyclist(rig); foundRig = true; }
+                foreach (MeshFilter mesh in go.GetComponentsInChildren<MeshFilter>())
+                    if (mesh.sharedMesh == null) throw new InvalidOperationException("Mesh lost after save: " + mesh.name);
+                if (go.GetComponent<CapeCrownRideController>() != null) Selection.activeGameObject = go;
+            }
+            if (!foundRig) throw new InvalidOperationException("Cyclist rig lost after scene save.");
+            Debug.Log(scenePath + " saved and set as build scene. Play: W/Up = accelerate, S/Down = brake, Space = demo cruise. Bluetooth is not yet bridged in Unity.");
         }
 
         // Existing instructions remain usable, but produce the new scene.
@@ -126,9 +153,12 @@ namespace StoryCycling.Editor
             go.GetComponent<MeshRenderer>().sharedMaterial=material;
         }
 
-        private static Transform Cyclist(out Transform[] wheels)
+        private static Transform AnimatedCyclist(out Transform[] wheels, out CapeCrownCyclistAnimation animation)
         {
-            Transform root = new GameObject("Cyclist • posed geometric prototype").transform;
+            Transform anchor = new GameObject("Cyclist • animated prototype").transform;
+            Transform root = new GameObject("Visual lean pivot").transform;
+            root.SetParent(anchor, false);
+            animation = anchor.gameObject.AddComponent<CapeCrownCyclistAnimation>();
             Material teal=Mat("Bike",new Color(.06f,.61f,.65f));
             Material dark=Mat("Rubber",new Color(.035f,.045f,.055f));
             Material metal=Mat("Spokes",new Color(.55f,.62f,.65f));
@@ -159,20 +189,33 @@ namespace StoryCycling.Editor
             Tube(root,hip,shoulder,.13f,jersey);
             Part(root,PrimitiveType.Sphere,new Vector3(0,1.61f,.23f),new Vector3(.23f,.26f,.25f),skin);
             Part(root,PrimitiveType.Sphere,new Vector3(0,1.72f,.23f),new Vector3(.27f,.15f,.30f),teal);
+            var thighs = new Transform[2];
+            var shins = new Transform[2];
+            var feet = new Transform[2];
+            var cranks = new Transform[2];
+            var pedals = new Transform[2];
+            var moving = new List<Transform>(wheels);
             for(int side=-1;side<=1;side+=2)
             {
                 float x=side*.13f;
                 Vector3 elbow=new Vector3(side*.2f,1.15f,.31f), hand=new Vector3(side*.21f,1,.43f);
                 Tube(root,shoulder+Vector3.right*x,elbow,.045f,jersey); Tube(root,elbow,hand,.035f,skin);
+                int index = side == -1 ? 0 : 1;
                 Vector3 knee=new Vector3(x,.67f,.16f), foot=new Vector3(x,.20f,-.03f);
-                Tube(root,hip+Vector3.right*x,knee,.065f,dark); Tube(root,knee,foot,.045f,skin);
-                Part(root,PrimitiveType.Cube,foot,new Vector3(.11f,.08f,.23f),dark);
+                thighs[index] = Tube(root,hip+Vector3.right*x,knee,.065f,dark);
+                shins[index] = Tube(root,knee,foot,.045f,skin);
+                feet[index] = Part(root,PrimitiveType.Cube,foot,new Vector3(.11f,.08f,.23f),dark).transform;
+                cranks[index] = Tube(root,crank,foot,.014f,metal);
+                pedals[index] = Part(root,PrimitiveType.Cube,foot,new Vector3(.16f,.025f,.1f),metal).transform;
+                moving.AddRange(new[] { thighs[index], shins[index], feet[index], cranks[index], pedals[index] });
             }
             // Keep the procedural rider inexpensive: batch static pieces by material,
             // but preserve independent wheel transforms for rotation.
             foreach (Transform wheel in wheels) BatchParts(wheel, null);
-            BatchParts(root, wheels);
-            return root;
+            BatchParts(root, moving.ToArray());
+            animation.Configure(root, thighs, shins, feet, cranks, pedals);
+            animation.ApplyPose(0);
+            return anchor;
         }
 
         private static void BatchParts(Transform root, Transform[] exclude)
@@ -205,10 +248,11 @@ namespace StoryCycling.Editor
             foreach (GameObject go in originals) UnityEngine.Object.DestroyImmediate(go);
         }
 
-        private static void Tube(Transform parent,Vector3 a,Vector3 b,float radius,Material material)
+        private static Transform Tube(Transform parent,Vector3 a,Vector3 b,float radius,Material material)
         {
             GameObject go=Part(parent,PrimitiveType.Cylinder,(a+b)*.5f,new Vector3(radius*2,(b-a).magnitude*.5f,radius*2),material);
             go.transform.localRotation=Quaternion.FromToRotation(Vector3.up,b-a);
+            return go.transform;
         }
         private static GameObject Part(Transform parent,PrimitiveType type,Vector3 position,Vector3 scale,Material material)
         {
@@ -221,7 +265,7 @@ namespace StoryCycling.Editor
         private static void Box(string name,Vector3 position,Vector3 scale,Material material)
         { Part(null,PrimitiveType.Cube,position,scale,material).name=name; }
 
-        private static void GroundPrefab(string path,Vector3 position,float yaw,float maximumFootprint,string name)
+        private static GameObject GroundPrefab(string path,Vector3 position,float yaw,float maximumFootprint,string name)
         {
             GameObject go=(GameObject)PrefabUtility.InstantiatePrefab(AssetDatabase.LoadAssetAtPath<GameObject>(path));
             go.name=name; go.transform.rotation=Quaternion.Euler(0,yaw,0);
@@ -231,6 +275,7 @@ namespace StoryCycling.Editor
             bounds=BoundsOf(go);
             go.transform.position+=position-new Vector3(bounds.center.x,bounds.min.y,bounds.center.z);
             foreach (Collider collider in go.GetComponentsInChildren<Collider>()) collider.enabled=false;
+            return go;
         }
         private static Bounds BoundsOf(GameObject go)
         {
@@ -262,7 +307,7 @@ namespace StoryCycling.Editor
             var panel=new GameObject("Telemetry",typeof(Image)); panel.transform.SetParent(canvas.transform,false);
             panel.GetComponent<Image>().color=new Color(.03f,.09f,.12f,.85f);
             RectTransform rect=panel.GetComponent<RectTransform>(); rect.anchorMin=rect.anchorMax=rect.pivot=new Vector2(0,1);
-            rect.anchoredPosition=new Vector2(24,-24); rect.sizeDelta=new Vector2(650,110);
+            rect.anchoredPosition=new Vector2(24,-24); rect.sizeDelta=new Vector2(650,132);
             var label=new GameObject("Speed and lap",typeof(Text)); label.transform.SetParent(panel.transform,false);
             Text text=label.GetComponent<Text>(); text.font=Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             text.fontSize=22; text.color=Color.white; text.text="CAPE CROWN • COASTAL LOOP\nPlay → W/↑ oder Leertaste";
