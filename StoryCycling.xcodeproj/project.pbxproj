@@ -1,0 +1,364 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		A10000000000000000000001 /* StoryCyclingApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000011 /* StoryCyclingApp.swift */; };
+		A10000000000000000000002 /* GameShellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000012 /* GameShellView.swift */; };
+		A10000000000000000000003 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000013 /* Assets.xcassets */; };
+		A10000000000000000000004 /* StoryCyclingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000014 /* StoryCyclingTests.swift */; };
+		A10000000000000000000005 /* TrainerConnectionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000017 /* TrainerConnectionManager.swift */; };
+		A10000000000000000000006 /* TrainerConnectionSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000018 /* TrainerConnectionSheet.swift */; };
+		A10000000000000000000007 /* HeartRateMonitorManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000019 /* HeartRateMonitorManager.swift */; };
+		A10000000000000000000008 /* HeartRateMonitorSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000020 /* HeartRateMonitorSheet.swift */; };
+		A10000000000000000000009 /* ZwiftClickManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000121 /* ZwiftClickManager.swift */; };
+		A10000000000000000000010 /* RideSceneView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000022 /* RideSceneView.swift */; };
+		A10000000000000000000023 /* ZwiftClickSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000024 /* ZwiftClickSheet.swift */; };
+		A10000000000000000000130 /* CoastalRide3DView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000131 /* CoastalRide3DView.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		A10000000000000000000021 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A10000000000000000000031 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A10000000000000000000041;
+			remoteInfo = StoryCycling;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		A10000000000000000000011 /* StoryCyclingApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryCyclingApp.swift; sourceTree = "<group>"; };
+		A10000000000000000000012 /* GameShellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameShellView.swift; sourceTree = "<group>"; };
+		A10000000000000000000013 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		A10000000000000000000014 /* StoryCyclingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryCyclingTests.swift; sourceTree = "<group>"; };
+		A10000000000000000000015 /* StoryCycling.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = StoryCycling.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A10000000000000000000016 /* StoryCyclingTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = StoryCyclingTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A10000000000000000000017 /* TrainerConnectionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrainerConnectionManager.swift; sourceTree = "<group>"; };
+		A10000000000000000000018 /* TrainerConnectionSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrainerConnectionSheet.swift; sourceTree = "<group>"; };
+		A10000000000000000000019 /* HeartRateMonitorManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeartRateMonitorManager.swift; sourceTree = "<group>"; };
+		A10000000000000000000020 /* HeartRateMonitorSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeartRateMonitorSheet.swift; sourceTree = "<group>"; };
+		A10000000000000000000121 /* ZwiftClickManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZwiftClickManager.swift; sourceTree = "<group>"; };
+		A10000000000000000000022 /* RideSceneView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RideSceneView.swift; sourceTree = "<group>"; };
+		A10000000000000000000024 /* ZwiftClickSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZwiftClickSheet.swift; sourceTree = "<group>"; };
+		A10000000000000000000131 /* CoastalRide3DView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoastalRide3DView.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A10000000000000000000051 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A10000000000000000000052 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		A10000000000000000000032 = {
+			isa = PBXGroup;
+			children = (
+				A10000000000000000000033 /* StoryCycling */,
+				A10000000000000000000034 /* StoryCyclingTests */,
+				A10000000000000000000035 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		A10000000000000000000033 /* StoryCycling */ = {
+			isa = PBXGroup;
+			children = (
+				A10000000000000000000011 /* StoryCyclingApp.swift */,
+				A10000000000000000000012 /* GameShellView.swift */,
+				A10000000000000000000017 /* TrainerConnectionManager.swift */,
+				A10000000000000000000018 /* TrainerConnectionSheet.swift */,
+				A10000000000000000000019 /* HeartRateMonitorManager.swift */,
+				A10000000000000000000020 /* HeartRateMonitorSheet.swift */,
+				A10000000000000000000121 /* ZwiftClickManager.swift */,
+				A10000000000000000000024 /* ZwiftClickSheet.swift */,
+				A10000000000000000000022 /* RideSceneView.swift */,
+				A10000000000000000000131 /* CoastalRide3DView.swift */,
+				A10000000000000000000013 /* Assets.xcassets */,
+			);
+			path = StoryCycling;
+			sourceTree = "<group>";
+		};
+		A10000000000000000000034 /* StoryCyclingTests */ = {
+			isa = PBXGroup;
+			children = (
+				A10000000000000000000014 /* StoryCyclingTests.swift */,
+			);
+			path = StoryCyclingTests;
+			sourceTree = "<group>";
+		};
+		A10000000000000000000035 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				A10000000000000000000015 /* StoryCycling.app */,
+				A10000000000000000000016 /* StoryCyclingTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A10000000000000000000041 /* StoryCycling */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A10000000000000000000061 /* Build configuration list for PBXNativeTarget "StoryCycling" */;
+			buildPhases = (
+				A10000000000000000000071 /* Sources */,
+				A10000000000000000000051 /* Frameworks */,
+				A10000000000000000000072 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = StoryCycling;
+			productName = StoryCycling;
+			productReference = A10000000000000000000015 /* StoryCycling.app */;
+			productType = "com.apple.product-type.application";
+		};
+		A10000000000000000000042 /* StoryCyclingTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A10000000000000000000062 /* Build configuration list for PBXNativeTarget "StoryCyclingTests" */;
+			buildPhases = (
+				A10000000000000000000073 /* Sources */,
+				A10000000000000000000052 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A10000000000000000000081 /* PBXTargetDependency */,
+			);
+			name = StoryCyclingTests;
+			productName = StoryCyclingTests;
+			productReference = A10000000000000000000016 /* StoryCyclingTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A10000000000000000000031 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1600;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					A10000000000000000000041 = {
+						CreatedOnToolsVersion = 16.0;
+					};
+					A10000000000000000000042 = {
+						CreatedOnToolsVersion = 16.0;
+						TestTargetID = A10000000000000000000041;
+					};
+				};
+			};
+			buildConfigurationList = A10000000000000000000063 /* Build configuration list for PBXProject "StoryCycling" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = A10000000000000000000032;
+			productRefGroup = A10000000000000000000035 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				A10000000000000000000041 /* StoryCycling */,
+				A10000000000000000000042 /* StoryCyclingTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A10000000000000000000072 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A10000000000000000000003 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A10000000000000000000071 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A10000000000000000000001 /* StoryCyclingApp.swift in Sources */,
+				A10000000000000000000002 /* GameShellView.swift in Sources */,
+				A10000000000000000000005 /* TrainerConnectionManager.swift in Sources */,
+				A10000000000000000000006 /* TrainerConnectionSheet.swift in Sources */,
+				A10000000000000000000007 /* HeartRateMonitorManager.swift in Sources */,
+				A10000000000000000000008 /* HeartRateMonitorSheet.swift in Sources */,
+				A10000000000000000000009 /* ZwiftClickManager.swift in Sources */,
+				A10000000000000000000023 /* ZwiftClickSheet.swift in Sources */,
+				A10000000000000000000010 /* RideSceneView.swift in Sources */,
+				A10000000000000000000130 /* CoastalRide3DView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A10000000000000000000073 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A10000000000000000000004 /* StoryCyclingTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		A10000000000000000000081 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A10000000000000000000041 /* StoryCycling */;
+			targetProxy = A10000000000000000000021 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		A10000000000000000000091 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		A10000000000000000000092 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		A10000000000000000000101 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = NVFVG37H6Q;
+				ENABLE_TESTABILITY = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "Story Cycling";
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Story Cycling verbindet sich mit deinem Smart Trainer, um Fahrtwerte anzuzeigen.";
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.vikdiel.storycycling;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				TARGETED_DEVICE_FAMILY = 2;
+			};
+			name = Debug;
+		};
+		A10000000000000000000102 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = NVFVG37H6Q;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "Story Cycling";
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Story Cycling verbindet sich mit deinem Smart Trainer, um Fahrtwerte anzuzeigen.";
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.vikdiel.storycycling;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				TARGETED_DEVICE_FAMILY = 2;
+			};
+			name = Release;
+		};
+		A10000000000000000000111 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.vikdiel.storycycling.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 2;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/StoryCycling.app/StoryCycling";
+			};
+			name = Debug;
+		};
+		A10000000000000000000112 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.vikdiel.storycycling.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 2;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/StoryCycling.app/StoryCycling";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A10000000000000000000061 /* Build configuration list for PBXNativeTarget "StoryCycling" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A10000000000000000000101 /* Debug */,
+				A10000000000000000000102 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A10000000000000000000062 /* Build configuration list for PBXNativeTarget "StoryCyclingTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A10000000000000000000111 /* Debug */,
+				A10000000000000000000112 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A10000000000000000000063 /* Build configuration list for PBXProject "StoryCycling" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A10000000000000000000091 /* Debug */,
+				A10000000000000000000092 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = A10000000000000000000031 /* Project object */;
+}

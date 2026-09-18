@@ -1,0 +1,42 @@
+name: iPad build
+
+on:
+  push:
+    branches: [main, "ralph/**"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  preflight:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Validate project and repository invariants
+        run: bash scripts/ci/preflight.sh
+
+  build-and-test:
+    needs: preflight
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build iPad app without code signing
+        run: >-
+          xcodebuild
+          -project StoryCycling.xcodeproj
+          -scheme StoryCycling
+          -sdk iphonesimulator
+          -destination 'generic/platform=iOS Simulator'
+          build
+          CODE_SIGNING_ALLOWED=NO
+      - name: Test on iPad simulator
+        run: bash scripts/ci/test-on-ipad-simulator.sh
+
+  quality-gate:
+    name: Quality Gate
+    needs: [preflight, build-and-test]
+    runs-on: macos-latest
+    steps:
+      - name: Confirm all required checks passed
+        run: echo "Quality Gate passed — preflight, build, and unit tests are green."
