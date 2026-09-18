@@ -80,8 +80,10 @@ struct GameShellView: View {
 
                 RideSceneView(speedKilometersPerHour: trainer.speedKilometersPerHour)
                     .frame(height: 220)
-                Text("\(trainer.speedKilometersPerHour.formatted(.number.precision(.fractionLength(1)))) km/h")
-                    .font(.title3.monospacedDigit().bold())
+                HStack(spacing: 28) {
+                    RideMetric(value: trainer.speedKilometersPerHour.formatted(.number.precision(.fractionLength(1))), unit: "km/h", title: "GESCHWINDIGKEIT")
+                    RideMetric(value: trainer.powerWatts.map(String.init) ?? "—", unit: "W", title: "LEISTUNG")
+                }
 
                 HStack(spacing: 16) {
                     Button(rideIsRunning ? "Demo pausieren" : "Demo-Fahrt starten") {
@@ -154,6 +156,26 @@ struct GameShellView: View {
         guard let range = trainer.resistanceRange else { return }
         let fraction = Double(nextGear - 1) / 23
         trainer.setResistance(range.lowerBound + (range.upperBound - range.lowerBound) * fraction)
+    }
+}
+
+private struct RideMetric: View {
+    let value: String
+    let unit: String
+    let title: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.caption2.weight(.bold))
+                .tracking(1)
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text(value)
+                    .font(.title2.monospacedDigit().bold())
+                Text(unit)
+                    .font(.subheadline.weight(.semibold))
+            }
+        }
     }
 }
 

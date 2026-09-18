@@ -51,6 +51,7 @@ final class TrainerConnectionManager: NSObject, ObservableObject {
     @Published private(set) var currentResistance: Double?
     @Published private(set) var resistanceError: String?
     @Published private(set) var speedKilometersPerHour: Double = 0
+    @Published private(set) var powerWatts: Int?
 
     private var central: CBCentralManager?
     private var connectedPeripheral: CBPeripheral?
@@ -165,6 +166,7 @@ extension TrainerConnectionManager: CBCentralManagerDelegate {
         resistanceRange = nil
         currentResistance = nil
         speedKilometersPerHour = 0
+        powerWatts = nil
         state = .disconnected
 
         if !intentionallyDisconnected {
@@ -207,12 +209,28 @@ extension TrainerConnectionManager: CBPeripheralDelegate {
             if minimum <= maximum { resistanceRange = minimum...maximum }
         }
 
-        if characteristic.uuid == Self.indoorBikeData, value.count >= 4 {
+        if characteristic.uuid == Self.indoorBikeData, value.count >= 2 {
             let flags = UInt16(value[value.startIndex]) | (UInt16(value[value.startIndex + 1]) << 8)
             let hasMoreData = flags & 0x0001 != 0
-            if !hasMoreData {
+            var offset = 2
+
+            if !hasMoreData, value.count >= offset + 2 {
                 let rawSpeed = UInt16(value[value.startIndex + 2]) | (UInt16(value[value.startIndex + 3]) << 8)
                 speedKilometersPerHour = Double(rawSpeed) / 100
+                offset += 2
+            }
+
+            // FTMS Indoor Bike Data is a flag-controlled byte stream. Skip every
+            // preceding optional value before reading instantaneous power.
+            if flags & 0x0002 != 0 { offset += 2 } // Average Speed
+            if flags & 0x0004 != 0 { offset += 2 } // Instantaneous Cadence
+            if flags & 0x0008 != 0 { offset += 2 } // Average Cadence
+            if flags & 0x0010 != 0 { offset += 3 } // Total Distance
+            if flags & 0x0020 != 0 { offset += 2 } // Resistance Level
+
+            if flags & 0x0040 != 0, value.count >= offset + 2 {
+                let rawPower = Int16(bitPattern: UInt16(value[value.startIndex + offset]) | (UInt16(value[value.startIndex + offset + 1]) << 8))
+                powerWatts = max(Int(rawPower), 0)
             }
         }
 
