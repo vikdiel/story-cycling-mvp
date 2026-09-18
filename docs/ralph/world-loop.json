@@ -1,0 +1,49 @@
+{
+  "project": "Cape Crown",
+  "branchName": "unity-world",
+  "description": "Closed coastal route rebuild",
+  "userStories": [
+    {
+      "id": "WORLD-001",
+      "title": "Continuous shared route",
+      "description": "Continuous shared route",
+      "acceptanceCriteria": [
+        "Road and rider use CapeCrownRoute",
+        "Editor geometry assertions pass for closure, tangents, winding and lane speed",
+        "Unity typecheck passes"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Implemented; Unity execution/visual acceptance pending. Source preflight is not sufficient."
+    },
+    {
+      "id": "WORLD-002",
+      "title": "Rebuild coherent loop world",
+      "description": "Rebuild coherent loop world",
+      "acceptanceCriteria": [
+        "Measured Synty frontage remains outside riding corridor",
+        "Meshes and materials survive scene reload and a second rebuild",
+        "Visual review of full lap in Unity Game view passes",
+        "Unity typecheck passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Implemented; Unity execution/visual acceptance pending. Source preflight is not sufficient."
+    },
+    {
+      "id": "WORLD-003",
+      "title": "Ride and chase camera",
+      "description": "Ride and chase camera",
+      "acceptanceCriteria": [
+        "W accelerates, S brakes, Space toggles demo cruise",
+        "Trainer setter disables keyboard simulation",
+        "One full lap has no teleport or camera flip",
+        "iPad performance reviewed",
+        "Unity typecheck passes"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Implemented; Unity execution/visual acceptance pending. Source preflight is not sufficient."
+    }
+  ]
+}
