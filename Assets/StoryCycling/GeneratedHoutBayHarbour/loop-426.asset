@@ -6,19 +6,19 @@ Mesh:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: Centre dash 49
+  m_Name: Centre dash 128
   serializedVersion: 12
   m_SubMeshes:
   - serializedVersion: 2
     firstByte: 0
-    indexCount: 12
+    indexCount: 18
     topology: 0
     baseVertex: 0
     firstVertex: 0
-    vertexCount: 6
+    vertexCount: 8
     localAABB:
-      m_Center: {x: 65.01016, y: 0.035, z: -7.0383}
-      m_Extent: {x: 0.07408142, y: 0, z: 1.4979091}
+      m_Center: {x: -66.15103, y: 0.035, z: 390.58612}
+      m_Extent: {x: 0.22955322, y: 0, z: 1.4965057}
   m_Shapes:
     vertices: []
     shapes: []
@@ -35,10 +35,10 @@ Mesh:
   m_KeepVertices: 0
   m_KeepIndices: 0
   m_IndexFormat: 0
-  m_IndexBuffer: 000002000100010002000300020004000300030004000500y
+  m_IndexBuffer: 000002000100010002000300020004000300030004000500040006000500050006000700y
   m_VertexData:
     serializedVersion: 3
-    m_VertexCount: 6
+    m_VertexCount: 8
     m_Channels:
     - stream: 0
       offset: 0
@@ -96,8 +96,8 @@ Mesh:
       offset: 0
       format: 0
       dimension: 0
-    m_DataSize: 144
-    _typelessdata: 74e38142295c0f3d509408c1000000000000803f00000000222b8242295c0f3d709208c1000000000000803f0000000027e18142295c0f3dd04ee1c0000000000000803f00000000d5288242295c0f3db04be1c0000000000000803f0000000046df8142295c0f3d5e4db1c000000000ffff7f3f00000000f4268242295c0f3de24ab1c000000000ffff7f3f00000000
+    m_DataSize: 192
+    _typelessdata: ccd783c2295c0f3d9508c443000000000000803f00000000081f84c2295c0f3d930ac443000000000000803f00000000510f84c2295c0f3dbe8ac34300000000ffff7f3f00000000935684c2295c0f3dae8cc34300000000ffff7f3f00000000e74584c2295c0f3db50bc343000000000000803f000000002f8d84c2295c0f3d990dc343000000000000803f000000008e7b84c2295c0f3d788bc243000000000000803f00000000dcc284c2295c0f3d508dc243000000000000803f00000000
   m_CompressedMesh:
     m_Vertices:
       m_NumItems: 0
@@ -151,8 +151,8 @@ Mesh:
       m_BitSize: 0
     m_UVInfo: 0
   m_LocalAABB:
-    m_Center: {x: 65.01016, y: 0.035, z: -7.0383}
-    m_Extent: {x: 0.07408142, y: 0, z: 1.4979091}
+    m_Center: {x: -66.15103, y: 0.035, z: 390.58612}
+    m_Extent: {x: 0.22955322, y: 0, z: 1.4965057}
   m_CookingOptions: 30
   m_PreBakeConvexCollisionMesh: 0
   m_PreBakeTriangleCollisionMesh: 0

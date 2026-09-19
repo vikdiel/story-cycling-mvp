@@ -1,0 +1,55 @@
+{
+  "project": "Cape Crown Scenic Collection",
+  "branchName": "unity-world",
+  "description": "Reference-driven route art, junctions, music selection and verifiable all-route runtime/export",
+  "userStories": [
+    {
+      "id": "ART-001",
+      "title": "Ten landmark references and music shortlist",
+      "description": "Ten documented reference sources and ten preview links; music license checked.",
+      "acceptanceCriteria": [
+        "Ten documented reference sources and ten preview links; music license checked.",
+        "Unity compilation passes"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "ART-002",
+      "title": "Distinct low-poly environments and connected side streets",
+      "description": "All ten scenes include identifiable scene-specific landmarks; street junctions clear riding corridor; supporting terrain follows road elevation.",
+      "acceptanceCriteria": [
+        "All ten scenes include identifiable scene-specific landmarks; street junctions clear riding corridor; supporting terrain follows road elevation.",
+        "Unity compilation passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "ART-003",
+      "title": "Runtime collection and exporter integrity",
+      "description": "All ten scenes selectable in fresh play mode; demo full laps and pause/resume; correct titles; iPad export includes ten scenes.",
+      "acceptanceCriteria": [
+        "All ten scenes selectable in fresh play mode; demo full laps and pause/resume; correct titles; iPad export includes ten scenes.",
+        "Unity compilation passes"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "ART-004",
+      "title": "Visual and build evidence",
+      "description": "Rendered ride views reviewed for all ten routes, scene rebuilds and iOS export pass; hardware performance separately pending.",
+      "acceptanceCriteria": [
+        "Rendered ride views reviewed for all ten routes, scene rebuilds and iOS export pass; hardware performance separately pending.",
+        "Unity compilation passes"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}

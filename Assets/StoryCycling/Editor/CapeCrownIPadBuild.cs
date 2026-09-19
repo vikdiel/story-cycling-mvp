@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using UnityEditor;
 using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
@@ -37,8 +38,8 @@ namespace StoryCycling.Editor
             PlayerSettings.SetGraphicsAPIs(BuildTarget.iOS,new[] { GraphicsDeviceType.Metal });
             PlayerSettings.iOS.appleEnableAutomaticSigning = true;
             // Preserve the developer's team ID. No credentials or signing keys belong here.
-            PlayerSettings.bundleVersion = "0.3.0";
-            PlayerSettings.iOS.buildNumber = "3";
+            PlayerSettings.bundleVersion = "0.4.0";
+            PlayerSettings.iOS.buildNumber = "4";
             var mobile = AssetDatabase.LoadAssetAtPath<UniversalRenderPipelineAsset>("Assets/Settings/Mobile_RPAsset.asset");
             if (mobile == null) throw new InvalidOperationException("Mobile URP asset missing.");
             mobile.supportsHDR = false;
@@ -53,7 +54,7 @@ namespace StoryCycling.Editor
             mobile.supportsCameraOpaqueTexture = false;
             EditorUtility.SetDirty(mobile);
             if (!File.Exists(ScenePath)) CapeCrownSceneBuilder.BuildHillRide();
-            EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(ScenePath,true) };
+            CapeCrownSceneBuilder.SetAllScenesInBuildSettings();
             var plugin = AssetImporter.GetAtPath("Assets/StoryCycling/Plugins/iOS/CapeCrownBluetooth.mm") as PluginImporter;
             if(plugin == null) throw new InvalidOperationException("Bluetooth native plugin missing.");
             plugin.SetCompatibleWithAnyPlatform(false);
@@ -74,14 +75,14 @@ namespace StoryCycling.Editor
             // Versioned destination prevents accidental replacement of a hand-signed Xcode export.
             string path = "Builds/iPad/CapeCrown-" + DateTime.Now.ToString("yyyyMMdd-HHmmss");
             var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions {
-                scenes = new[] { ScenePath }, target = BuildTarget.iOS,
+                scenes = EditorBuildSettings.scenes.Where(s => s.enabled).Select(s => s.path).ToArray(), target = BuildTarget.iOS,
                 locationPathName = path, options = BuildOptions.Development
             });
             string projectFile = Path.Combine(path,"Unity-iPhone.xcodeproj/project.pbxproj");
             bool complete = report.summary.result == BuildResult.Succeeded && report.summary.totalErrors == 0 &&
                 report.summary.platform == BuildTarget.iOS && File.Exists(projectFile) && File.Exists(Path.Combine(path,"Info.plist"));
             Directory.CreateDirectory("Logs");
-            File.WriteAllText("Logs/ipad-export.txt",$"Gate: {(complete ? "PASS" : "FAIL")}\nUnity result: {report.summary.result}\nPlatform: {report.summary.platform}\nPath: {path}\nSize: {report.summary.totalSize}\nErrors: {report.summary.totalErrors}\nXcode project exists: {File.Exists(projectFile)}\nUnity export only; Xcode compile/signing and iPad performance not tested.\n");
+            File.WriteAllText("Logs/ipad-export.txt",$"Gate: {(complete ? "PASS" : "FAIL")}\nUnity result: {report.summary.result}\nPlatform: {report.summary.platform}\nPath: {path}\nScenes: {EditorBuildSettings.scenes.Count(s => s.enabled)}\nSize: {report.summary.totalSize}\nErrors: {report.summary.totalErrors}\nXcode project exists: {File.Exists(projectFile)}\nUnity export only; Xcode compile/signing and iPad performance not tested.\n");
             if (!complete)
                 throw new BuildFailedException("iPad export incomplete. See Logs/ipad-export.txt and Unity Console. If iOS support was just installed, restart Unity before retrying.");
             Debug.Log("iPad Xcode export PASS: " + Path.GetFullPath(path) + "/Unity-iPhone.xcodeproj");

@@ -6,11 +6,43 @@ namespace StoryCycling
     // rider, so a populated section never exceeds a small active-object budget on iPad.
     public sealed class CapeCrownLife : MonoBehaviour
     {
-        private CapeCrownRideController ride;
-        private Transform[] walkers;
-        private float[] distances, offsets, speeds;
-        private int[] directions;
-        private const float ActivationRadius = 50f;
+        [SerializeField] private CapeCrownRideController ride;
+        [SerializeField] private Transform[] walkers;
+        [SerializeField] private float[] distances, offsets, speeds;
+        [SerializeField] private int[] directions;
+        private const float ActivationRadius = 90f;
+        private Transform[][] bones;
+        private static readonly string[] BoneNames={"UpperLeg_L","LowerLeg_L","Ankle_L","UpperLeg_R","LowerLeg_R","Ankle_R","Shoulder_L","Elbow_L","Hand_L","Shoulder_R","Elbow_R","Hand_R"};
+        private void Awake()
+        {
+            if(walkers==null)return;
+            bones=new Transform[walkers.Length][];
+            for(int i=0;i<walkers.Length;i++)
+            {
+                bones[i]=new Transform[BoneNames.Length];
+                if(walkers[i]==null)continue;
+                foreach(var animator in walkers[i].GetComponentsInChildren<Animator>(true))animator.enabled=false;
+                foreach(var t in walkers[i].GetComponentsInChildren<Transform>(true))
+                    for(int b=0;b<BoneNames.Length;b++)if(t.name==BoneNames[b])bones[i][b]=t;
+            }
+        }
+        private void PoseWalker(int i)
+        {
+            if(bones==null||i>=bones.Length)return;
+            float phase=Time.time*5+ i*.7f;
+            var b=bones[i];
+            for(int side=0;side<2;side++)
+            {
+                float swing=Mathf.Sin(phase+side*Mathf.PI),bend=Mathf.Max(0,-swing);
+                int leg=side*3,arm=6+side*3;
+                Aim(b[leg],b[leg+1],walkers[i].TransformDirection(new Vector3(0,-1,swing*.35f)));
+                Aim(b[leg+1],b[leg+2],walkers[i].TransformDirection(new Vector3(0,-1,-bend*.55f)));
+                Aim(b[arm],b[arm+1],walkers[i].TransformDirection(new Vector3(side==0?-.1f:.1f,-1,-swing*.22f)));
+                Aim(b[arm+1],b[arm+2],walkers[i].TransformDirection(new Vector3(0,-1,.18f-swing*.16f)));
+            }
+        }
+        private static void Aim(Transform joint,Transform child,Vector3 direction)
+        { if(joint!=null&&child!=null)joint.rotation=Quaternion.FromToRotation(child.position-joint.position,direction)*joint.rotation; }
 
         public void Configure(CapeCrownRideController controller, Transform[] pedestrians,
             float[] dists, float[] offs, int[] dirs)
@@ -43,8 +75,9 @@ namespace StoryCycling
                 if (hf.sqrMagnitude < 1e-6f) hf = Vector3.forward;
                 hf.Normalize();
                 Vector3 side = Vector3.Cross(Vector3.up, hf);
-                walkers[i].position = p + side * offsets[i] + Vector3.up * bob;
+                walkers[i].position = p + side * offsets[i] + Vector3.up * (.03f+Mathf.Abs(bob)*.3f);
                 walkers[i].rotation = Quaternion.LookRotation(hf * directions[i], Vector3.up);
+                PoseWalker(i);
             }
         }
     }

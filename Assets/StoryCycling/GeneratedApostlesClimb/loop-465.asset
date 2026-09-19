@@ -6,7 +6,7 @@ Mesh:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: Centre dash 6
+  m_Name: Centre dash 67
   serializedVersion: 12
   m_SubMeshes:
   - serializedVersion: 2
@@ -17,8 +17,8 @@ Mesh:
     firstVertex: 0
     vertexCount: 6
     localAABB:
-      m_Center: {x: 73.693344, y: 0.035, z: -450.65442}
-      m_Extent: {x: 0.13399124, y: 0, z: 1.4924316}
+      m_Center: {x: 70.171326, y: 2.3527002, z: 37.35443}
+      m_Extent: {x: 0.08288574, y: 0.03493333, z: 1.5027847}
   m_Shapes:
     vertices: []
     shapes: []
@@ -97,7 +97,7 @@ Mesh:
       format: 0
       dimension: 0
     m_DataSize: 144
-    _typelessdata: 641e9342295c0f3d0012e2c300000000ffff7f3f0000000000669342295c0f3dcc12e2c3000000000000803f00000000a03f9342295c0f3dc353e1c3000000000000803f000000003e879342295c0f3d8954e1c300000000ffff7f3f00000000fb5f9342295c0f3dbc94e0c3000000000000803f0000000099a79342295c0f3d7c95e0c3000000000000803f00000000
+    _typelessdata: 482d8c424b56144046690f42b1df49b94cee7f3fe665bebcf6748c424b56144016680f42b4324db94cee7f3f7666bebcc3338c4201921640246a154262554eb949ee7f3ff96cbebc717b8c4201921640ea681542ee3c53b94aee7f3f1c74bebc7a3a8c42fdce1840ca6d1b42e39754b947ee7f3fa57abebc28828c42fdce1840846c1b42229658b948ee7f3f527bbebc
   m_CompressedMesh:
     m_Vertices:
       m_NumItems: 0
@@ -151,8 +151,8 @@ Mesh:
       m_BitSize: 0
     m_UVInfo: 0
   m_LocalAABB:
-    m_Center: {x: 73.693344, y: 0.035, z: -450.65442}
-    m_Extent: {x: 0.13399124, y: 0, z: 1.4924316}
+    m_Center: {x: 70.171326, y: 2.3527002, z: 37.35443}
+    m_Extent: {x: 0.08288574, y: 0.03493333, z: 1.5027847}
   m_CookingOptions: 30
   m_PreBakeConvexCollisionMesh: 0
   m_PreBakeTriangleCollisionMesh: 0

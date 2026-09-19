@@ -6,19 +6,19 @@ Mesh:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: Centre dash 4
+  m_Name: Centre dash 83
   serializedVersion: 12
   m_SubMeshes:
   - serializedVersion: 2
     firstByte: 0
-    indexCount: 18
+    indexCount: 12
     topology: 0
     baseVertex: 0
     firstVertex: 0
-    vertexCount: 8
+    vertexCount: 6
     localAABB:
-      m_Center: {x: 68.07045, y: 0.035, z: -366.68878}
-      m_Extent: {x: 0.1578331, y: 0, z: 1.5050812}
+      m_Center: {x: 69.684975, y: 0.7191527, z: 264.69507}
+      m_Extent: {x: 0.0836792, y: 0.008630574, z: 1.5008087}
   m_Shapes:
     vertices: []
     shapes: []
@@ -35,10 +35,10 @@ Mesh:
   m_KeepVertices: 0
   m_KeepIndices: 0
   m_IndexFormat: 0
-  m_IndexBuffer: 000002000100010002000300020004000300030004000500040006000500050006000700y
+  m_IndexBuffer: 000002000100010002000300020004000300030004000500y
   m_VertexData:
     serializedVersion: 3
-    m_VertexCount: 8
+    m_VertexCount: 6
     m_Channels:
     - stream: 0
       offset: 0
@@ -96,8 +96,8 @@ Mesh:
       offset: 0
       format: 0
       dimension: 0
-    m_DataSize: 192
-    _typelessdata: 43d38742295c0f3dbb17b8c3000000000000803f00000000cf1a8842295c0f3dd118b8c3000000000000803f0000000017f28742295c0f3d6b97b7c3000000000000803f00000000a5398842295c0f3d7b98b7c300000000ffff7f3f0000000054108842295c0f3d5c16b7c3000000000000803f00000000e4578842295c0f3d6417b7c3000000000000803f00000000522d8842295c0f3d8497b6c3000000000000803f00000000e2748842295c0f3d8698b6c3000000000000803f00000000
+    m_DataSize: 144
+    _typelessdata: dd338b42c7e4353f0a998343790168b8e9fe7f3f79fabcbb8b7b8b42c7e4353fde988343e5bb62b8e9fe7f3f96f9bcbb093b8b42771c383f46598443269b60b8eafe7f3f7ca8bcbbb7828b42771c383f1c5984430a3859b8eafe7f3f5c56bcbbdf418b4201503a3f13198543a21757b8ebfe7f3f0205bcbb8d898b4201503a3feb1885432ad851b8ecfe7f3f1e04bcbb
   m_CompressedMesh:
     m_Vertices:
       m_NumItems: 0
@@ -151,8 +151,8 @@ Mesh:
       m_BitSize: 0
     m_UVInfo: 0
   m_LocalAABB:
-    m_Center: {x: 68.07045, y: 0.035, z: -366.68878}
-    m_Extent: {x: 0.1578331, y: 0, z: 1.5050812}
+    m_Center: {x: 69.684975, y: 0.7191527, z: 264.69507}
+    m_Extent: {x: 0.0836792, y: 0.008630574, z: 1.5008087}
   m_CookingOptions: 30
   m_PreBakeConvexCollisionMesh: 0
   m_PreBakeTriangleCollisionMesh: 0

@@ -13,7 +13,7 @@ namespace StoryCycling
         private RectTransform safe;
         private GameObject home, hud, settings, pause, routes;
         private Transform list;
-        private Text speed,power,heart,distance,connection,startLabel,trainerLabel,heartLabel,pauseLabel,muteLabel,statusLine,demoLabel,titleLabel;
+        private Text speed,power,heart,distance,connection,startLabel,trainerLabel,heartLabel,pauseLabel,muteLabel,statusLine,demoLabel,titleLabel,routeDescription,routeError;
         private Button start,resume;
         private int revision=-1;
         private bool settingsOpen, routesOpen;
@@ -33,9 +33,10 @@ namespace StoryCycling
         {
             home=Panel("Start menu",safe,new Vector2(0,.5f),new Vector2(38,0),new Vector2(510,768),ink);
             Label(home.transform,"CAPE CROWN  /  SOUTH AFRICA",24,new Vector2(30,-32),new Vector2(455,34),teal);
-            titleLabel=Label(home.transform,"",72,new Vector2(28,-84),new Vector2(460,172),paper);
+            titleLabel=Label(home.transform,"",58,new Vector2(28,-84),new Vector2(460,172),paper);
+            titleLabel.resizeTextForBestFit=true;titleLabel.resizeTextMinSize=30;titleLabel.resizeTextMaxSize=58;
             Label(home.transform,"Dein Winter. Deine Küste.",26,new Vector2(30,-265),new Vector2(450,40),paper);
-            Label(home.transform,"Promenade · Küstenanstieg · Atlantik\n0,63 km pro Runde  /  8 m Anstieg",23,new Vector2(30,-327),new Vector2(450,68),new Color(.72f,.82f,.82f));
+            routeDescription=Label(home.transform,"",23,new Vector2(30,-327),new Vector2(450,68),new Color(.72f,.82f,.82f));
             connection=Label(home.transform,"KICKR verbinden, dann geht es los",21,new Vector2(30,-411),new Vector2(450,56),paper);
             start=Button(home.transform,"Runde starten",new Vector2(30,-480),new Vector2(450,64),teal,()=>{if(ride.CanStart){ride.TryStart();settingsOpen=false;}else ShowSettings();});
             startLabel=start.GetComponentInChildren<Text>();
@@ -99,15 +100,16 @@ namespace StoryCycling
         }
         private void BuildRoutes()
         {
-            routes=Panel("Routes backdrop",safe,new Vector2(.5f,.5f),Vector2.zero,new Vector2(760,760),ink);
+            routes=Panel("Routes backdrop",safe,new Vector2(.5f,.5f),Vector2.zero,new Vector2(860,570),ink);
             Label(routes.transform,"ROUTE WÄHLEN",30,new Vector2(28,-22),new Vector2(700,45),paper);
-            Button(routes.transform,"Schließen",new Vector2(580,-22),new Vector2(150,46),new Color(.16f,.25f,.28f),()=>routesOpen=false);
+            Button(routes.transform,"Schließen",new Vector2(680,-22),new Vector2(150,46),new Color(.16f,.25f,.28f),()=>routesOpen=false);
             for (int i = 0; i < CapeCrownRoutes.All.Length; i++)
             {
                 var entry = CapeCrownRoutes.All[i];
                 int col = i % 2, row = i / 2;
-                Button(routes.transform, entry.label, new Vector2(28 + col * 356, -86 - row * 74), new Vector2(340, 62), new Color(.16f,.25f,.28f), () => CapeCrownRoutes.Load(entry.sceneName));
+                Button(routes.transform, entry.label, new Vector2(28 + col * 406, -86 - row * 74), new Vector2(390, 62), new Color(.16f,.25f,.28f), () => CapeCrownRoutes.Load(entry.sceneName));
             }
+            routeError=Label(routes.transform,"",18,new Vector2(28,-510),new Vector2(800,38),teal);
             Label(routes.transform,"Runde endet beim Wechsel · Demo zählt keinen Fortschritt",18,new Vector2(28,-470),new Vector2(700,30),new Color(.70f,.76f,.76f));
         }
         private void Update()
@@ -125,6 +127,8 @@ namespace StoryCycling
             muteLabel.text=music.Muted?"Musik einschalten":"Musik stummschalten";
             if(demoLabel!=null)demoLabel.text=ride.IsDemo?"Demo beenden":"Demo-Fahrt (ohne KICKR)";
             if(titleLabel!=null)titleLabel.text=TitleFromLabel(ride.RouteLabel);
+            if(routeDescription!=null)routeDescription.text=CapeCrownRoutes.Current.scenery+$"\n{CapeCrownRoute.Length/1000:0.00} km · Cape Town Collection";
+            if(routeError!=null)routeError.text=CapeCrownRoutes.IsLoading?"Route wird geladen …":CapeCrownRoutes.LastError??"";
             if(revision!=devices.Revision)RebuildCandidates();
         }
         private void RebuildCandidates()

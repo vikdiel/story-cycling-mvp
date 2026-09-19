@@ -6,19 +6,19 @@ Mesh:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: loop-171
+  m_Name: Pitched roof
   serializedVersion: 12
   m_SubMeshes:
   - serializedVersion: 2
     firstByte: 0
-    indexCount: 12
+    indexCount: 18
     topology: 0
     baseVertex: 0
     firstVertex: 0
     vertexCount: 6
     localAABB:
-      m_Center: {x: -10.871077, y: 0.035, z: 626.2276}
-      m_Extent: {x: 1.4895811, y: 0, z: 0.33129883}
+      m_Center: {x: -6, y: 6.7, z: 0}
+      m_Extent: {x: 7, y: 1.6999998, z: 12.5}
   m_Shapes:
     vertices: []
     shapes: []
@@ -35,7 +35,7 @@ Mesh:
   m_KeepVertices: 0
   m_KeepIndices: 0
   m_IndexFormat: 0
-  m_IndexBuffer: 000002000100010002000300020004000300030004000500y
+  m_IndexBuffer: 000002000100030004000500000003000200020003000500010002000400040002000500y
   m_VertexData:
     serializedVersion: 3
     m_VertexCount: 6
@@ -97,7 +97,7 @@ Mesh:
       format: 0
       dimension: 0
     m_DataSize: 144
-    _typelessdata: 377a16c1295c0f3d5d791c4400000000ffff7f3f000000009b1a16c1295c0f3d33821c44000000000000803f00000000f7232ec1295c0f3dd5891c44000000000000803f000000005bbf2dc1295c0f3da7921c44000000000000803f0000000041c545c1295c0f3df59a1c44000000000000803f00000000b95d45c1295c0f3dc5a31c44000000000000803f00000000
+    _typelessdata: 000050c10000a040000048c12a49d9be34ad5f3f2f5c73be0000803f0000a040000048c12a49d93e34ad5f3f2f5c73be0000c0c066660641000048c10000000001697f3f70f18abd000050c10000a040000048411e0adebef391643f2baff83d0000803f0000a040000048411e0ade3ef391643f2baff83d0000c0c066660641000048410000000035aa7d3f61fe093e
   m_CompressedMesh:
     m_Vertices:
       m_NumItems: 0
@@ -151,8 +151,8 @@ Mesh:
       m_BitSize: 0
     m_UVInfo: 0
   m_LocalAABB:
-    m_Center: {x: -10.871077, y: 0.035, z: 626.2276}
-    m_Extent: {x: 1.4895811, y: 0, z: 0.33129883}
+    m_Center: {x: -6, y: 6.7, z: 0}
+    m_Extent: {x: 7, y: 1.6999998, z: 12.5}
   m_CookingOptions: 30
   m_PreBakeConvexCollisionMesh: 0
   m_PreBakeTriangleCollisionMesh: 0

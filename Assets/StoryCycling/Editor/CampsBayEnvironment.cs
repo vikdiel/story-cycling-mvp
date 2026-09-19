@@ -75,6 +75,7 @@ namespace StoryCycling.Editor
             for (int i = 0; i < cafeCount; i++)
             {
                 float z = cafeStart + 18 * i;
+                if (Mathf.Abs(z + 65) < 19 || Mathf.Abs(z - 70) < 19) continue; // Leave side streets open.
                 GameObject shop = GroundPrefab(CampsBayShops[i % CampsBayShops.Length], Vector3.zero, 90, 18f, "Cafe ground floor " + i);
                 Bounds b = BoundsOf(shop);
                 // Set human-scale height explicitly. Old code only shrank already-small 3 m shops.

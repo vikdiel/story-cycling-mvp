@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using UnityEditor;
+using UnityEditor.Build;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -73,62 +74,7 @@ namespace StoryCycling.Editor
 
         private static void BuildGenericEnvironment(int theme)
         {
-            Color[] groundColors = {
-                new Color(.52f, .58f, .38f), new Color(.58f, .52f, .44f), new Color(.52f, .48f, .42f),
-                new Color(.48f, .60f, .36f), new Color(.42f, .58f, .46f), new Color(.72f, .68f, .52f),
-                new Color(.45f, .52f, .38f), new Color(.55f, .54f, .50f)
-            };
-            Box("Section ground", new Vector3(0, -0.6f, 0), new Vector3(1600, 1, 1600), Mat("Section ground", groundColors[theme % groundColors.Length]));
-            // Varied Synty buildings lining both sides, with occasional gaps.
-            float spacing = 15f;
-            for (float d = 6f; d < CapeCrownRoute.Length; d += spacing)
-            {
-                int idx = Mathf.RoundToInt(d / spacing);
-                if (idx % 6 == 4) continue;
-                int side = (idx % 2 == 0) ? -1 : 1;
-                float footprint = 12f + (idx % 3) * 4f;
-                AddRoadsidePrefab(GenericBuildings[idx % GenericBuildings.Length], d, side * 11.5f, footprint, "Building " + idx);
-            }
-            // Street lamps along the road.
-            for (float d = 14f; d < CapeCrownRoute.Length; d += 28f)
-                AddRoadsidePrefab(LampPole, d, ((Mathf.RoundToInt(d / 28f)) % 2 == 0 ? -1 : 1) * 6.3f, 2.4f, "Street lamp");
-            // Intersections: side streets, traffic lights and give-way signs.
-            for (float d = 140f; d < CapeCrownRoute.Length; d += 260f)
-                AddIntersection(d);
-            // Scattered trees inland and seaward for depth.
-            for (float d = 18f; d < CapeCrownRoute.Length; d += 22f)
-            {
-                int side = (Mathf.RoundToInt(d / 22f) % 2 == 0) ? -1 : 1;
-                CapeCrownRoute.Sample(d, out Vector3 p, out Vector3 fwd);
-                Vector3 hf = new Vector3(fwd.x, 0, fwd.z).normalized;
-                Vector3 off = Vector3.Cross(Vector3.up, hf) * (side * 18f);
-                AddCoastalProp(Tree, new Vector3(p.x + off.x, -0.14f, p.z + off.z), d * 31f, 5.5f, "Section tree");
-            }
-            AddParkedCars();
-        }
-
-        private static void AddRoadsidePrefab(string path, float distance, float offset, float footprint, string name)
-        {
-            CapeCrownRoute.Sample(distance, out Vector3 p, out Vector3 fwd);
-            Vector3 hf = new Vector3(fwd.x, 0, fwd.z);
-            if (hf.sqrMagnitude < 1e-6f) hf = Vector3.forward;
-            hf.Normalize();
-            float yaw = Mathf.Atan2(hf.x, hf.z) * Mathf.Rad2Deg;
-            Vector3 pos = p + Vector3.Cross(Vector3.up, hf) * offset;
-            GroundPrefab(path, pos, yaw + 90f, footprint, name);
-        }
-
-        private static void AddIntersection(float distance)
-        {
-            CapeCrownRoute.Sample(distance, out Vector3 p, out Vector3 fwd);
-            Vector3 hf = new Vector3(fwd.x, 0, fwd.z).normalized;
-            Material asphalt = Mat("Side street", new Color(.13f, .16f, .19f));
-            var street = Part(null, PrimitiveType.Cube, p + Vector3.up * 0.005f, new Vector3(44f, .04f, 8f), asphalt);
-            street.transform.rotation = Quaternion.LookRotation(hf, Vector3.up);
-            street.name = "Side street";
-            AddRoadsidePrefab(TrafficLightPrefab, distance, 6f, 2.4f, "Traffic light");
-            AddRoadsidePrefab(TrafficLightPrefab, distance, -6f, 2.4f, "Traffic light");
-            AddRoadsidePrefab(GiveWaySign, distance, 4.2f, 1.8f, "Give-way sign");
+            BuildReferenceEnvironment(Generated.Substring("Assets/StoryCycling/Generated".Length), theme);
         }
 
         private static void AddRouteData()
@@ -237,11 +183,14 @@ namespace StoryCycling.Editor
             "Assets/StoryCycling/Scenes/TableFoothills.unity"
         };
 
-        private static void SetAllScenesInBuildSettings()
+        public static void SetAllScenesInBuildSettings()
         {
             var list = new System.Collections.Generic.List<EditorBuildSettingsScene>();
             foreach (string p in SectionScenes)
-                if (File.Exists(p)) list.Add(new EditorBuildSettingsScene(p, true));
+                {
+                if (!File.Exists(p)) throw new BuildFailedException("Missing route scene: " + p + ". Run Story Cycling > Build All Routes.");
+                list.Add(new EditorBuildSettingsScene(p, true));
+            }
             EditorBuildSettings.scenes = list.ToArray();
             Debug.Log("Build settings now include " + list.Count + " section scenes.");
         }

@@ -21,6 +21,7 @@ namespace StoryCycling
 
         private static Vector2[] pts;
         private static float total;
+        private static float[] cumulative;
         private const int SamplesPerSeg = 64;
 
         public static float Length => total;
@@ -33,12 +34,14 @@ namespace StoryCycling
                 throw new ArgumentException("Route needs at least 3 waypoints.");
             pts = waypoints;
             total = 0f;
+            cumulative = new float[pts.Length * SamplesPerSeg + 1];
             Vector2 prev = Point(0, 0f);
             for (int seg = 0; seg < pts.Length; seg++)
                 for (int s = 1; s <= SamplesPerSeg; s++)
                 {
                     Vector2 p = Point(seg, s / (float)SamplesPerSeg);
                     total += Vector2.Distance(prev, p);
+                    cumulative[seg * SamplesPerSeg + s] = total;
                     prev = p;
                 }
         }
@@ -71,27 +74,13 @@ namespace StoryCycling
 
         static void Locate(float d, out int seg, out float t)
         {
-            float acc = 0f;
-            Vector2 prev = Point(0, 0f);
-            for (int s = 0; s < pts.Length; s++)
-            {
-                for (int k = 1; k <= SamplesPerSeg; k++)
-                {
-                    Vector2 p = Point(s, k / (float)SamplesPerSeg);
-                    float len = Vector2.Distance(prev, p);
-                    if (acc + len >= d)
-                    {
-                        float frac = (d - acc) / Mathf.Max(len, 1e-6f);
-                        seg = s;
-                        t = (k - 1 + frac) / SamplesPerSeg;
-                        return;
-                    }
-                    acc += len;
-                    prev = p;
-                }
-            }
-            seg = pts.Length - 1;
-            t = 1f;
+            // Cached arc-length table: identical sampling to Define, logarithmic lookup.
+            int lo = 1, hi = cumulative.Length - 1;
+            while (lo < hi) { int mid = (lo + hi) / 2; if (cumulative[mid] < d) lo = mid + 1; else hi = mid; }
+            int interval = lo - 1;
+            float frac = (d - cumulative[interval]) / Mathf.Max(cumulative[lo] - cumulative[interval], 1e-6f);
+            seg = interval / SamplesPerSeg;
+            t = (interval % SamplesPerSeg + frac) / SamplesPerSeg;
         }
 
         public static void Sample(float distance, out Vector3 point, out Vector3 forward, float hillHeight = 0f)

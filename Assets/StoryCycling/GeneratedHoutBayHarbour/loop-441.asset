@@ -6,19 +6,19 @@ Mesh:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: Centre dash 64
+  m_Name: Centre dash 143
   serializedVersion: 12
   m_SubMeshes:
   - serializedVersion: 2
     firstByte: 0
-    indexCount: 18
+    indexCount: 12
     topology: 0
     baseVertex: 0
     firstVertex: 0
-    vertexCount: 8
+    vertexCount: 6
     localAABB:
-      m_Center: {x: 66.6364, y: 0.03624297, z: 112.84221}
-      m_Extent: {x: 0.10416031, y: 0.0006311778, z: 1.5020447}
+      m_Center: {x: -69.73515, y: 0.035, z: 270.79156}
+      m_Extent: {x: 0.08098984, y: 0, z: 1.5017853}
   m_Shapes:
     vertices: []
     shapes: []
@@ -35,10 +35,10 @@ Mesh:
   m_KeepVertices: 0
   m_KeepIndices: 0
   m_IndexFormat: 0
-  m_IndexBuffer: 000002000100010002000300020004000300030004000500040006000500050006000700y
+  m_IndexBuffer: 000002000100010002000300020004000300030004000500y
   m_VertexData:
     serializedVersion: 3
-    m_VertexCount: 8
+    m_VertexCount: 6
     m_Channels:
     - stream: 0
       offset: 0
@@ -96,8 +96,8 @@ Mesh:
       offset: 0
       format: 0
       dimension: 0
-    m_DataSize: 192
-    _typelessdata: 81108542acdd113dcaafde4248ef02b70000803fc472b4b92b588542acdd113d2aaede42f53f03b70000803f0f73b4b9221c8542bf46133dc7afe04288130db7feff7f3f6dc8c1b9cc638542bf46133d25aee042820117b7feff7f3f271dcfb9cc278542fdff143deeafe242566e2ab70000803f95c1e9b9766f8542fdff143d4caee242807034b7fdff7f3fba11f7b9803385425909173d42b0e4424c4b3eb7feff7f3f7e3002ba2a7b85425909173d9eaee4428cbf3eb7feff7f3fb43002ba
+    m_DataSize: 144
+    _typelessdata: 305a8bc2295c0f3d8d258843000000000000803f00000000dea18bc2295c0f3d6d25884300000000ffff7f3f00000000be548bc2295c0f3da2658743000000000000803f000000006c9c8bc2295c0f3d80658743000000000000803f00000000ef4e8bc2295c0f3d3ca58643000000000000803f000000009d968bc2295c0f3d18a58643000000000000803f00000000
   m_CompressedMesh:
     m_Vertices:
       m_NumItems: 0
@@ -151,8 +151,8 @@ Mesh:
       m_BitSize: 0
     m_UVInfo: 0
   m_LocalAABB:
-    m_Center: {x: 66.6364, y: 0.03624297, z: 112.84221}
-    m_Extent: {x: 0.10416031, y: 0.0006311778, z: 1.5020447}
+    m_Center: {x: -69.73515, y: 0.035, z: 270.79156}
+    m_Extent: {x: 0.08098984, y: 0, z: 1.5017853}
   m_CookingOptions: 30
   m_PreBakeConvexCollisionMesh: 0
   m_PreBakeTriangleCollisionMesh: 0

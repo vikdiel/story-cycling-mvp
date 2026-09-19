@@ -79,7 +79,7 @@ namespace StoryCycling.Editor
             Material grass = Mat("CoastalGrass", new Color(.37f, .48f, .31f));
             Material sand = Mat("Sand", new Color(.77f, .69f, .49f));
             Material ocean = Mat("Atlantic", new Color(.08f, .39f, .52f));
-            if (campsBay) BuildCampsBayEnvironment();
+            if (campsBay) { BeginArt(); BuildCampsBayEnvironment(); }
             else
             {
                 Box("Island", new Vector3(0,-.65f,0), new Vector3(148,1,330), sand);
@@ -88,6 +88,7 @@ namespace StoryCycling.Editor
             }
 
             if (hill) BuildCoastalHill();
+            if (campsBay) { ArtJunction(110,-1,true,"CAMPS BAY DRIVE"); ArtJunction(245,-1,true,"GENEVA DRIVE"); }
 
             // Every strip is sampled from the same path as the rider. No prefab pivots.
             Strip("Continuous asphalt", -4f, 4f, .02f, 0, CapeCrownRoute.Length, asphalt);
@@ -272,40 +273,7 @@ namespace StoryCycling.Editor
             Debug.Log(scenePath + " saved. Route length " + CapeCrownRoute.Length.ToString("0") + " m.");
         }
 
-        private static void BuildBoKaapEnvironment()
-        {
-            Material ground = Mat("Bo-Kaap ground", new Color(.46f, .44f, .42f));
-            Box("Bo-Kaap ground", new Vector3(0, -0.6f, 0), new Vector3(900, 1, 900), ground);
-            Color[] palette = {
-                new Color(.96f, .42f, .56f), new Color(.30f, .72f, .52f), new Color(.36f, .55f, .86f),
-                new Color(.95f, .76f, .26f), new Color(.44f, .80f, .74f), new Color(.90f, .50f, .30f),
-                new Color(.72f, .52f, .82f)
-            };
-            Material trim = Mat("Bo-Kaap trim", new Color(.97f, .94f, .86f));
-            float spacing = 9f;
-            for (float d = 0; d < CapeCrownRoute.Length; d += spacing)
-            {
-                CapeCrownRoute.Sample(d, out Vector3 point, out Vector3 forward);
-                Vector3 fwd = new Vector3(forward.x, 0, forward.z).normalized;
-                Vector3 right = Vector3.Cross(Vector3.up, fwd).normalized;
-                Quaternion rot = Quaternion.LookRotation(fwd, Vector3.up);
-                for (int side = -1; side <= 1; side += 2)
-                {
-                    int idx = Mathf.RoundToInt(d / spacing) * 2 + (side < 0 ? 0 : 1);
-                    float w = 4f + (idx % 3) * 2f;
-                    float h = 3f + ((idx / 2) % 3) * 1.5f;
-                    int colorIdx = idx % palette.Length;
-                    Vector3 pos = point + right * (side * 10f) + Vector3.up * (h / 2f - 0.15f);
-                    GameObject house = Part(null, PrimitiveType.Cube, pos, new Vector3(6f, h, w), Mat("Bo-Kaap house " + colorIdx, palette[colorIdx]));
-                    house.transform.rotation = rot;
-                    house.name = "Bo-Kaap house";
-                    GameObject roof = Part(null, PrimitiveType.Cube, pos + Vector3.up * (h / 2f + 0.18f), new Vector3(6.4f, 0.35f, w + 0.4f), trim);
-                    roof.transform.rotation = rot;
-                    roof.name = "Bo-Kaap roof";
-                }
-            }
-            AddParkedCars();
-        }
+        private static void BuildBoKaapEnvironment() => BuildReferenceBoKaap();
 
         private static void AddLife(CapeCrownRideController director)
         {

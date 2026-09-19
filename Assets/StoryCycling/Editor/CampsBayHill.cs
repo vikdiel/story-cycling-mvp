@@ -99,6 +99,7 @@ namespace StoryCycling.Editor
             for (int i = 0; i < cafeCount; i++)
             {
                 float z = cafeStart + 18 * i;
+                if (Mathf.Abs(z + 65) < 19 || Mathf.Abs(z - 70) < 19) continue; // Leave side streets open.
                 Material canvas = Mat("Cafe canopy " + i,colors[i%colors.Length]);
                 Box("Beach cafe awning",new Vector3(38.6f,3.1f,z),new Vector3(2.4f,.12f,7.5f),canvas);
                 for(int end=-1;end<=1;end+=2)
