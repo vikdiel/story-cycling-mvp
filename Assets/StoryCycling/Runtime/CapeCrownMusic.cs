@@ -34,6 +34,12 @@ namespace StoryCycling
             }
             if (clips.Count == 0) clips.Add(Resources.Load<AudioClip>("CampsBayRide")); // fallback
             rideClips = clips.ToArray();
+            // Shuffle so every session starts with a different track.
+            for (int i = rideClips.Length - 1; i > 0; i--)
+            {
+                int j = Random.Range(0, i + 1);
+                AudioClip tmp = rideClips[i]; rideClips[i] = rideClips[j]; rideClips[j] = tmp;
+            }
         }
 
         private AudioSource AddSource(string clipName, bool loop)

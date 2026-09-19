@@ -7,6 +7,7 @@ namespace StoryCycling
     {
         [SerializeField] private Transform visual;
         [SerializeField] private Transform[] thighs, shins, feet, cranks, pedals;
+        [SerializeField] private Transform[] upperArms, foreArms;
         private float phase, cadence, lean;
         public const float LegLength = .49f;
         public const float CrankRadius = .17f;
@@ -16,10 +17,25 @@ namespace StoryCycling
         private static bool Valid(Transform[] parts) => parts != null && parts.Length == 2 && parts[0] != null && parts[1] != null;
 
         public void Configure(Transform pivot, Transform[] upper, Transform[] lower,
-            Transform[] shoes, Transform[] arms, Transform[] platforms)
+            Transform[] shoes, Transform[] arms, Transform[] platforms,
+            Transform[] upperArms = null, Transform[] foreArms = null)
         {
             visual = pivot; thighs = upper; shins = lower; feet = shoes;
             cranks = arms; pedals = platforms;
+            this.upperArms = upperArms; this.foreArms = foreArms;
+        }
+
+        public void MenuWave(float time)
+        {
+            if (!IsConfigured || upperArms == null || foreArms == null) return;
+            if (upperArms.Length < 2 || foreArms.Length < 2 || upperArms[1] == null || foreArms[1] == null) return;
+            float wave = Mathf.Sin(time * 7f);
+            // Right arm raised + waving; left arm stays on the bars.
+            Vector3 shoulder = new Vector3(.13f, 1.44f, .17f);
+            Vector3 elbow = new Vector3(.30f, 1.34f, .10f);
+            Vector3 hand = new Vector3(.34f + wave * .15f, 1.74f, .08f);
+            PoseTube(upperArms[1], shoulder, elbow);
+            PoseTube(foreArms[1], elbow, hand);
         }
 
         public void Tick(float speedKph, float distance, bool pedalling, float deltaTime, float measuredCadence = -1)

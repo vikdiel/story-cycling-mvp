@@ -70,23 +70,37 @@ namespace StoryCycling
             routeDistance=CapeCrownRoute.Advance(routeDistance,metres,CapeCrownRoute.LaneOffset,hillHeight);
             if(routeDistance>=CapeCrownRoute.Length) { laps+=Mathf.FloorToInt(routeDistance/CapeCrownRoute.Length);routeDistance=Mathf.Repeat(routeDistance,CapeCrownRoute.Length); }
             PlaceRider();
-            if(cyclistAnimation!=null)cyclistAnimation.Tick(trainerSpeedKph,routeDistance,pedalling,Time.deltaTime,devices!=null&&devices.FreshCadence?devices.Cadence:-1);
+            if(cyclistAnimation!=null)
+            {
+                if(Started)cyclistAnimation.Tick(trainerSpeedKph,routeDistance,pedalling,Time.deltaTime,devices!=null&&devices.FreshCadence?devices.Cadence:-1);
+                else cyclistAnimation.MenuWave(Time.time);
+            }
             if(wheels!=null)foreach(var wheel in wheels)if(wheel!=null)wheel.Rotate(Vector3.right,metres/.34f*Mathf.Rad2Deg,Space.Self);
         }
         private void PlaceRider()
         {
             if(rider==null)return;
             CapeCrownRoute.Sample(routeDistance,out _,out Vector3 forward,hillHeight);
-            rider.SetPositionAndRotation(CapeCrownRoute.Position(routeDistance,CapeCrownRoute.LaneOffset,.045f,hillHeight),Quaternion.LookRotation(forward,Vector3.up));
+            Vector3 facing = Started ? forward : -forward; // menu: turn to face the camera
+            rider.SetPositionAndRotation(CapeCrownRoute.Position(routeDistance,CapeCrownRoute.LaneOffset,.045f,hillHeight),Quaternion.LookRotation(facing,Vector3.up));
         }
         private void LateUpdate()=>UpdateCamera(false);
         private void UpdateCamera(bool snap)
         {
             if(rider==null||rideCamera==null)return;
-            Vector3 position=rider.position-rider.forward*5.8f+Vector3.up*2.6f;
+            Vector3 position, look;
+            if(!Started)
+            {
+                position=rider.position+rider.forward*3.4f+Vector3.up*1.7f;
+                look=rider.position+Vector3.up*1.45f;
+            }
+            else
+            {
+                position=rider.position-rider.forward*5.8f+Vector3.up*2.6f;
+                look=CapeCrownRoute.Position(routeDistance+7,CapeCrownRoute.LaneOffset,1.15f,hillHeight);
+            }
             float blend=snap?1:1-Mathf.Exp(-8*Time.deltaTime);
             rideCamera.position=Vector3.Lerp(rideCamera.position,position,blend);
-            Vector3 look=CapeCrownRoute.Position(routeDistance+7,CapeCrownRoute.LaneOffset,1.15f,hillHeight);
             rideCamera.rotation=Quaternion.Slerp(rideCamera.rotation,Quaternion.LookRotation(look-rideCamera.position,Vector3.up),blend);
         }
     }

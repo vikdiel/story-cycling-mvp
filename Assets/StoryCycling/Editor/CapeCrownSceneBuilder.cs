@@ -396,24 +396,27 @@ namespace StoryCycling.Editor
             var feet = new Transform[2];
             var cranks = new Transform[2];
             var pedals = new Transform[2];
+            var upperArms = new Transform[2];
+            var foreArms = new Transform[2];
             var moving = new List<Transform>(wheels);
             for(int side=-1;side<=1;side+=2)
             {
                 float x=side*.13f;
-                Vector3 elbow=new Vector3(side*.2f,1.18f,.30f), hand=new Vector3(side*.23f,.96f,.52f);
-                Tube(root,shoulder+Vector3.right*x,elbow,.05f,sleeve); Tube(root,elbow,hand,.036f,skin);
                 int index = side == -1 ? 0 : 1;
+                Vector3 elbow=new Vector3(side*.2f,1.18f,.30f), hand=new Vector3(side*.23f,.96f,.52f);
+                upperArms[index] = Tube(root,shoulder+Vector3.right*x,elbow,.05f,sleeve);
+                foreArms[index] = Tube(root,elbow,hand,.036f,skin);
                 Vector3 knee=new Vector3(x,.67f,.16f), foot=new Vector3(x,.20f,-.03f);
                 thighs[index] = Tube(root,hip+Vector3.right*x,knee,.07f,shorts);
                 shins[index] = Tube(root,knee,foot,.045f,skin);
                 feet[index] = Part(root,PrimitiveType.Cube,foot,new Vector3(.12f,.08f,.25f),dark).transform;
                 cranks[index] = Tube(root,crank,foot,.014f,spokes);
                 pedals[index] = Part(root,PrimitiveType.Cube,foot,new Vector3(.17f,.025f,.11f),accent).transform;
-                moving.AddRange(new[] { thighs[index], shins[index], feet[index], cranks[index], pedals[index] });
+                moving.AddRange(new[] { upperArms[index], foreArms[index], thighs[index], shins[index], feet[index], cranks[index], pedals[index] });
             }
             foreach (Transform wheel in wheels) BatchParts(wheel, null);
             BatchParts(root, moving.ToArray());
-            animation.Configure(root, thighs, shins, feet, cranks, pedals);
+            animation.Configure(root, thighs, shins, feet, cranks, pedals, upperArms, foreArms);
             animation.ApplyPose(0);
             return anchor;
         }
