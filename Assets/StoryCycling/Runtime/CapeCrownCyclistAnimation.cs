@@ -38,9 +38,25 @@ namespace StoryCycling
             PoseTube(foreArms[1], elbow, hand);
         }
 
+        public void ResetArms()
+        {
+            if (upperArms == null || foreArms == null) return;
+            for (int i = 0; i < 2; i++)
+            {
+                if (upperArms[i] == null || foreArms[i] == null) continue;
+                int side = i == 0 ? -1 : 1;
+                Vector3 shoulder = new Vector3(side * .13f, 1.44f, .17f);
+                Vector3 elbow = new Vector3(side * .2f, 1.18f, .30f);
+                Vector3 hand = new Vector3(side * .23f, .96f, .52f);
+                PoseTube(upperArms[i], shoulder, elbow);
+                PoseTube(foreArms[i], elbow, hand);
+            }
+        }
+
         public void Tick(float speedKph, float distance, bool pedalling, float deltaTime, float measuredCadence = -1)
         {
             if (!IsConfigured) return;
+            ResetArms(); // arms return to the handlebars while riding
             // Measured cadence drives the rig; cosmetic fallback only when the trainer omits it.
             float target = pedalling && speedKph > .1f ? (measuredCadence >= 0 ? measuredCadence : Mathf.Lerp(35, 95, Mathf.Clamp01(speedKph / 40))) : 0;
             cadence = Mathf.MoveTowards(cadence, target, 180 * deltaTime);

@@ -20,8 +20,8 @@ namespace StoryCycling.Editor
         private static readonly string[] CityApartments = {
             Root + "Buildings/SM_Bld_Apartment_01.prefab", Root + "Buildings/SM_Bld_Apartment_02.prefab",
             Root + "Buildings/SM_Bld_Apartment_03.prefab", Root + "Buildings/SM_Bld_Apartment_Corner_01.prefab",
-            Root + "Buildings/SM_Bld_Apartment_Corner_02.prefab", Root + "Buildings/SM_Bld_Apartment_Stack_01.prefab",
-            Root + "Buildings/SM_Bld_Apartment_Stack_02.prefab", Root + "Buildings/SM_Bld_Apartment_Stack_03.prefab"
+            Root + "Buildings/SM_Bld_Apartment_Corner_02.prefab", Root + "Buildings/SM_Bld_Apartment_Corner_03.prefab",
+            Root + "Buildings/SM_Bld_Apartment_Door_01.prefab", Root + "Buildings/SM_Bld_Apartment_Door_02.prefab"
         };
         private static readonly string[] CityTowers = {
             Root + "Buildings/SM_Bld_OfficeSquare_01.prefab", Root + "Buildings/SM_Bld_OfficeSquare_02.prefab",
@@ -102,7 +102,7 @@ namespace StoryCycling.Editor
             }
         }
 
-        private static void PlaceRoadside(string path, float d, float lateral, float footprint, int idx)
+        private static GameObject PlaceRoadside(string path, float d, float lateral, float footprint, int idx)
         {
             CapeCrownRoute.Sample(d, out Vector3 p, out Vector3 fwd);
             Vector3 hf = new Vector3(fwd.x, 0, fwd.z);
@@ -110,7 +110,7 @@ namespace StoryCycling.Editor
             hf.Normalize();
             float yaw = Mathf.Atan2(hf.x, hf.z) * Mathf.Rad2Deg;
             Vector3 pos = p + Vector3.Cross(Vector3.up, hf) * lateral;
-            GroundPrefab(path, pos, yaw + 90f, footprint, "City " + idx);
+            return GroundPrefab(path, pos, yaw + 90f, footprint, "City " + idx);
         }
 
         private static void AddIntersections()
@@ -134,7 +134,8 @@ namespace StoryCycling.Editor
             for (float d = 12f; d < CapeCrownRoute.Length; d += 24f)
             {
                 int side = (Mathf.RoundToInt(d / 24f) % 2 == 0) ? -1 : 1;
-                PlaceRoadside(LampPole, d, side * 7.4f, 2.4f, 3);
+                var lamp = PlaceRoadside(LampPole, d, side * 7.4f, 2.4f, 3);
+                if (lamp != null) lamp.transform.localScale *= 1.6f; // more prominent street lamps
             }
         }
     }
