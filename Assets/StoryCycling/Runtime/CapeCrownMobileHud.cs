@@ -80,6 +80,7 @@ namespace StoryCycling
             var mute=Button(settings.transform,"",new Vector2(28,-520),new Vector2(218,52),new Color(.16f,.25f,.28f),()=>music.ToggleMute());muteLabel=mute.GetComponentInChildren<Text>();
             var slider=CreateSlider(settings.transform,new Vector2(277,-530),new Vector2(642,36));slider.value=music.Volume;slider.onValueChanged.AddListener(music.SetVolume);
             Label(settings.transform,"Fahren: KICKR Core  ·  Touch: Menüs und Pause",20,new Vector2(28,-614),new Vector2(880,34),new Color(.70f,.76f,.76f));
+            Label(settings.transform,"Fahr-Musik: Kevin MacLeod (incompetech.com) · CC BY 4.0",16,new Vector2(28,-650),new Vector2(880,26),new Color(.52f,.60f,.60f));
         }
         private void BuildPause()
         {
