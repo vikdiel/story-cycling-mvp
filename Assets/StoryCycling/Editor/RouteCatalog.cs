@@ -28,6 +28,7 @@ namespace StoryCycling.Editor
         [MenuItem("Story Cycling/Build All Routes")]
         public static void BuildAllRoutes()
         {
+            BuildCityCenter();  // Cape Town City Center (dense downtown loop)
             BuildWorld(true, true);   // Cape Crown Promenade (Camps Bay)
             BuildBoKaap();            // Bo-Kaap Steps
             BuildGeneric("CliftonCove", "CLIFTON COVE", 5, 350f, 60f, 1f, (0.2f, 0.45f, 0.55f), (0.6f, 0.85f, 0.45f));
@@ -171,6 +172,7 @@ namespace StoryCycling.Editor
         }
 
         private static readonly string[] SectionScenes = {
+            "Assets/StoryCycling/Scenes/CapeTownCityCenter.unity",
             "Assets/StoryCycling/Scenes/CampsBayTrainerRide.unity",
             "Assets/StoryCycling/Scenes/CliftonCove.unity",
             "Assets/StoryCycling/Scenes/ApostlesClimb.unity",

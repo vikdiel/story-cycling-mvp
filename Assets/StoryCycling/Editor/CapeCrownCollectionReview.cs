@@ -109,7 +109,7 @@ namespace StoryCycling.Editor
                     index++;
                     if(index>=CapeCrownRoutes.All.Length)
                     {
-                        File.AppendAllText(Folder+"/result.txt","PASS ALL 10 ROUTES. Mobile URP in Editor. Not physical iPad performance or BLE.\n");
+                        File.AppendAllText(Folder+"/result.txt","PASS ALL "+CapeCrownRoutes.All.Length+" ROUTES. Mobile URP in Editor. Not physical iPad performance or BLE.\n");
                         running=false;Time.timeScale=1;EditorApplication.isPlaying=false;
                         if(Application.isBatchMode)EditorApplication.Exit(0);
                         return;

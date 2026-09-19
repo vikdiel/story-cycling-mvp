@@ -9,6 +9,7 @@ namespace StoryCycling
         public struct Entry { public string label; public string sceneName; public string scenery; }
         public static readonly Entry[] All = {
             new Entry { label = "Cape Crown Promenade", sceneName = "CampsBayTrainerRide", scenery = "Palmenpromenade · Cafés · Twelve Apostles" },
+            new Entry { label = "Cape Town City Center", sceneName = "CapeTownCityCenter", scenery = "Downtown · Bürotürme · Kreuzungen" },
             new Entry { label = "Clifton Cove", sceneName = "CliftonCove", scenery = "Granitbuchten · Strandtreppen · Küstenvillen" },
             new Entry { label = "The Apostles Climb", sceneName = "ApostlesClimb", scenery = "Felsgalerie · Aussichtspunkte · Atlantik" },
             new Entry { label = "Hout Bay Harbour", sceneName = "HoutBayHarbour", scenery = "Fischerhafen · Boote · Markt" },

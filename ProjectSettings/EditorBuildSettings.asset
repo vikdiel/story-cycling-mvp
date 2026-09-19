@@ -6,6 +6,9 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
+    path: Assets/StoryCycling/Scenes/CapeTownCityCenter.unity
+    guid: 763e72e8a54064341a170b16371e9abc
+  - enabled: 1
     path: Assets/StoryCycling/Scenes/CampsBayTrainerRide.unity
     guid: a6c46c8bd872246f9b692e353eb45bcb
   - enabled: 1
