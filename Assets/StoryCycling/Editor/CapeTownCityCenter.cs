@@ -20,8 +20,7 @@ namespace StoryCycling.Editor
         private static readonly string[] CityApartments = {
             Root + "Buildings/SM_Bld_Apartment_01.prefab", Root + "Buildings/SM_Bld_Apartment_02.prefab",
             Root + "Buildings/SM_Bld_Apartment_03.prefab", Root + "Buildings/SM_Bld_Apartment_Corner_01.prefab",
-            Root + "Buildings/SM_Bld_Apartment_Corner_02.prefab", Root + "Buildings/SM_Bld_Apartment_Corner_03.prefab",
-            Root + "Buildings/SM_Bld_Apartment_Door_01.prefab", Root + "Buildings/SM_Bld_Apartment_Door_02.prefab"
+            Root + "Buildings/SM_Bld_Apartment_Corner_02.prefab", Root + "Buildings/SM_Bld_Apartment_Corner_03.prefab"
         };
         private static readonly string[] CityTowers = {
             Root + "Buildings/SM_Bld_OfficeSquare_01.prefab", Root + "Buildings/SM_Bld_OfficeSquare_02.prefab",
@@ -56,7 +55,7 @@ namespace StoryCycling.Editor
 
         private static bool NearIntersection(float d)
         {
-            float m = Mathf.Repeat(d, IntersectionSpacing);
+            float m = Mathf.Repeat(d - IntersectionSpacing * 0.5f, IntersectionSpacing);
             return m < IntersectionGap || m > IntersectionSpacing - IntersectionGap;
         }
 
@@ -77,7 +76,6 @@ namespace StoryCycling.Editor
             BuildFacade(72f, 22f, CityTowers, true, 12f);
 
             AddIntersections();
-            AddStreetLamps();
             AddParkedCars(6f, 20f);
         }
 
@@ -120,22 +118,14 @@ namespace StoryCycling.Editor
             {
                 CapeCrownRoute.Sample(d, out Vector3 p, out Vector3 fwd);
                 Vector3 hf = new Vector3(fwd.x, 0, fwd.z).normalized;
-                var street = Part(null, PrimitiveType.Cube, p + Vector3.up * 0.055f, new Vector3(52f, .06f, 8f), asphalt);
+                var street = Part(null, PrimitiveType.Cube, p + Vector3.up * 0.055f, new Vector3(120f, .06f, 8f), asphalt);
                 street.transform.rotation = Quaternion.LookRotation(hf, Vector3.up);
                 street.name = "Cross street";
                 PlaceRoadside(TrafficLightPrefab, d, 5.7f, 2.4f, 0);
                 PlaceRoadside(TrafficLightPrefab, d, -5.7f, 2.4f, 1);
-                PlaceRoadside(GiveWaySign, d, 4.5f, 1.8f, 2);
-            }
-        }
-
-        private static void AddStreetLamps()
-        {
-            for (float d = 12f; d < CapeCrownRoute.Length; d += 24f)
-            {
-                int side = (Mathf.RoundToInt(d / 24f) % 2 == 0) ? -1 : 1;
-                var lamp = PlaceRoadside(LampPole, d, side * 7.4f, 2.4f, 3);
-                if (lamp != null) lamp.transform.localScale *= 1.6f; // more prominent street lamps
+                PlaceRoadside(LampPole, d, 7.4f, 2.4f, 2);
+                PlaceRoadside(LampPole, d, -7.4f, 2.4f, 3);
+                PlaceRoadside(GiveWaySign, d, 4.5f, 1.8f, 4);
             }
         }
     }
