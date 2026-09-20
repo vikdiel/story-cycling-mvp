@@ -156,6 +156,87 @@ namespace StoryCycling.Editor
 
         private static float ShoreX(float z) => 107 + 7 * Mathf.Cos(z * Mathf.PI / 340);
 
+        private static void BuildCampsBayStreetLife()
+        {
+            // Beach promenade runs along the flat straight (route distance ~0–350 m),
+            // ocean on the +offset side, cafe terrace on the -offset side. relief=0 here,
+            // so GroundPrefab/ArtFrame place everything on the promenade surface.
+            const string P = Root;
+            string cone = P + "Props/SM_Prop_Cone_01.prefab";
+            string cone2 = P + "Props/SM_Prop_Cone_02.prefab";
+            string barrier = P + "Props/SM_Prop_Barrier_01.prefab";
+            string skip = P + "Props/SM_Prop_Skip_01.prefab";
+            string pallet = P + "Props/SM_Prop_Pallet_01.prefab";
+            string policeCar = P + "Vehicles/SM_Veh_Car_Police_01.prefab";
+            string ambulance = P + "Vehicles/SM_Veh_Car_Ambo_01.prefab";
+            string policeOfficer = P + "Characters/Character_Male_Police.prefab";
+            string sedan = P + "Vehicles/SM_Veh_Car_Sedan_01.prefab";
+            string smallCar = P + "Vehicles/SM_Veh_Car_Small_01.prefab";
+            string giveWay = P + "Props/SM_Prop_Sign_GiveWay_01.prefab";
+            string stopSign = P + "Props/SM_Prop_Sign_Stop_01.prefab";
+            string warning = P + "Props/SM_Prop_Sign_Warning_01.prefab";
+            string billboard = P + "Props/SM_Prop_Billboard_01.prefab";
+            string flower = P + "Environments/SM_Env_Flower_01.prefab";
+            string planter = P + "Props/SM_Prop_Planter_01.prefab";
+            string potPlant = P + "Props/SM_Prop_PotPlant_01.prefab";
+            string hydrant = P + "Props/SM_Prop_Hydrant_01.prefab";
+            string parkingMeter = P + "Props/SM_Prop_ParkingMeter_01.prefab";
+            string trashCan = P + "Props/SM_Prop_TrashCan_01.prefab";
+
+            // 1) Street lamps: one at each intersection corner + spaced along the promenade.
+            ArtLamp(110, -9f); ArtLamp(245, -9f);
+            for (float d = 40; d < 340; d += 46) if (!AtJunction(d)) ArtLamp(d, 9f);
+
+            // 2) Road signs at each side-street mouth.
+            ArtProp(giveWay, 96, -7.5f, 2f, "Give way sign", 180);
+            ArtProp(stopSign, 124, 7.5f, 2f, "Stop sign", 0);
+            ArtProp(giveWay, 231, -7.5f, 2f, "Give way sign", 180);
+            ArtProp(stopSign, 259, 7.5f, 2f, "Stop sign", 0);
+
+            // 3) Construction site (Baustelle) on the road shoulder.
+            ArtProp(warning, 302, 7f, 2f, "Roadworks warning", 0);
+            ArtProp(barrier, 312, 6.5f, 4f, "Roadworks barrier", 90);
+            ArtProp(cone, 306, 5.5f, 1.2f, "Roadworks cone", 0);
+            ArtProp(cone2, 318, 5.5f, 1.2f, "Roadworks cone", 0);
+            ArtProp(skip, 322, 6.5f, 3.5f, "Roadworks skip", 0);
+            ArtProp(pallet, 314, 8f, 2.5f, "Roadworks pallet", 45);
+
+            // 4) Police scene: patrol car, officer, cone.
+            ArtProp(policeCar, 56, 7f, 4.6f, "Police patrol car", 0);
+            ArtProp(policeOfficer, 50, 9f, 2f, "Police officer", 180);
+            ArtProp(cone, 44, 7f, 1.2f, "Police cone", 0);
+
+            // 5) Accident scene: two cars, cones, police, ambulance.
+            ArtProp(sedan, 178, 6.5f, 4.6f, "Crashed sedan", 25);
+            ArtProp(smallCar, 186, 8f, 4.6f, "Second car", -30);
+            ArtProp(cone, 170, 6f, 1.2f, "Accident cone", 0);
+            ArtProp(cone, 194, 6f, 1.2f, "Accident cone", 0);
+            ArtProp(policeCar, 168, 9f, 4.6f, "Incident police", 0);
+            ArtProp(ambulance, 197, 9f, 4.6f, "Ambulance", 0);
+
+            // 6) Billboards facing the road.
+            ArtProp(billboard, 132, 11.5f, 5f, "Promenade billboard", 90);
+            ArtProp(billboard, 268, 11.5f, 5f, "Promenade billboard", 90);
+
+            // 7) Street clutter + greenery along the promenade for life.
+            for (float d = 30; d < 340; d += 22)
+            {
+                if (AtJunction(d, 12)) continue;
+                if (d > 160 && d < 200) continue;   // keep accident scene readable
+                if (d > 300) continue;              // keep construction readable
+                float off = 8.5f + ((int)d % 3) * 1.2f;
+                switch ((int)(d / 22) % 6)
+                {
+                    case 0: ArtProp(flower, d, off, 1.5f, "Wayside flowers", 0); break;
+                    case 1: ArtProp(planter, d, off, 2f, "Promenade planter", 0); break;
+                    case 2: ArtProp(potPlant, d, off, 1.5f, "Potted plant", 0); break;
+                    case 3: ArtProp(hydrant, d, off, 1.2f, "Fire hydrant", 0); break;
+                    case 4: ArtProp(parkingMeter, d, off, 1.2f, "Parking meter", 0); break;
+                    default: ArtProp(trashCan, d, off, 1.2f, "Trash can", 0); break;
+                }
+            }
+        }
+
         private static void CoastalSky()
         {
             Shader shader = Shader.Find("CapeCrown/CoastalSky");
