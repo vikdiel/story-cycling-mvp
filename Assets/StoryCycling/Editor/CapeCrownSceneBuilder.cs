@@ -397,13 +397,13 @@ namespace StoryCycling.Editor
             }
             foreach (Transform wheel in wheels) BatchParts(wheel, null);
             BatchParts(root, moving.ToArray());
-            Transform character = BuildRider(root);
+            Transform character = BuildRider(root, animation);
             animation.Configure(root, character.GetComponent<Animator>(), cranks, pedals);
             animation.ApplyPose(0);
             return anchor;
         }
 
-        private static Transform BuildRider(Transform root)
+        private static Transform BuildRider(Transform root, CapeCrownCyclistAnimation animation)
         {
             GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(RiderPrefab);
             if (prefab == null) throw new InvalidOperationException("Rider prefab missing: " + RiderPrefab);
@@ -413,12 +413,16 @@ namespace StoryCycling.Editor
             // Unity's humanoid avatar re-roots the Hips bone to the character's own
             // transform origin, so the character origin must land on the saddle itself.
             go.transform.localPosition = new Vector3(0f, .93f, -.18f);
-            go.transform.localRotation = Quaternion.identity;
+            // Synty's bind pose faces -Z; flip 180° so the rider faces the direction of travel.
+            go.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
             go.transform.localScale = Vector3.one * RiderScale;
             Animator anim = go.GetComponent<Animator>();
             if (anim == null) anim = go.AddComponent<Animator>();
             anim.applyRootMotion = false;
             anim.runtimeAnimatorController = EnsureIdleController();
+            // OnAnimatorIK only fires on the character's own GameObject, so host it here.
+            var ik = go.AddComponent<CapeCrownRiderIK>();
+            ik.Bind(anim, animation);
             return go.transform;
         }
 

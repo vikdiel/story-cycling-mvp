@@ -100,7 +100,7 @@ namespace StoryCycling
             }
         }
 
-        private void OnAnimatorIK(int layerIndex)
+        public void ApplyIK(Animator a)
         {
             if (!IsConfigured) return;
             float angle = phase;
@@ -110,27 +110,27 @@ namespace StoryCycling
                 int side = i == 0 ? -1 : 1;
                 Vector3 pedal = visual.TransformPoint(PedalPosition(side, angle + i * Mathf.PI));
                 AvatarIKGoal foot = i == 0 ? AvatarIKGoal.LeftFoot : AvatarIKGoal.RightFoot;
-                animator.SetIKPositionWeight(foot, 1f);
-                animator.SetIKRotationWeight(foot, 1f);
-                animator.SetIKPosition(foot, pedal + visual.up * .02f);
-                animator.SetIKRotation(foot, visual.rotation);
+                a.SetIKPositionWeight(foot, 1f);
+                a.SetIKRotationWeight(foot, 1f);
+                a.SetIKPosition(foot, pedal + visual.up * .02f);
+                a.SetIKRotation(foot, visual.rotation);
                 AvatarIKHint knee = i == 0 ? AvatarIKHint.LeftKnee : AvatarIKHint.RightKnee;
-                animator.SetIKHintPositionWeight(knee, 1f);
-                animator.SetIKHintPosition(knee, visual.TransformPoint(i == 0 ? lKneeHint : rKneeHint));
+                a.SetIKHintPositionWeight(knee, 1f);
+                a.SetIKHintPosition(knee, visual.TransformPoint(i == 0 ? lKneeHint : rKneeHint));
             }
             // Hands onto the drops (or raised in a wave while in the menu).
-            animator.SetIKPositionWeight(AvatarIKGoal.LeftHand, 1f);
-            animator.SetIKRotationWeight(AvatarIKGoal.LeftHand, 1f);
-            animator.SetIKPosition(AvatarIKGoal.LeftHand, visual.TransformPoint(lhHand));
-            animator.SetIKRotation(AvatarIKGoal.LeftHand, visual.rotation);
-            animator.SetIKPositionWeight(AvatarIKGoal.RightHand, 1f);
-            animator.SetIKRotationWeight(AvatarIKGoal.RightHand, 1f);
-            animator.SetIKPosition(AvatarIKGoal.RightHand, visual.TransformPoint(rhHand));
-            animator.SetIKRotation(AvatarIKGoal.RightHand, visual.rotation);
-            animator.SetIKHintPositionWeight(AvatarIKHint.LeftElbow, 1f);
-            animator.SetIKHintPosition(AvatarIKHint.LeftElbow, visual.TransformPoint(lElbow));
-            animator.SetIKHintPositionWeight(AvatarIKHint.RightElbow, 1f);
-            animator.SetIKHintPosition(AvatarIKHint.RightElbow, visual.TransformPoint(rElbow));
+            a.SetIKPositionWeight(AvatarIKGoal.LeftHand, 1f);
+            a.SetIKRotationWeight(AvatarIKGoal.LeftHand, 1f);
+            a.SetIKPosition(AvatarIKGoal.LeftHand, visual.TransformPoint(lhHand));
+            a.SetIKRotation(AvatarIKGoal.LeftHand, visual.rotation);
+            a.SetIKPositionWeight(AvatarIKGoal.RightHand, 1f);
+            a.SetIKRotationWeight(AvatarIKGoal.RightHand, 1f);
+            a.SetIKPosition(AvatarIKGoal.RightHand, visual.TransformPoint(rhHand));
+            a.SetIKRotation(AvatarIKGoal.RightHand, visual.rotation);
+            a.SetIKHintPositionWeight(AvatarIKHint.LeftElbow, 1f);
+            a.SetIKHintPosition(AvatarIKHint.LeftElbow, visual.TransformPoint(lElbow));
+            a.SetIKHintPositionWeight(AvatarIKHint.RightElbow, 1f);
+            a.SetIKHintPosition(AvatarIKHint.RightElbow, visual.TransformPoint(rElbow));
         }
 
         private void LateUpdate()
