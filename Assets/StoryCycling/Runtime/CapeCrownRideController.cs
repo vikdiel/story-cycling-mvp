@@ -77,8 +77,12 @@ namespace StoryCycling
             PlaceRider();
             if(cyclistAnimation!=null)
             {
-                if(Started)cyclistAnimation.Tick(trainerSpeedKph,routeDistance,pedalling,Time.deltaTime,devices!=null&&devices.FreshCadence?devices.Cadence:-1);
-                else cyclistAnimation.MenuWave(Time.time);
+                if(Started)
+                {
+                    cyclistAnimation.SetVisible(true);
+                    cyclistAnimation.Tick(trainerSpeedKph,routeDistance,pedalling,Time.deltaTime,devices!=null&&devices.FreshCadence?devices.Cadence:-1);
+                }
+                else cyclistAnimation.SetVisible(false);
             }
             if(wheels!=null)foreach(var wheel in wheels)if(wheel!=null)wheel.Rotate(Vector3.right,metres/.34f*Mathf.Rad2Deg,Space.Self);
         }
