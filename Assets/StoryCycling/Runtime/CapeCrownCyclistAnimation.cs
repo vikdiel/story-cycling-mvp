@@ -15,6 +15,10 @@ namespace StoryCycling
         private Transform spine, chest, neck, head;
         private Quaternion spineBase, chestBase, neckBase, headBase;
         private bool bonesReady;
+        private bool menuStanding;
+        private float wave;
+        private static readonly Vector3 SeatedPos = new Vector3(0f, .93f, -.18f);
+        private static readonly Vector3 StandingPos = new Vector3(-.55f, .83f, 0f);
 
         // Retained for the validation maths and the procedural crank visuals.
         public const float LegLength = .49f;
@@ -47,8 +51,11 @@ namespace StoryCycling
         public void MenuWave(float time)
         {
             if (!IsConfigured) return;
-            float wave = Mathf.Sin(time * 7f);
-            rhHand = new Vector3(.36f + wave * .13f, 1.72f, .10f);
+            menuStanding = true;
+            wave = Mathf.Sin(time * 7f);
+            // Stand beside the empty bike, facing the camera.
+            animator.transform.localPosition = StandingPos;
+            animator.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
         }
 
         public void ResetArms()
@@ -60,6 +67,9 @@ namespace StoryCycling
         public void Tick(float speedKph, float distance, bool pedalling, float deltaTime, float measuredCadence = -1)
         {
             if (!IsConfigured) return;
+            menuStanding = false;
+            animator.transform.localPosition = SeatedPos;
+            animator.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
             ResetArms();
             float target = pedalling && speedKph > .1f ? (measuredCadence >= 0 ? measuredCadence : Mathf.Lerp(35, 95, Mathf.Clamp01(speedKph / 40))) : 0;
             cadence = Mathf.MoveTowards(cadence, target, 180 * deltaTime);
@@ -103,6 +113,7 @@ namespace StoryCycling
         public void ApplyIK(Animator a)
         {
             if (!IsConfigured) return;
+            if (menuStanding) { ApplyStandingIK(a); return; }
             float angle = phase;
             // Feet onto the pedals, knees biased forward/out.
             for (int i = 0; i < 2; i++)
@@ -137,6 +148,15 @@ namespace StoryCycling
         {
             if (!IsConfigured) return;
             EnsureBones();
+            if (menuStanding)
+            {
+                // Standing upright: back to the bind pose, no crouch.
+                if (spine != null) spine.rotation = spineBase;
+                if (chest != null) chest.rotation = chestBase;
+                if (neck != null) neck.rotation = neckBase;
+                if (head != null) head.rotation = headBase;
+                return;
+            }
             // Cycling crouch: lean the torso forward around the bike's X axis (visual.right),
             // keeping the head roughly level to the road. World-space deltas ignore the rig's
             // raw bone axes, which is why this beats SetBoneLocalRotation for the Synty spine.
@@ -159,6 +179,39 @@ namespace StoryCycling
             if (neck != null) neckBase = neck.rotation;
             if (head != null) headBase = head.rotation;
             bonesReady = true;
+        }
+
+        private void ApplyStandingIK(Animator a)
+        {
+            Transform t = animator.transform;
+            Quaternion rot = t.rotation;
+            // Feet on the ground, slightly apart and forward.
+            for (int i = 0; i < 2; i++)
+            {
+                float side = i == 0 ? -1f : 1f;
+                Vector3 foot = t.TransformPoint(new Vector3(side * .13f, -.78f, .07f));
+                AvatarIKGoal goal = i == 0 ? AvatarIKGoal.LeftFoot : AvatarIKGoal.RightFoot;
+                a.SetIKPositionWeight(goal, 1f);
+                a.SetIKRotationWeight(goal, 1f);
+                a.SetIKPosition(goal, foot);
+                a.SetIKRotation(goal, rot);
+                AvatarIKHint knee = i == 0 ? AvatarIKHint.LeftKnee : AvatarIKHint.RightKnee;
+                a.SetIKHintPositionWeight(knee, 1f);
+                a.SetIKHintPosition(knee, t.TransformPoint(new Vector3(side * .16f, -.38f, .18f)));
+            }
+            // Right arm waves, left arm hangs at the side.
+            a.SetIKPositionWeight(AvatarIKGoal.RightHand, 1f);
+            a.SetIKRotationWeight(AvatarIKGoal.RightHand, 1f);
+            a.SetIKPosition(AvatarIKGoal.RightHand, t.TransformPoint(new Vector3(.45f + wave * .15f, 1.0f, .12f)));
+            a.SetIKRotation(AvatarIKGoal.RightHand, rot);
+            a.SetIKHintPositionWeight(AvatarIKHint.RightElbow, 1f);
+            a.SetIKHintPosition(AvatarIKHint.RightElbow, t.TransformPoint(new Vector3(.28f, .38f, .08f)));
+            a.SetIKPositionWeight(AvatarIKGoal.LeftHand, 1f);
+            a.SetIKRotationWeight(AvatarIKGoal.LeftHand, 1f);
+            a.SetIKPosition(AvatarIKGoal.LeftHand, t.TransformPoint(new Vector3(-.20f, -.03f, .08f)));
+            a.SetIKRotation(AvatarIKGoal.LeftHand, rot);
+            a.SetIKHintPositionWeight(AvatarIKHint.LeftElbow, 1f);
+            a.SetIKHintPosition(AvatarIKHint.LeftElbow, t.TransformPoint(new Vector3(-.22f, .30f, .06f)));
         }
 
         private static void PoseTube(Transform part, Vector3 a, Vector3 b)

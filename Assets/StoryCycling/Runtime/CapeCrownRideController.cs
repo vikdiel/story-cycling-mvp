@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
 namespace StoryCycling
@@ -17,6 +18,9 @@ namespace StoryCycling
         private float routeDistance, totalMetres, trainingMetres, trainerSpeedKph, demoSpeed;
         private int laps;
         private bool paused;
+        private float orbitYaw;
+        private Vector2 lastDrag;
+        private bool dragging;
         public string RouteLabel => routeLabel;
         public bool Started { get; private set; }
         public string PauseReason { get; private set; }
@@ -56,6 +60,7 @@ namespace StoryCycling
         }
         private void Update()
         {
+            UpdateOrbitInput();
             if(devices!=null && devices.IsTestFeed)
             {
                 demoSpeed=Mathf.MoveTowards(demoSpeed,30f,10f*Time.deltaTime);
@@ -85,6 +90,34 @@ namespace StoryCycling
             rider.SetPositionAndRotation(CapeCrownRoute.Position(routeDistance,CapeCrownRoute.LaneOffset,.045f,hillHeight),Quaternion.LookRotation(facing,Vector3.up));
         }
         private void LateUpdate()=>UpdateCamera(false);
+        private void UpdateOrbitInput()
+        {
+            if (!Started) { orbitYaw = 0f; dragging = false; return; }
+            Vector2 cur; bool press;
+            if (Touchscreen.current != null)
+            {
+                var touch = Touchscreen.current.primaryTouch;
+                press = touch.press.isPressed;
+                cur = touch.position.ReadValue();
+            }
+            else if (Mouse.current != null)
+            {
+                press = Mouse.current.leftButton.isPressed;
+                cur = Mouse.current.position.ReadValue();
+            }
+            else { press = false; cur = Vector2.zero; }
+            if (press)
+            {
+                if (!dragging) { dragging = true; lastDrag = cur; }
+                else
+                {
+                    float dx = cur.x - lastDrag.x;
+                    orbitYaw += dx * 0.3f;
+                    lastDrag = cur;
+                }
+            }
+            else dragging = false;
+        }
         private void UpdateCamera(bool snap)
         {
             if(rider==null||rideCamera==null)return;
@@ -100,6 +133,12 @@ namespace StoryCycling
                 look=CapeCrownRoute.Position(routeDistance+7,CapeCrownRoute.LaneOffset,1.15f,hillHeight);
             }
             float blend=snap?1:1-Mathf.Exp(-8*Time.deltaTime);
+            if (Started && Mathf.Abs(orbitYaw) > .001f)
+            {
+                Vector3 pivot = rider.position + Vector3.up * 1.2f;
+                position = pivot + Quaternion.Euler(0f, orbitYaw, 0f) * (position - pivot);
+                look = pivot;
+            }
             rideCamera.position=Vector3.Lerp(rideCamera.position,position,blend);
             rideCamera.rotation=Quaternion.Slerp(rideCamera.rotation,Quaternion.LookRotation(look-rideCamera.position,Vector3.up),blend);
         }
