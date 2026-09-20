@@ -2,62 +2,65 @@ using UnityEngine;
 
 namespace StoryCycling
 {
+    // Drives a real Synty humanoid rider through Unity's humanoid IK:
+    // feet follow the pedals, hands grip the bars, plus a fixed cycling crouch.
     // Visual rig only: no forces or steering are applied to the proven route anchor.
     public sealed class CapeCrownCyclistAnimation : MonoBehaviour
     {
-        [SerializeField] private Transform visual;
-        [SerializeField] private Transform[] thighs, shins, feet, cranks, pedals;
-        [SerializeField] private Transform[] upperArms, foreArms;
+        [SerializeField] private Transform visual;       // "Visual lean pivot"
+        [SerializeField] private Animator animator;
+        [SerializeField] private Transform[] cranks, pedals;
+
         private float phase, cadence, lean;
+        private Transform spine, chest, neck, head;
+        private Quaternion spineBase, chestBase, neckBase, headBase;
+        private bool bonesReady;
+
+        // Retained for the validation maths and the procedural crank visuals.
         public const float LegLength = .49f;
         public const float CrankRadius = .17f;
-        public bool IsConfigured => visual != null && Valid(thighs) && Valid(shins) &&
-            Valid(feet) && Valid(cranks) && Valid(pedals);
+
+        // Local-space (visual pivot) targets, matching the existing bike geometry.
+        private Vector3 lhHand = new Vector3(-.23f, .96f, .52f);
+        private Vector3 rhHand = new Vector3(.23f, .96f, .52f);
+        private Vector3 lElbow = new Vector3(-.22f, 1.10f, .28f);
+        private Vector3 rElbow = new Vector3(.22f, 1.10f, .28f);
+        private Vector3 lKneeHint = new Vector3(-.28f, .72f, .40f);
+        private Vector3 rKneeHint = new Vector3(.28f, .72f, .40f);
+
+        public bool IsConfigured => visual != null && animator != null && Valid(cranks) && Valid(pedals);
 
         private static bool Valid(Transform[] parts) => parts != null && parts.Length == 2 && parts[0] != null && parts[1] != null;
 
-        public void Configure(Transform pivot, Transform[] upper, Transform[] lower,
-            Transform[] shoes, Transform[] arms, Transform[] platforms,
-            Transform[] upperArms = null, Transform[] foreArms = null)
+        private void Awake()
         {
-            visual = pivot; thighs = upper; shins = lower; feet = shoes;
-            cranks = arms; pedals = platforms;
-            this.upperArms = upperArms; this.foreArms = foreArms;
+            // Safety net: re-resolve the Animator at runtime in case the editor-serialised
+            // reference into the prefab instance did not survive the scene reload.
+            if (animator == null) animator = GetComponentInChildren<Animator>(true);
+        }
+
+        public void Configure(Transform pivot, Animator a, Transform[] crankSet, Transform[] pedalSet)
+        {
+            visual = pivot; animator = a; cranks = crankSet; pedals = pedalSet;
         }
 
         public void MenuWave(float time)
         {
-            if (!IsConfigured || upperArms == null || foreArms == null) return;
-            if (upperArms.Length < 2 || foreArms.Length < 2 || upperArms[1] == null || foreArms[1] == null) return;
+            if (!IsConfigured) return;
             float wave = Mathf.Sin(time * 7f);
-            // Right arm raised + waving; left arm stays on the bars.
-            Vector3 shoulder = new Vector3(.13f, 1.44f, .17f);
-            Vector3 elbow = new Vector3(.30f, 1.34f, .10f);
-            Vector3 hand = new Vector3(.34f + wave * .15f, 1.74f, .08f);
-            PoseTube(upperArms[1], shoulder, elbow);
-            PoseTube(foreArms[1], elbow, hand);
+            rhHand = new Vector3(.36f + wave * .13f, 1.72f, .10f);
         }
 
         public void ResetArms()
         {
-            if (upperArms == null || foreArms == null) return;
-            for (int i = 0; i < 2; i++)
-            {
-                if (upperArms[i] == null || foreArms[i] == null) continue;
-                int side = i == 0 ? -1 : 1;
-                Vector3 shoulder = new Vector3(side * .13f, 1.44f, .17f);
-                Vector3 elbow = new Vector3(side * .2f, 1.18f, .30f);
-                Vector3 hand = new Vector3(side * .23f, .96f, .52f);
-                PoseTube(upperArms[i], shoulder, elbow);
-                PoseTube(foreArms[i], elbow, hand);
-            }
+            lhHand = new Vector3(-.23f, .96f, .52f);
+            rhHand = new Vector3(.23f, .96f, .52f);
         }
 
         public void Tick(float speedKph, float distance, bool pedalling, float deltaTime, float measuredCadence = -1)
         {
             if (!IsConfigured) return;
-            ResetArms(); // arms return to the handlebars while riding
-            // Measured cadence drives the rig; cosmetic fallback only when the trainer omits it.
+            ResetArms();
             float target = pedalling && speedKph > .1f ? (measuredCadence >= 0 ? measuredCadence : Mathf.Lerp(35, 95, Mathf.Clamp01(speedKph / 40))) : 0;
             cadence = Mathf.MoveTowards(cadence, target, 180 * deltaTime);
             phase = Mathf.Repeat(phase + cadence / 60 * Mathf.PI * 2 * deltaTime, Mathf.PI * 2);
@@ -86,20 +89,76 @@ namespace StoryCycling
 
         public void ApplyPose(float angle)
         {
-            if (!IsConfigured) return;
+            if (cranks == null || pedals == null) return;
             for (int i = 0; i < 2; i++)
             {
                 int side = i == 0 ? -1 : 1;
                 Vector3 pedal = PedalPosition(side, angle + i * Mathf.PI);
-                Vector3 ankle = pedal + Vector3.up * .07f;
-                Vector3 hip = new Vector3(side * .13f, 1.02f, -.18f);
-                Vector3 knee = KneePosition(hip, ankle);
-                PoseTube(thighs[i], hip, knee);
-                PoseTube(shins[i], knee, ankle);
-                PoseTube(cranks[i], new Vector3(side * .14f, .32f, 0), pedal);
-                feet[i].localPosition = ankle + Vector3.forward * .04f;
-                pedals[i].localPosition = pedal;
+                Vector3 bracket = new Vector3(side * .14f, .32f, 0);
+                if (cranks[i] != null) PoseTube(cranks[i], bracket, pedal);
+                if (pedals[i] != null) pedals[i].localPosition = pedal;
             }
+        }
+
+        private void OnAnimatorIK(int layerIndex)
+        {
+            if (!IsConfigured) return;
+            float angle = phase;
+            // Feet onto the pedals, knees biased forward/out.
+            for (int i = 0; i < 2; i++)
+            {
+                int side = i == 0 ? -1 : 1;
+                Vector3 pedal = visual.TransformPoint(PedalPosition(side, angle + i * Mathf.PI));
+                AvatarIKGoal foot = i == 0 ? AvatarIKGoal.LeftFoot : AvatarIKGoal.RightFoot;
+                animator.SetIKPositionWeight(foot, 1f);
+                animator.SetIKRotationWeight(foot, 1f);
+                animator.SetIKPosition(foot, pedal + visual.up * .02f);
+                animator.SetIKRotation(foot, visual.rotation);
+                AvatarIKHint knee = i == 0 ? AvatarIKHint.LeftKnee : AvatarIKHint.RightKnee;
+                animator.SetIKHintPositionWeight(knee, 1f);
+                animator.SetIKHintPosition(knee, visual.TransformPoint(i == 0 ? lKneeHint : rKneeHint));
+            }
+            // Hands onto the drops (or raised in a wave while in the menu).
+            animator.SetIKPositionWeight(AvatarIKGoal.LeftHand, 1f);
+            animator.SetIKRotationWeight(AvatarIKGoal.LeftHand, 1f);
+            animator.SetIKPosition(AvatarIKGoal.LeftHand, visual.TransformPoint(lhHand));
+            animator.SetIKRotation(AvatarIKGoal.LeftHand, visual.rotation);
+            animator.SetIKPositionWeight(AvatarIKGoal.RightHand, 1f);
+            animator.SetIKRotationWeight(AvatarIKGoal.RightHand, 1f);
+            animator.SetIKPosition(AvatarIKGoal.RightHand, visual.TransformPoint(rhHand));
+            animator.SetIKRotation(AvatarIKGoal.RightHand, visual.rotation);
+            animator.SetIKHintPositionWeight(AvatarIKHint.LeftElbow, 1f);
+            animator.SetIKHintPosition(AvatarIKHint.LeftElbow, visual.TransformPoint(lElbow));
+            animator.SetIKHintPositionWeight(AvatarIKHint.RightElbow, 1f);
+            animator.SetIKHintPosition(AvatarIKHint.RightElbow, visual.TransformPoint(rElbow));
+        }
+
+        private void LateUpdate()
+        {
+            if (!IsConfigured) return;
+            EnsureBones();
+            // Cycling crouch: lean the torso forward around the bike's X axis (visual.right),
+            // keeping the head roughly level to the road. World-space deltas ignore the rig's
+            // raw bone axes, which is why this beats SetBoneLocalRotation for the Synty spine.
+            Vector3 pitch = visual.right;
+            if (spine != null) spine.rotation = Quaternion.AngleAxis(12f, pitch) * spineBase;
+            if (chest != null) chest.rotation = Quaternion.AngleAxis(42f, pitch) * chestBase;
+            if (neck != null) neck.rotation = Quaternion.AngleAxis(-30f, pitch) * neckBase;
+            if (head != null) head.rotation = Quaternion.AngleAxis(4f, pitch) * headBase;
+        }
+
+        private void EnsureBones()
+        {
+            if (bonesReady || animator == null) return;
+            spine = animator.GetBoneTransform(HumanBodyBones.Spine);
+            chest = animator.GetBoneTransform(HumanBodyBones.Chest);
+            neck = animator.GetBoneTransform(HumanBodyBones.Neck);
+            head = animator.GetBoneTransform(HumanBodyBones.Head);
+            if (spine != null) spineBase = spine.rotation;
+            if (chest != null) chestBase = chest.rotation;
+            if (neck != null) neckBase = neck.rotation;
+            if (head != null) headBase = head.rotation;
+            bonesReady = true;
         }
 
         private static void PoseTube(Transform part, Vector3 a, Vector3 b)

@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Collections.Generic;
 using UnityEditor;
+using UnityEditor.Animations;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -14,6 +15,9 @@ namespace StoryCycling.Editor
         private static string Generated;
         private static float relief;
         private const string Root = "Assets/Synty/PolygonCity/Prefabs/";
+        private const string RiderPrefab = "Assets/Synty/PolygonGeneric/Prefabs/Characters/SM_Gen_Chr_Street_Male_01.prefab";
+        private const string RiderControllerPath = "Assets/StoryCycling/GeneratedRider/IdleRider.controller";
+        private const float RiderScale = 1.07f;   // fits the Synty leg to the existing crank circle
         private const float StadiumHalf = 175f;   // Camps Bay straight half-length (beach z-span)
         private static readonly Vector2[] CampsBayWaypoints = {
             new Vector2(48, -175), new Vector2(48, 0), new Vector2(48, 175),
@@ -349,11 +353,6 @@ namespace StoryCycling.Editor
             Material tire=Mat("Tires",new Color(.04f,.05f,.06f));
             Material rim=Mat("Rims",new Color(.90f,.45f,.12f));
             Material spokes=Mat("Spokes",new Color(.62f,.68f,.72f));
-            Material jersey=Mat("Jersey",new Color(.95f,.38f,.15f));
-            Material sleeve=Mat("Sleeve",new Color(.96f,.94f,.86f));
-            Material shorts=Mat("Shorts",new Color(.10f,.14f,.20f));
-            Material skin=Mat("Skin",new Color(.55f,.32f,.20f));
-            Material helmet=Mat("Helmet",new Color(.96f,.94f,.86f));
             Material dark=Mat("Saddle grips",new Color(.07f,.08f,.10f));
             Vector3 rear=new Vector3(0,.34f,-.53f), front=new Vector3(0,.34f,.53f);
             Vector3 crank=new Vector3(0,.32f,0), seat=new Vector3(0,.88f,-.18f), neck=new Vector3(0,.85f,.39f);
@@ -384,41 +383,73 @@ namespace StoryCycling.Editor
             Tube(root,new Vector3(-.24f,1.0f,.46f),new Vector3(.24f,1.0f,.46f),.022f,dark);
             Tube(root,new Vector3(-.24f,1.0f,.46f),new Vector3(-.24f,.93f,.52f),.014f,dark);
             Tube(root,new Vector3(.24f,1.0f,.46f),new Vector3(.24f,.93f,.52f),.014f,dark);
-            // Posed rider: leaning torso, sleeved arms to the drops, proper helmet.
-            Vector3 hip=new Vector3(0,1.02f,-.18f), shoulder=new Vector3(0,1.44f,.17f);
-            Tube(root,hip,shoulder,.14f,jersey);
-            Tube(root,shoulder,new Vector3(0,1.50f,.16f),.11f,sleeve);
-            Part(root,PrimitiveType.Sphere,new Vector3(0,1.62f,.23f),new Vector3(.20f,.22f,.22f),skin);
-            Part(root,PrimitiveType.Sphere,new Vector3(0,1.70f,.22f),new Vector3(.30f,.17f,.32f),helmet);
-            Part(root,PrimitiveType.Sphere,new Vector3(0,1.79f,.18f),new Vector3(.17f,.06f,.20f),accent);
-            var thighs = new Transform[2];
-            var shins = new Transform[2];
-            var feet = new Transform[2];
+            // Rider: a real Synty humanoid on the procedural bike (cranks/pedals stay).
             var cranks = new Transform[2];
             var pedals = new Transform[2];
-            var upperArms = new Transform[2];
-            var foreArms = new Transform[2];
             var moving = new List<Transform>(wheels);
             for(int side=-1;side<=1;side+=2)
             {
-                float x=side*.13f;
                 int index = side == -1 ? 0 : 1;
-                Vector3 elbow=new Vector3(side*.2f,1.18f,.30f), hand=new Vector3(side*.23f,.96f,.52f);
-                upperArms[index] = Tube(root,shoulder+Vector3.right*x,elbow,.05f,sleeve);
-                foreArms[index] = Tube(root,elbow,hand,.036f,skin);
-                Vector3 knee=new Vector3(x,.67f,.16f), foot=new Vector3(x,.20f,-.03f);
-                thighs[index] = Tube(root,hip+Vector3.right*x,knee,.07f,shorts);
-                shins[index] = Tube(root,knee,foot,.045f,skin);
-                feet[index] = Part(root,PrimitiveType.Cube,foot,new Vector3(.12f,.08f,.25f),dark).transform;
+                Vector3 foot=new Vector3(side*.14f,.15f,0);
                 cranks[index] = Tube(root,crank,foot,.014f,spokes);
                 pedals[index] = Part(root,PrimitiveType.Cube,foot,new Vector3(.17f,.025f,.11f),accent).transform;
-                moving.AddRange(new[] { upperArms[index], foreArms[index], thighs[index], shins[index], feet[index], cranks[index], pedals[index] });
+                moving.AddRange(new[] { cranks[index], pedals[index] });
             }
             foreach (Transform wheel in wheels) BatchParts(wheel, null);
             BatchParts(root, moving.ToArray());
-            animation.Configure(root, thighs, shins, feet, cranks, pedals, upperArms, foreArms);
+            Transform character = BuildRider(root);
+            animation.Configure(root, character.GetComponent<Animator>(), cranks, pedals);
             animation.ApplyPose(0);
             return anchor;
+        }
+
+        private static Transform BuildRider(Transform root)
+        {
+            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(RiderPrefab);
+            if (prefab == null) throw new InvalidOperationException("Rider prefab missing: " + RiderPrefab);
+            GameObject go = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
+            go.name = "Rider \u2022 Street Male";
+            go.transform.SetParent(root, false);
+            // Unity's humanoid avatar re-roots the Hips bone to the character's own
+            // transform origin, so the character origin must land on the saddle itself.
+            go.transform.localPosition = new Vector3(0f, .93f, -.18f);
+            go.transform.localRotation = Quaternion.identity;
+            go.transform.localScale = Vector3.one * RiderScale;
+            Animator anim = go.GetComponent<Animator>();
+            if (anim == null) anim = go.AddComponent<Animator>();
+            anim.applyRootMotion = false;
+            anim.runtimeAnimatorController = EnsureIdleController();
+            return go.transform;
+        }
+
+        private static RuntimeAnimatorController EnsureIdleController()
+        {
+            RuntimeAnimatorController existing = AssetDatabase.LoadAssetAtPath<RuntimeAnimatorController>(RiderControllerPath);
+            if (existing != null)
+            {
+                AnimatorController ac = existing as AnimatorController;
+                if (ac != null && ac.layers.Length > 0 && !ac.layers[0].iKPass)
+                {
+                    AnimatorControllerLayer[] fixLayers = ac.layers;
+                    fixLayers[0].iKPass = true;
+                    fixLayers[0].defaultWeight = 1f;
+                    ac.layers = fixLayers;
+                    AssetDatabase.SaveAssets();
+                }
+                return existing;
+            }
+            string dir = "Assets/StoryCycling/GeneratedRider";
+            if (!AssetDatabase.IsValidFolder(dir))
+                AssetDatabase.CreateFolder("Assets/StoryCycling", "GeneratedRider");
+            AnimatorController controller = AnimatorController.CreateAnimatorControllerAtPath(RiderControllerPath);
+            AnimatorControllerLayer[] layers = controller.layers;
+            layers[0].iKPass = true;
+            layers[0].defaultWeight = 1f;
+            AnimatorState state = layers[0].stateMachine.AddState("Idle");
+            layers[0].stateMachine.defaultState = state;
+            controller.layers = layers;
+            AssetDatabase.SaveAssets();
+            return controller;
         }
 
         private static void BatchParts(Transform root, Transform[] exclude)
