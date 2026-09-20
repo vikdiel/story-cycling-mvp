@@ -117,7 +117,7 @@ namespace StoryCycling
             // Feet onto the pedals, knees biased forward/out.
             for (int i = 0; i < 2; i++)
             {
-                int side = i == 0 ? -1 : 1;
+                int side = i == 0 ? 1 : -1;
                 Vector3 pedal = visual.TransformPoint(PedalPosition(side, angle + i * Mathf.PI));
                 AvatarIKGoal foot = i == 0 ? AvatarIKGoal.LeftFoot : AvatarIKGoal.RightFoot;
                 a.SetIKPositionWeight(foot, 1f);
@@ -126,7 +126,7 @@ namespace StoryCycling
                 a.SetIKRotation(foot, visual.rotation);
                 AvatarIKHint knee = i == 0 ? AvatarIKHint.LeftKnee : AvatarIKHint.RightKnee;
                 a.SetIKHintPositionWeight(knee, 1f);
-                a.SetIKHintPosition(knee, visual.TransformPoint(i == 0 ? lKneeHint : rKneeHint));
+                a.SetIKHintPosition(knee, visual.TransformPoint(i == 0 ? rKneeHint : lKneeHint));
             }
             // Hands onto the drops (or raised in a wave while in the menu).
             a.SetIKPositionWeight(AvatarIKGoal.LeftHand, 1f);
@@ -138,9 +138,9 @@ namespace StoryCycling
             a.SetIKPosition(AvatarIKGoal.RightHand, visual.TransformPoint(lhHand));
             a.SetIKRotation(AvatarIKGoal.RightHand, visual.rotation);
             a.SetIKHintPositionWeight(AvatarIKHint.LeftElbow, 1f);
-            a.SetIKHintPosition(AvatarIKHint.LeftElbow, visual.TransformPoint(lElbow));
+            a.SetIKHintPosition(AvatarIKHint.LeftElbow, visual.TransformPoint(rElbow));
             a.SetIKHintPositionWeight(AvatarIKHint.RightElbow, 1f);
-            a.SetIKHintPosition(AvatarIKHint.RightElbow, visual.TransformPoint(rElbow));
+            a.SetIKHintPosition(AvatarIKHint.RightElbow, visual.TransformPoint(lElbow));
         }
 
         private void ApplyStandingIK(Animator a)
