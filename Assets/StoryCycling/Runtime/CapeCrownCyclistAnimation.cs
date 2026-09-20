@@ -110,6 +110,8 @@ namespace StoryCycling
         public void ApplyIK(Animator a)
         {
             if (!IsConfigured) return;
+            // The Synty head is rigged 180° relative to the torso; flip it to face forward.
+            a.SetBoneLocalRotation(HumanBodyBones.Head, Quaternion.Euler(0f, 180f, 0f));
             if (menuStanding) { ApplyStandingIK(a); return; }
             float angle = phase;
             // Feet onto the pedals, knees biased forward/out.
