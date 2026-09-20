@@ -124,8 +124,8 @@ namespace StoryCycling
             Vector3 position, look;
             if(!Started)
             {
-                position=rider.position+rider.forward*3.4f+Vector3.up*1.7f;
-                look=rider.position+Vector3.up*1.45f;
+                position=rider.position+rider.forward*2.4f+rider.right*2.4f+Vector3.up*1.55f;
+                look=rider.position+Vector3.up*1.1f;
             }
             else
             {
