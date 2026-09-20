@@ -54,23 +54,11 @@ namespace StoryCycling
             if (animator != null) animator.gameObject.SetActive(visible);
         }
 
-        private void LateUpdate()
-        {
-            if (!IsConfigured) return;
-            Transform head = animator.GetBoneTransform(HumanBodyBones.Head);
-            if (head == null) return;
-            // The Synty head is rigged facing backward; yaw it 180° around its own
-            // up axis so the face points along the direction of travel. A local-space
-            // yaw is robust against the rig's non-standard muscle-space axes, which
-            // is why SetBoneLocalRotation (muscle space) kept mis-pitching the head.
-            head.Rotate(0f, 180f, 0f, Space.Self);
-        }
-
         public void Tick(float speedKph, float distance, bool pedalling, float deltaTime, float measuredCadence = -1)
         {
             if (!IsConfigured) return;
             animator.transform.localPosition = SeatedPos;
-            animator.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
+            animator.transform.localRotation = Quaternion.identity;
             ResetArms();
             float target = pedalling && speedKph > .1f ? (measuredCadence >= 0 ? measuredCadence : Mathf.Lerp(35, 95, Mathf.Clamp01(speedKph / 40))) : 0;
             cadence = Mathf.MoveTowards(cadence, target, 180 * deltaTime);

@@ -413,8 +413,10 @@ namespace StoryCycling.Editor
             // Unity's humanoid avatar re-roots the Hips bone to the character's own
             // transform origin, so the character origin must land on the saddle itself.
             go.transform.localPosition = new Vector3(0f, .93f, -.18f);
-            // Synty's bind pose faces -Z; flip 180° so the rider faces the direction of travel.
-            go.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
+            // The Synty Street Male already faces +Z (direction of travel) in bind pose.
+            // No flip here: a 180° Y rotation made the torso face backward and swapped
+            // left/right, which crossed the arms/legs and forced the head workaround.
+            go.transform.localRotation = Quaternion.identity;
             go.transform.localScale = Vector3.one * RiderScale;
             Animator anim = go.GetComponent<Animator>();
             if (anim == null) anim = go.AddComponent<Animator>();
