@@ -12,9 +12,6 @@ namespace StoryCycling
         [SerializeField] private Transform[] cranks, pedals;
 
         private float phase, cadence, lean;
-        private Transform spine, chest, neck, head;
-        private Quaternion spineBase, chestBase, neckBase, headBase;
-        private bool bonesReady;
         private bool menuStanding;
         private float wave;
         private static readonly Vector3 SeatedPos = new Vector3(0f, .93f, -.18f);
@@ -142,43 +139,6 @@ namespace StoryCycling
             a.SetIKHintPosition(AvatarIKHint.LeftElbow, visual.TransformPoint(lElbow));
             a.SetIKHintPositionWeight(AvatarIKHint.RightElbow, 1f);
             a.SetIKHintPosition(AvatarIKHint.RightElbow, visual.TransformPoint(rElbow));
-        }
-
-        private void LateUpdate()
-        {
-            if (!IsConfigured) return;
-            EnsureBones();
-            if (menuStanding)
-            {
-                // Standing upright: back to the bind pose, no crouch.
-                if (spine != null) spine.rotation = spineBase;
-                if (chest != null) chest.rotation = chestBase;
-                if (neck != null) neck.rotation = neckBase;
-                if (head != null) head.rotation = headBase;
-                return;
-            }
-            // Cycling crouch: lean the torso forward around the bike's X axis (visual.right),
-            // keeping the head roughly level to the road. World-space deltas ignore the rig's
-            // raw bone axes, which is why this beats SetBoneLocalRotation for the Synty spine.
-            Vector3 pitch = visual.right;
-            if (spine != null) spine.rotation = Quaternion.AngleAxis(12f, pitch) * spineBase;
-            if (chest != null) chest.rotation = Quaternion.AngleAxis(42f, pitch) * chestBase;
-            if (neck != null) neck.rotation = Quaternion.AngleAxis(-30f, pitch) * neckBase;
-            if (head != null) head.rotation = Quaternion.AngleAxis(4f, pitch) * headBase;
-        }
-
-        private void EnsureBones()
-        {
-            if (bonesReady || animator == null) return;
-            spine = animator.GetBoneTransform(HumanBodyBones.Spine);
-            chest = animator.GetBoneTransform(HumanBodyBones.Chest);
-            neck = animator.GetBoneTransform(HumanBodyBones.Neck);
-            head = animator.GetBoneTransform(HumanBodyBones.Head);
-            if (spine != null) spineBase = spine.rotation;
-            if (chest != null) chestBase = chest.rotation;
-            if (neck != null) neckBase = neck.rotation;
-            if (head != null) headBase = head.rotation;
-            bonesReady = true;
         }
 
         private void ApplyStandingIK(Animator a)
