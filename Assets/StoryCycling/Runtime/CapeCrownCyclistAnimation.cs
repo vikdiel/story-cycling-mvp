@@ -110,21 +110,21 @@ namespace StoryCycling
         public void ApplyIK(Animator a)
         {
             if (!IsConfigured) return;
-            // The Synty head is rigged 180° off; flip it around its local Z (Blender up axis).
-            a.SetBoneLocalRotation(HumanBodyBones.Head, Quaternion.Euler(0f, 0f, 180f));
+            // The Synty head is rigged facing backward; flip it 180° around its muscle-space X.
+            a.SetBoneLocalRotation(HumanBodyBones.Head, Quaternion.Euler(180f, 0f, 0f));
             if (menuStanding) { ApplyStandingIK(a); return; }
             float angle = phase;
             // Feet onto the pedals, knees biased forward/out.
             for (int i = 0; i < 2; i++)
             {
-                int side = i == 0 ? 1 : -1;
+                int side = i == 0 ? -1 : 1;
                 Vector3 pedal = visual.TransformPoint(PedalPosition(side, angle + i * Mathf.PI));
-                AvatarIKGoal foot = i == 0 ? AvatarIKGoal.LeftFoot : AvatarIKGoal.RightFoot;
+                AvatarIKGoal foot = i == 0 ? AvatarIKGoal.RightFoot : AvatarIKGoal.LeftFoot;
                 a.SetIKPositionWeight(foot, 1f);
                 a.SetIKRotationWeight(foot, 1f);
                 a.SetIKPosition(foot, pedal + visual.up * .02f);
                 a.SetIKRotation(foot, visual.rotation);
-                AvatarIKHint knee = i == 0 ? AvatarIKHint.LeftKnee : AvatarIKHint.RightKnee;
+                AvatarIKHint knee = i == 0 ? AvatarIKHint.RightKnee : AvatarIKHint.LeftKnee;
                 a.SetIKHintPositionWeight(knee, 1f);
                 a.SetIKHintPosition(knee, visual.TransformPoint(i == 0 ? rKneeHint : lKneeHint));
             }
