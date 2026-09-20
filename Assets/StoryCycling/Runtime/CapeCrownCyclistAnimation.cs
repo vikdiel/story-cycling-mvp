@@ -110,8 +110,8 @@ namespace StoryCycling
         public void ApplyIK(Animator a)
         {
             if (!IsConfigured) return;
-            // The Synty head is rigged 180° relative to the torso; flip it to face forward.
-            a.SetBoneLocalRotation(HumanBodyBones.Head, Quaternion.Euler(0f, 180f, 0f));
+            // The Synty head is rigged 180° off; flip it around its local Z (Blender up axis).
+            a.SetBoneLocalRotation(HumanBodyBones.Head, Quaternion.Euler(0f, 0f, 180f));
             if (menuStanding) { ApplyStandingIK(a); return; }
             float angle = phase;
             // Feet onto the pedals, knees biased forward/out.
@@ -131,11 +131,11 @@ namespace StoryCycling
             // Hands onto the drops (or raised in a wave while in the menu).
             a.SetIKPositionWeight(AvatarIKGoal.LeftHand, 1f);
             a.SetIKRotationWeight(AvatarIKGoal.LeftHand, 1f);
-            a.SetIKPosition(AvatarIKGoal.LeftHand, visual.TransformPoint(lhHand));
+            a.SetIKPosition(AvatarIKGoal.LeftHand, visual.TransformPoint(rhHand));
             a.SetIKRotation(AvatarIKGoal.LeftHand, visual.rotation);
             a.SetIKPositionWeight(AvatarIKGoal.RightHand, 1f);
             a.SetIKRotationWeight(AvatarIKGoal.RightHand, 1f);
-            a.SetIKPosition(AvatarIKGoal.RightHand, visual.TransformPoint(rhHand));
+            a.SetIKPosition(AvatarIKGoal.RightHand, visual.TransformPoint(lhHand));
             a.SetIKRotation(AvatarIKGoal.RightHand, visual.rotation);
             a.SetIKHintPositionWeight(AvatarIKHint.LeftElbow, 1f);
             a.SetIKHintPosition(AvatarIKHint.LeftElbow, visual.TransformPoint(lElbow));
