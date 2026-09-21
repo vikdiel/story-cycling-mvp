@@ -12,7 +12,7 @@ namespace StoryCycling
         [SerializeField] private CapeCrownCyclistAnimation cyclistAnimation;
         [SerializeField] private float maxSpeedKph = 100f;
 
-        private float speedKph, routeDistance, totalMetres;
+        private float speedKph = 30f, routeDistance, totalMetres;
         public float SpeedKph => speedKph;
         public float TotalMetres => totalMetres;
         public float Length => GpxRide.Length;

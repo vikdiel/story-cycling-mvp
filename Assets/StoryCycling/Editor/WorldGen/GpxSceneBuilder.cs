@@ -47,6 +47,7 @@ namespace StoryCycling.WorldGen.Editor
             Box("Ocean", new Vector3(0, -6f, 0), new Vector3(40000, 4f, 40000), ocean);
 
             PlaceLandmarks(spline);
+            PlaceFiller(spline);
 
             Lighting();
 
@@ -70,8 +71,9 @@ namespace StoryCycling.WorldGen.Editor
             data.ApplyModifiedPropertiesWithoutUndo();
 
             var hud = director.gameObject.AddComponent<GpxTestHud>();
-            new SerializedObject(hud).FindProperty("ride").objectReferenceValue = director;
-            hud.gameObject.SetActive(true);
+            var hudData = new SerializedObject(hud);
+            hudData.FindProperty("ride").objectReferenceValue = director;
+            hudData.ApplyModifiedPropertiesWithoutUndo();
 
             AssetDatabase.SaveAssets();
             EditorSceneManager.SaveScene(scene, ScenePath);
@@ -136,6 +138,73 @@ namespace StoryCycling.WorldGen.Editor
             var go = new GameObject(name, typeof(MeshFilter), typeof(MeshRenderer));
             go.GetComponent<MeshFilter>().sharedMesh = mesh;
             go.GetComponent<MeshRenderer>().sharedMaterial = material;
+        }
+
+        private static void PlaceFiller(RouteSpline spline)
+        {
+            var catalog = AssetDatabase.LoadAssetAtPath<AssetCatalog>(AssetCatalogBuilder.CatalogPath);
+            if (catalog == null) { Debug.LogWarning("WorldGen catalog missing — route will have no vegetation/buildings."); return; }
+            var vegetation = new List<GameObject>();
+            var buildings = new List<GameObject>();
+            foreach (var e in catalog.entries)
+            {
+                if (e == null || e.prefab == null) continue;
+                if (e.category == AssetCategory.Vegetation) vegetation.Add(e.prefab);
+                else if (e.category == AssetCategory.Building) buildings.Add(e.prefab);
+            }
+            if (vegetation.Count == 0 && buildings.Count == 0) { Debug.LogWarning("WorldGen catalog has no vegetation/building prefabs."); return; }
+
+            var rng = new System.Random(4242);
+            int placed = 0;
+
+            // Trees/bushes: one roughly every 30 m, alternating sides, 7–22 m off the road.
+            for (float d = 0f; d < spline.Length; d += 30f)
+            {
+                if (vegetation.Count == 0) break;
+                var prefab = vegetation[rng.Next(vegetation.Count)];
+                Vector3 p = spline.SamplePosition(d);
+                Vector3 t = spline.SampleTangent(d);
+                Vector3 side = Vector3.Cross(Vector3.up, t).normalized;
+                int dir = rng.Next(2) == 0 ? -1 : 1;
+                float offset = 7f + (float)rng.NextDouble() * 15f;
+                PlacePrefab(prefab, p + side * (dir * offset), t, rng, ref placed);
+            }
+
+            // Buildings: roughly every 500 m, both sides, 15–30 m off the road, gentle slopes only.
+            for (float d = 100f; d < spline.Length; d += 500f)
+            {
+                if (buildings.Count == 0) break;
+                if (SlopeDegrees(spline, d) > 12f) continue;
+                var prefab = buildings[rng.Next(buildings.Count)];
+                Vector3 p = spline.SamplePosition(d);
+                Vector3 t = spline.SampleTangent(d);
+                Vector3 side = Vector3.Cross(Vector3.up, t).normalized;
+                int dir = rng.Next(2) == 0 ? -1 : 1;
+                float offset = 15f + (float)rng.NextDouble() * 15f;
+                PlacePrefab(prefab, p + side * (dir * offset), t, rng, ref placed);
+            }
+            Debug.Log($"GPX filler placed {placed} objects (vegetation {vegetation.Count}, buildings {buildings.Count}).");
+        }
+
+        private static float SlopeDegrees(RouteSpline spline, float d)
+        {
+            Vector3 t = spline.SampleTangent(d);
+            float horiz = new Vector2(t.x, t.z).magnitude;
+            if (horiz < 1e-5f) return 0f;
+            return Mathf.Atan(t.y / horiz) * Mathf.Rad2Deg;
+        }
+
+        private static void PlacePrefab(GameObject prefab, Vector3 pos, Vector3 tangent, System.Random rng, ref int placed)
+        {
+            var go = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
+            go.name = prefab.name;
+            go.transform.position = pos;
+            go.transform.rotation = Quaternion.LookRotation(tangent, Vector3.up) * Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f);
+            // Ground-anchor: snap the prefab's lowest bound to the track elevation at this point.
+            Bounds b = BoundsOf(go);
+            go.transform.position += Vector3.up * (pos.y - b.min.y);
+            foreach (var c in go.GetComponentsInChildren<Collider>()) c.enabled = false;
+            placed++;
         }
 
         private static void Box(string name, Vector3 position, Vector3 scale, Material material)

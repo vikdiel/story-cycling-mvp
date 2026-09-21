@@ -13,6 +13,7 @@ namespace StoryCycling
 
         private void Start()
         {
+            if (ride == null) ride = FindAnyObjectByType<GpxRideController>();
             var root = new GameObject("GPX HUD", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
             root.GetComponent<Canvas>().renderMode = RenderMode.ScreenSpaceOverlay;
             var scaler = root.GetComponent<CanvasScaler>();
