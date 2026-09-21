@@ -13,8 +13,10 @@ namespace StoryCycling
         private RectTransform safe;
         private GameObject home, hud, settings, pause, routes;
         private Transform list;
-        private Text speed,power,heart,distance,connection,startLabel,trainerLabel,heartLabel,pauseLabel,muteLabel,statusLine,demoLabel,titleLabel,routeDescription,routeError;
+        private Text speed,power,heart,distance,connection,startLabel,trainerLabel,heartLabel,pauseLabel,muteLabel,statusLine,demoLabel,titleLabel,routeDescription,routeError,demoSpeedValue;
         private Button start,resume;
+        private Slider demoSpeedSlider;
+        private GameObject demoSpeedPanel;
         private int revision=-1;
         private bool settingsOpen, routesOpen;
         private Color ink=new Color(.035f,.095f,.125f,.94f),teal=new Color(.15f,.66f,.62f),paper=new Color(.96f,.94f,.86f);
@@ -56,6 +58,18 @@ namespace StoryCycling
             var actions=Rect("Ride actions",hud.transform,new Vector2(1,1),new Vector2(-28,-28),new Vector2(262,130),new Vector2(1,1));
             Button(actions,"Geräte",Vector2.zero,new Vector2(262,54),ink,()=>ShowSettings());
             Button(actions,"Pause",new Vector2(0,-66),new Vector2(262,54),ink,()=>ride.Pause());
+            BuildDemoSpeed();
+        }
+        private void BuildDemoSpeed()
+        {
+            demoSpeedPanel=Panel("Demo speed",hud.transform,new Vector2(0,0),new Vector2(28,28),new Vector2(430,132),ink);
+            Label(demoSpeedPanel.transform,"DEMO-GESCHWINDIGKEIT",16,new Vector2(18,-12),new Vector2(400,26),teal);
+            var slider=CreateSlider(demoSpeedPanel.transform,new Vector2(18,-58),new Vector2(400,32));
+            slider.minValue=0;slider.maxValue=100;slider.wholeNumbers=true;slider.value=30;
+            demoSpeedSlider=slider;
+            demoSpeedValue=Label(demoSpeedPanel.transform,"30 km/h",26,new Vector2(18,-88),new Vector2(180,40),paper);
+            slider.onValueChanged.AddListener(v=>{ ride.SetDemoSpeed(v); demoSpeedValue.text=((int)v)+" km/h"; });
+            Button(demoSpeedPanel.transform,"Auto",new Vector2(300,-90),new Vector2(112,42),new Color(.16f,.25f,.28f),()=>{ ride.ResetDemoSpeed(); demoSpeedValue.text="Auto"; });
         }
         private Text Metric(string unit,float x)
         {
@@ -126,6 +140,7 @@ namespace StoryCycling
             pauseLabel.text=ride.PauseReason+$"\n{ride.TotalMetres/1000:0.00} km in dieser Fahrt";
             trainerLabel.text=devices.TrainerName+"\n"+devices.TrainerState;heartLabel.text=devices.HeartName+"\n"+devices.HeartState;
             muteLabel.text=music.Muted?"Musik einschalten":"Musik stummschalten";
+            if(demoSpeedPanel!=null)demoSpeedPanel.SetActive(ride.IsDemo);
             if(demoLabel!=null)demoLabel.text=ride.IsDemo?"Demo beenden":"Demo-Fahrt (ohne KICKR)";
             if(titleLabel!=null)titleLabel.text=TitleFromLabel(ride.RouteLabel);
             if(routeDescription!=null)routeDescription.text=CapeCrownRoutes.Current.scenery+$"\n{CapeCrownRoute.Length/1000:0.00} km · Cape Town Collection";

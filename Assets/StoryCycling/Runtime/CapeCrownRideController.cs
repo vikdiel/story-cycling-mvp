@@ -20,6 +20,9 @@ namespace StoryCycling
         [SerializeField] private float demoMaxSpeed = 100f;  // km/h — top speed the demo reaches
         [SerializeField] private float demoSpeedPeriod = 120f; // seconds for one full speed cycle
         private float demoElapsed;
+        private bool demoManual;
+        private float demoSpeedTarget;
+        public bool DemoManual => demoManual;
         private int laps;
         private bool paused;
         private float orbitYaw;
@@ -50,11 +53,14 @@ namespace StoryCycling
         public void Pause(string reason="Pausiert") { if(!Started)return;paused=true;trainerSpeedKph=0;PauseReason=reason; }
         public bool Resume() { if(!CanStart)return false;paused=false;PauseReason="";return true; }
         public void EndRide() { Started=false;paused=false;trainerSpeedKph=0; if(music!=null)music.SetRiding(false); }
-        public void StartDemo() { if(devices==null)return; demoSpeed=0; demoElapsed=0; devices.StartDemoFeed(); }
+        public void StartDemo() { if(devices==null)return; demoSpeed=0; demoElapsed=0; demoManual=false; devices.StartDemoFeed(); }
         public void StopDemo() { if(devices==null)return; devices.StopDemoFeed(); demoSpeed=0; if(Started)EndRide(); }
         public void TogglePause() { if(paused)Resume();else Pause(); }
         private void OnApplicationFocus(bool focus) { if(!focus)Pause("App war im Hintergrund"); }
         private void OnApplicationPause(bool value) { if(value)Pause("App war im Hintergrund"); }
+        // Manual speed override from the demo HUD slider (0–100 km/h).
+        public void SetDemoSpeed(float kph) { demoManual=true; demoSpeedTarget=Mathf.Clamp(kph,0f,demoMaxSpeed); }
+        public void ResetDemoSpeed() { demoManual=false; demoElapsed=0; }
         private void Start()
         {
             devices=FindAnyObjectByType<CapeCrownDevices>();
@@ -67,11 +73,19 @@ namespace StoryCycling
             UpdateOrbitInput();
             if(devices!=null && devices.IsTestFeed)
             {
-                // Variable demo speed: a smooth cycle from demoMinSpeed up to demoMaxSpeed
-                // (100 km/h) so the ride accelerates, cruises and eases off like real riding.
-                demoElapsed += Time.deltaTime;
-                float cycle = Mathf.Repeat(demoElapsed, demoSpeedPeriod) / demoSpeedPeriod;
-                demoSpeed = Mathf.Lerp(demoMinSpeed, demoMaxSpeed, 0.5f - 0.5f * Mathf.Cos(cycle * Mathf.PI * 2f));
+                if(demoManual)
+                {
+                    // Slider-driven: glide toward the target speed.
+                    demoSpeed=Mathf.MoveTowards(demoSpeed,demoSpeedTarget,80f*Time.deltaTime);
+                }
+                else
+                {
+                    // Variable demo speed: a smooth cycle from demoMinSpeed up to demoMaxSpeed
+                    // (100 km/h) so the ride accelerates, cruises and eases off like real riding.
+                    demoElapsed += Time.deltaTime;
+                    float cycle = Mathf.Repeat(demoElapsed, demoSpeedPeriod) / demoSpeedPeriod;
+                    demoSpeed = Mathf.Lerp(demoMinSpeed, demoMaxSpeed, 0.5f - 0.5f * Mathf.Cos(cycle * Mathf.PI * 2f));
+                }
                 devices.TickDemo(demoSpeed);
             }
             if(Started && !paused && !CanStart)Pause("Trainerdaten fehlen – bitte Verbindung prüfen");
