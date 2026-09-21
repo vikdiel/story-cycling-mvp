@@ -237,6 +237,35 @@ namespace StoryCycling.Editor
             }
         }
 
+        private static void BuildCampsBayVegetation()
+        {
+            // Dense inland fynbos behind the cafe frontage on the flat promenade straight,
+            // so the eye never hits empty ground between the buildings and the mountain.
+            // Seeded, so the exact placement is reproducible on every rebuild.
+            ScatterVegetation(20260921, 0f, 340f, -12f, -52f, 2.2f, 420, -.15f);
+            ScatterVegetation(20260922, 0f, 340f, 10f, 22f, 4.5f, 90, -.12f);
+            ScatterClouds();
+        }
+
+        private static void ScatterClouds()
+        {
+            string[] clouds = {
+                Root + "Environments/SM_Env_Cloud_01.prefab",
+                Root + "Environments/SM_Env_Cloud_02.prefab",
+                Root + "Environments/SM_Env_Cloud_03.prefab"
+            };
+            var rng = new System.Random(7312026);
+            for (int i = 0; i < 16; i++)
+            {
+                var go = (GameObject)PrefabUtility.InstantiatePrefab(AssetDatabase.LoadAssetAtPath<GameObject>(clouds[i % clouds.Length]));
+                go.name = "Drifting cloud " + i;
+                go.transform.position = new Vector3(-220f + rng.Next(440), 52f + rng.Next(36), -380f + rng.Next(760));
+                go.transform.rotation = Quaternion.Euler(0f, rng.Next(360), 0f);
+                go.transform.localScale = Vector3.one * (16f + rng.Next(18));
+                foreach (Collider c in go.GetComponentsInChildren<Collider>()) c.enabled = false;
+            }
+        }
+
         private static void CoastalSky()
         {
             Shader shader = Shader.Find("CapeCrown/CoastalSky");

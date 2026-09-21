@@ -92,7 +92,7 @@ namespace StoryCycling.Editor
             }
 
             if (hill) BuildCoastalHill();
-            if (campsBay) { ArtJunction(110,-1,true,"CAMPS BAY DRIVE"); ArtJunction(245,-1,true,"GENEVA DRIVE"); BuildCampsBayStreetLife(); }
+            if (campsBay) { ArtJunction(110,-1,true,"CAMPS BAY DRIVE"); ArtJunction(245,-1,true,"GENEVA DRIVE"); BuildCampsBayStreetLife(); BuildCampsBayVegetation(); }
 
             // Every strip is sampled from the same path as the rider. No prefab pivots.
             Strip("Continuous asphalt", -4f, 4f, .02f, 0, CapeCrownRoute.Length, asphalt);

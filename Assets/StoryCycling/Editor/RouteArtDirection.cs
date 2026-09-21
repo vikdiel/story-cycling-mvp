@@ -141,6 +141,64 @@ namespace StoryCycling.Editor
             p+=Vector3.Cross(Vector3.up,flat)*offset;
             GroundPrefab(path,p,Mathf.Atan2(flat.x,flat.z)*Mathf.Rad2Deg+yaw,footprint,name);
         }
+
+        // Reusable vegetation pools drawn from the installed Synty packs.
+        private const string GenEnv = "Assets/Synty/PolygonGeneric/Prefabs/Environment/";
+        private static readonly string[] ScatterShrubs = {
+            GenEnv + "SM_Gen_Env_Bush_01.prefab", GenEnv + "SM_Gen_Env_Bush_02.prefab",
+            GenEnv + "SM_Gen_Env_Bush_03.prefab", GenEnv + "SM_Gen_Env_Bush_04.prefab",
+            GenEnv + "SM_Gen_Env_Fern_01.prefab", GenEnv + "SM_Gen_Env_Fern_02.prefab",
+            GenEnv + "SM_Gen_Env_Fern_03.prefab", GenEnv + "SM_Gen_Env_Shrub_01.prefab",
+            GenEnv + "SM_Gen_Env_Shrub_02.prefab", GenEnv + "SM_Gen_Env_Shrub_03.prefab",
+            GenEnv + "SM_Gen_Env_Grass_Tall_01.prefab", GenEnv + "SM_Gen_Env_Grass_Tall_02.prefab",
+            GenEnv + "SM_Gen_Env_Grass_Tall_03.prefab", GenEnv + "SM_Gen_Env_Grass_Tall_04.prefab"
+        };
+        private static readonly string[] ScatterBloom = {
+            GenEnv + "SM_Gen_Env_Flowers_01.prefab", GenEnv + "SM_Gen_Env_Flowers_02.prefab",
+            GenEnv + "SM_Gen_Env_Flowers_03.prefab", GenEnv + "SM_Gen_Env_Flowers_04.prefab",
+            GenEnv + "SM_Gen_Env_Flowers_05.prefab", GenEnv + "SM_Gen_Env_Flowers_06.prefab",
+            GenEnv + "SM_Gen_Env_Flowers_07.prefab", GenEnv + "SM_Gen_Env_Flowers_08.prefab"
+        };
+        private static readonly string[] ScatterCanopy = {
+            GenEnv + "SM_Gen_Env_Tree_01.prefab", GenEnv + "SM_Gen_Env_Tree_02.prefab",
+            GenEnv + "SM_Gen_Env_Tree_03.prefab", GenEnv + "SM_Gen_Env_Bush_Large_01.prefab",
+            GenEnv + "SM_Gen_Env_Bush_Large_02.prefab", GenEnv + "SM_Gen_Env_Bush_Large_03.prefab",
+            GenEnv + "SM_Gen_Env_Bush_Large_04.prefab"
+        };
+
+        // Seeded Poisson-disk scatter along a route-distance band. Reusable across all
+        // routes: pass a band, density and ground offset; the same seed reproduces the
+        // exact same placement, so a route is deterministic and cheap to iterate.
+        private static void ScatterVegetation(int seed, float dFrom, float dTo, float offMin,
+            float offMax, float minDist, int count, float yOffset)
+        {
+            float span = dTo - dFrom;
+            var rng = new System.Random(seed);
+            var placed = new List<Vector2>();
+            int tries = count * 30;
+            for (int a = 0; a < tries && placed.Count < count; a++)
+            {
+                float d = dFrom + (float)rng.NextDouble() * span;
+                float o = offMin + (float)rng.NextDouble() * (offMax - offMin);
+                bool ok = true;
+                foreach (var q in placed)
+                {
+                    float dd = Mathf.Abs(d - q.x);
+                    float dz = o - q.y;
+                    if (dd * dd + dz * dz < minDist * minDist) { ok = false; break; }
+                }
+                if (!ok) continue;
+                placed.Add(new Vector2(d, o));
+                float roll = (float)rng.NextDouble();
+                string path; float fp;
+                if (roll < .5f) { path = ScatterShrubs[rng.Next(ScatterShrubs.Length)]; fp = 1.4f + (float)rng.NextDouble(); }
+                else if (roll < .74f) { path = ScatterBloom[rng.Next(ScatterBloom.Length)]; fp = 1f + .6f * (float)rng.NextDouble(); }
+                else { path = ScatterCanopy[rng.Next(ScatterCanopy.Length)]; fp = 4.2f + 2.6f * (float)rng.NextDouble(); }
+                Vector3 pos = CapeCrownRoute.Position(d, o, 0, relief);
+                pos.y += yOffset;
+                GroundPrefab(path, pos, (float)rng.NextDouble() * 360f, fp, "Scattered vegetation");
+            }
+        }
         private static void ArtBuilding(float d,int side,int variant,float footprint=13)
         {
             if(AtJunction(d,23))return;
