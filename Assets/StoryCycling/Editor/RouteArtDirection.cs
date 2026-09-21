@@ -104,7 +104,7 @@ namespace StoryCycling.Editor
             ABox(parent,"Street name plate",p,new Vector3(3.4f,.48f,.10f),Art("Street sign green",new Color(.08f,.31f,.29f)));
             var go=new GameObject(title,typeof(TextMesh));go.transform.SetParent(parent,false);go.transform.localPosition=p+Vector3.back*.065f;
             var tx=go.GetComponent<TextMesh>();tx.text=title;tx.fontSize=48;tx.characterSize=.055f;tx.anchor=TextAnchor.MiddleCenter;tx.color=Color.white;
-            go.transform.localRotation=Quaternion.Euler(0,180,0);
+            go.transform.localRotation=Quaternion.identity;
         }
         private static void ArtLamp(float d,float offset)
         {
@@ -166,6 +166,18 @@ namespace StoryCycling.Editor
             GenEnv + "SM_Gen_Env_Bush_Large_04.prefab"
         };
 
+        // Larger coastal villas/apartment blocks for the second row behind the street front.
+        private static readonly string[] VillaPool = {
+            Root + "Buildings/SM_Bld_Apartment_01.prefab",
+            Root + "Buildings/SM_Bld_Apartment_02.prefab",
+            Root + "Buildings/SM_Bld_Apartment_03.prefab",
+            Root + "Buildings/SM_Bld_Apartment_Stack_01.prefab",
+            Root + "Buildings/SM_Bld_Apartment_Stack_02.prefab",
+            Root + "Buildings/SM_Bld_Apartment_Stack_03.prefab",
+            Root + "Buildings/SM_Bld_OfficeOld_Large_01.prefab",
+            Root + "Buildings/SM_Bld_OfficeOld_Large_02.prefab"
+        };
+
         // Seeded Poisson-disk scatter along a route-distance band. Reusable across all
         // routes: pass a band, density and ground offset; the same seed reproduces the
         // exact same placement, so a route is deterministic and cheap to iterate.
@@ -180,6 +192,7 @@ namespace StoryCycling.Editor
             {
                 float d = dFrom + (float)rng.NextDouble() * span;
                 float o = offMin + (float)rng.NextDouble() * (offMax - offMin);
+                if (AtJunction(d, 24)) continue;   // keep side-street mouths clear
                 bool ok = true;
                 foreach (var q in placed)
                 {
@@ -198,6 +211,15 @@ namespace StoryCycling.Editor
                 pos.y += yOffset;
                 GroundPrefab(path, pos, (float)rng.NextDouble() * 360f, fp, "Scattered vegetation");
             }
+        }
+
+        // A larger villa/apartment block as a second row behind the street front, facing the road.
+        private static void ArtVilla(float d, int side, int variant, float footprint, float offsetMul = 20f)
+        {
+            if (AtJunction(d, 26)) return;
+            ArtProp(VillaPool[variant % VillaPool.Length], d, side * offsetMul, footprint, "Coastal villa " + variant, side > 0 ? 270 : 90);
+            var t = ArtFrame("Villa forecourt", d, side * offsetMul);
+            ABox(t, "Villa foundation", new Vector3(0, -.25f, 0), new Vector3(footprint + 2, .5f, footprint + 2), Ivory); FinishArt(t);
         }
         private static void ArtBuilding(float d,int side,int variant,float footprint=13)
         {

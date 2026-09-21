@@ -184,14 +184,14 @@ namespace StoryCycling.Editor
             string trashCan = P + "Props/SM_Prop_TrashCan_01.prefab";
 
             // 1) Street lamps: one at each intersection corner + spaced along the promenade.
-            ArtLamp(110, -9f); ArtLamp(245, -9f);
-            for (float d = 40; d < 340; d += 46) if (!AtJunction(d)) ArtLamp(d, 9f);
+            ArtLamp(110, -7f); ArtLamp(245, -7f);
+            for (float d = 40; d < 340; d += 46) if (!AtJunction(d)) ArtLamp(d, 7f);
 
-            // 2) Road signs at each side-street mouth.
-            ArtProp(giveWay, 96, -7.5f, 2f, "Give way sign", 180);
-            ArtProp(stopSign, 124, 7.5f, 2f, "Stop sign", 0);
-            ArtProp(giveWay, 231, -7.5f, 2f, "Give way sign", 180);
-            ArtProp(stopSign, 259, 7.5f, 2f, "Stop sign", 0);
+            // 2) Road signs at each side-street mouth — face the road (perpendicular to travel).
+            ArtProp(giveWay, 96, -7.5f, 2f, "Give way sign", 90);
+            ArtProp(stopSign, 124, 7.5f, 2f, "Stop sign", 270);
+            ArtProp(giveWay, 231, -7.5f, 2f, "Give way sign", 90);
+            ArtProp(stopSign, 259, 7.5f, 2f, "Stop sign", 270);
 
             // 3) Construction site (Baustelle) on the road shoulder.
             ArtProp(warning, 302, 7f, 2f, "Roadworks warning", 0);
@@ -242,9 +242,24 @@ namespace StoryCycling.Editor
             // Dense inland fynbos behind the cafe frontage on the flat promenade straight,
             // so the eye never hits empty ground between the buildings and the mountain.
             // Seeded, so the exact placement is reproducible on every rebuild.
-            ScatterVegetation(20260921, 0f, 340f, -12f, -52f, 2.2f, 420, -.15f);
-            ScatterVegetation(20260922, 0f, 340f, 10f, 22f, 4.5f, 90, -.12f);
+            ScatterVegetation(20260921, 0f, 340f, -28f, -52f, 2.2f, 420, -.15f);
+            ScatterVegetation(20260922, 0f, 340f, 12f, 24f, 4.5f, 90, -.12f);
+            BuildCampsBayVillas();
             ScatterClouds();
+        }
+
+        private static void BuildCampsBayVillas()
+        {
+            // Two rows of larger villas behind the beach-front cafes (inland side, flat straight),
+            // so the eye never hits empty ground between the front and the mountain.
+            // The hill back-straight stays natural: villas there would float on the sloping
+            // embankment, so it gets fynbos + the viewpoint instead.
+            for (float d = 16; d < 338; d += 18)
+            {
+                if (AtJunction(d, 28)) continue;
+                ArtVilla(d, -1, (int)(d / 18), 15f, 22f);          // first villa row
+                ArtVilla(d + 9, -1, 6 + (int)(d / 18), 18f, 40f);  // second, larger villa row
+            }
         }
 
         private static void ScatterClouds()
@@ -259,7 +274,7 @@ namespace StoryCycling.Editor
             {
                 var go = (GameObject)PrefabUtility.InstantiatePrefab(AssetDatabase.LoadAssetAtPath<GameObject>(clouds[i % clouds.Length]));
                 go.name = "Drifting cloud " + i;
-                go.transform.position = new Vector3(-220f + rng.Next(440), 52f + rng.Next(36), -380f + rng.Next(760));
+                go.transform.position = new Vector3(-220f + rng.Next(440), 110f + rng.Next(50), -380f + rng.Next(760));
                 go.transform.rotation = Quaternion.Euler(0f, rng.Next(360), 0f);
                 go.transform.localScale = Vector3.one * (16f + rng.Next(18));
                 foreach (Collider c in go.GetComponentsInChildren<Collider>()) c.enabled = false;
