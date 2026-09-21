@@ -10,8 +10,8 @@ namespace StoryCycling.WorldGen.Editor
     // biome tags/weights after generation; the generator may only use these entries.
     public static class AssetCatalogBuilder
     {
-        private const string OutputRoot = "Assets/StoryCycling/WorldGenCatalog";
-        private const string CatalogPath = OutputRoot + "/SyntyCatalog.asset";
+        public const string OutputRoot = "Assets/StoryCycling/WorldGenCatalog";
+        public const string CatalogPath = OutputRoot + "/SyntyCatalog.asset";
 
         [MenuItem("Story Cycling/WorldGen/Build Catalog from Synty")]
         public static void BuildCatalog()
