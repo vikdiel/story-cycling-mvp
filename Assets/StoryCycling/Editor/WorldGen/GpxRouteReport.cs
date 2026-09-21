@@ -18,7 +18,7 @@ namespace StoryCycling.WorldGen.Editor
             var pts = GpxParser.Parse(xml);
             if (pts.Count < 2) throw new System.Exception("GPX parsed to <2 points: " + pts.Count);
 
-            var local = GpxParser.ProjectToLocalMeters(pts);
+            var local = RoutePreprocessor.Clean(GpxParser.ProjectToLocalMeters(pts));
             float length = GpxParser.PathLength(local);
 
             // Total ascent = sum of positive elevation deltas along the path.

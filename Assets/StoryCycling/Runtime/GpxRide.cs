@@ -18,7 +18,7 @@ namespace StoryCycling
             string path = Path.Combine(Application.streamingAssetsPath, streamingAssetsRelPath);
             if (!File.Exists(path)) { Debug.LogError("GPX not found: " + path); Spline = null; return; }
             var pts = GpxParser.Parse(File.ReadAllText(path));
-            var local = GpxParser.ProjectToLocalMeters(pts);
+            var local = RoutePreprocessor.Clean(GpxParser.ProjectToLocalMeters(pts));
             Spline = new RouteSpline();
             Spline.Define(local);
             Debug.Log($"GpxRide loaded {local.Count} points, {Spline.Length / 1000f:0.00} km");

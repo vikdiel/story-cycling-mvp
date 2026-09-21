@@ -29,7 +29,7 @@ namespace StoryCycling.WorldGen.Editor
             assetId = 0;
 
             var pts = GpxParser.Parse(File.ReadAllText(GpxPath));
-            var local = GpxParser.ProjectToLocalMeters(pts);
+            var local = RoutePreprocessor.Clean(GpxParser.ProjectToLocalMeters(pts));
             var spline = new RouteSpline();
             spline.Define(local);
 
@@ -40,14 +40,14 @@ namespace StoryCycling.WorldGen.Editor
             Material ocean = Mat("GpxOcean", new Color(.08f, .39f, .52f));
 
             // Ground ribbon follows the track elevation so the climbing road never floats.
-            Ribbon("Terrain ribbon", -30f, 30f, -.08f, 0f, spline.Length, terrain, spline);
+            Ribbon("Terrain ribbon", -90f, 90f, -.08f, 0f, spline.Length, terrain, spline);
             Ribbon("Asphalt", -4f, 4f, .02f, 0f, spline.Length, asphalt, spline);
             Ribbon("Inner edge", -3.7f, -3.57f, .03f, 0f, spline.Length, white, spline);
             Ribbon("Outer edge", 3.57f, 3.7f, .03f, 0f, spline.Length, white, spline);
             Box("Ocean", new Vector3(0, -6f, 0), new Vector3(40000, 4f, 40000), ocean);
 
             PlaceLandmarks(spline);
-            PlaceFiller(spline);
+            PlaceFiller(spline, pts.Count > 0 ? pts[0] : default);
 
             Lighting();
 
@@ -132,7 +132,9 @@ namespace StoryCycling.WorldGen.Editor
                 triangles[tri] = a; triangles[tri + 1] = a + 2; triangles[tri + 2] = a + 1;
                 triangles[tri + 3] = a + 1; triangles[tri + 4] = a + 2; triangles[tri + 5] = a + 3;
             }
-            Mesh mesh = new Mesh { name = name, vertices = vertices, triangles = triangles };
+            Mesh mesh = new Mesh { name = name, indexFormat = UnityEngine.Rendering.IndexFormat.UInt32 };
+            mesh.vertices = vertices;
+            mesh.triangles = triangles;
             mesh.RecalculateNormals(); mesh.RecalculateBounds();
             mesh = Save(mesh);
             var go = new GameObject(name, typeof(MeshFilter), typeof(MeshRenderer));
@@ -140,50 +142,42 @@ namespace StoryCycling.WorldGen.Editor
             go.GetComponent<MeshRenderer>().sharedMaterial = material;
         }
 
-        private static void PlaceFiller(RouteSpline spline)
+        private static void PlaceFiller(RouteSpline spline, GeoPoint origin)
         {
             var catalog = AssetDatabase.LoadAssetAtPath<AssetCatalog>(AssetCatalogBuilder.CatalogPath);
-            if (catalog == null) { Debug.LogWarning("WorldGen catalog missing — route will have no vegetation/buildings."); return; }
-            var vegetation = new List<GameObject>();
-            var buildings = new List<GameObject>();
-            foreach (var e in catalog.entries)
+            if (catalog == null) { Debug.LogWarning("WorldGen catalog missing — no filler."); return; }
+
+            // OSM laden (einmal per 'Fetch OSM for Nordhoek' geholt, dann offline)
+            OsmContext osm = null;
+            string osmPath = "Assets/StreamingAssets/Osm/Nordhoek.osm.xml";
+            if (System.IO.File.Exists(osmPath))
             {
-                if (e == null || e.prefab == null) continue;
-                if (e.category == AssetCategory.Vegetation) vegetation.Add(e.prefab);
-                else if (e.category == AssetCategory.Building) buildings.Add(e.prefab);
+                osm = OsmContext.Load(System.IO.File.ReadAllText(osmPath), origin);
+                OsmBuildingPlacer.Place(spline, osm, catalog);   // Gebäude an echten Footprints
+                OsmDetailPlacer.Place(spline, osm, catalog);     // Schilder, Ampeln, Bänke, Bäume, Zäune, Parkautos
             }
-            if (vegetation.Count == 0 && buildings.Count == 0) { Debug.LogWarning("WorldGen catalog has no vegetation/building prefabs."); return; }
+            else Debug.LogWarning("OSM fehlt — erst 'Fetch OSM for Nordhoek'. Gebäude/Details werden übersprungen.");
+
+            // Vegetation: Dichte aus OSM-Landnutzung (Wald dicht, Feld licht, Stadt kaum Bäume)
+            var vegetation = new List<GameObject>();
+            foreach (var e in catalog.entries)
+                if (e != null && e.prefab != null && e.category == AssetCategory.Vegetation) vegetation.Add(e.prefab);
+            if (vegetation.Count == 0) return;
 
             var rng = new System.Random(4242);
-            int placed = 0;
-
-            // Trees/bushes: one roughly every 30 m, alternating sides, 7–22 m off the road.
-            for (float d = 0f; d < spline.Length; d += 30f)
+            for (float d = 0f; d < spline.Length; d += 10f)
             {
-                if (vegetation.Count == 0) break;
-                var prefab = vegetation[rng.Next(vegetation.Count)];
                 Vector3 p = spline.SamplePosition(d);
+                string biome = osm != null ? osm.BiomeAt(p) : "generic";
+                float step = biome == "forest" ? 12f : biome == "field" ? 45f : biome == "urban" ? 60f : 30f;
+                if (d % step >= 10f) continue;
                 Vector3 t = spline.SampleTangent(d);
                 Vector3 side = Vector3.Cross(Vector3.up, t).normalized;
                 int dir = rng.Next(2) == 0 ? -1 : 1;
                 float offset = 7f + (float)rng.NextDouble() * 15f;
-                PlacePrefab(prefab, p + side * (dir * offset), t, rng, ref placed);
+                int dummy = 0;
+                PlacePrefab(vegetation[rng.Next(vegetation.Count)], p + side * (dir * offset), t, rng, ref dummy);
             }
-
-            // Buildings: roughly every 500 m, both sides, 15–30 m off the road, gentle slopes only.
-            for (float d = 100f; d < spline.Length; d += 500f)
-            {
-                if (buildings.Count == 0) break;
-                if (SlopeDegrees(spline, d) > 12f) continue;
-                var prefab = buildings[rng.Next(buildings.Count)];
-                Vector3 p = spline.SamplePosition(d);
-                Vector3 t = spline.SampleTangent(d);
-                Vector3 side = Vector3.Cross(Vector3.up, t).normalized;
-                int dir = rng.Next(2) == 0 ? -1 : 1;
-                float offset = 15f + (float)rng.NextDouble() * 15f;
-                PlacePrefab(prefab, p + side * (dir * offset), t, rng, ref placed);
-            }
-            Debug.Log($"GPX filler placed {placed} objects (vegetation {vegetation.Count}, buildings {buildings.Count}).");
         }
 
         private static float SlopeDegrees(RouteSpline spline, float d)
