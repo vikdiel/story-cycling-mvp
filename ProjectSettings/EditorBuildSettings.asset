@@ -6,37 +6,7 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
-    path: Assets/StoryCycling/Scenes/CapeTownCityCenter.unity
-    guid: 763e72e8a54064341a170b16371e9abc
-  - enabled: 1
-    path: Assets/StoryCycling/Scenes/CampsBayTrainerRide.unity
-    guid: a6c46c8bd872246f9b692e353eb45bcb
-  - enabled: 1
-    path: Assets/StoryCycling/Scenes/CliftonCove.unity
-    guid: a36a80ddd9230483b9af41f2823f9258
-  - enabled: 1
-    path: Assets/StoryCycling/Scenes/ApostlesClimb.unity
-    guid: 9c9f90aeae05242a9ab7bfff11a162a5
-  - enabled: 1
-    path: Assets/StoryCycling/Scenes/HoutBayHarbour.unity
-    guid: 5ad02e2899a52492683f33d39bf897df
-  - enabled: 1
-    path: Assets/StoryCycling/Scenes/ConstantiaVines.unity
-    guid: 2986875aacd094c8a829cef1bce7cbab
-  - enabled: 1
-    path: Assets/StoryCycling/Scenes/BoKaapSteps.unity
-    guid: 7c994798fd8184326b3f35fdc441235e
-  - enabled: 1
-    path: Assets/StoryCycling/Scenes/KirstenboschLoop.unity
-    guid: 7ce4d8fa1293f4a52b8cd406db0e8c60
-  - enabled: 1
-    path: Assets/StoryCycling/Scenes/FalseBaySands.unity
-    guid: a5dccbfcebae243fa8ce525479d5734e
-  - enabled: 1
-    path: Assets/StoryCycling/Scenes/CapePointHeadland.unity
-    guid: 2947660bde4a64625af766bbc1264cf2
-  - enabled: 1
-    path: Assets/StoryCycling/Scenes/TableFoothills.unity
-    guid: d34d25c1bc57a4968a46b55848dce4eb
+    path: Assets/StoryCycling/Scenes/NordhoekGpxTest.unity
+    guid: 82b42257387f6432f832bfafcd04fcef
   m_configObjects:
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}

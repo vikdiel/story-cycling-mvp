@@ -12,7 +12,7 @@ namespace StoryCycling.Editor
 {
     public static partial class CapeCrownSceneBuilder
     {
-        private static string Generated;
+        public static string Generated;
         private static float relief;
         private const string Root = "Assets/Synty/PolygonCity/Prefabs/";
         private const string RiderPrefab = "Assets/Synty/PolygonGeneric/Prefabs/Characters/SM_Gen_Chr_Street_Male_01.prefab";
@@ -342,7 +342,7 @@ namespace StoryCycling.Editor
             go.GetComponent<MeshRenderer>().sharedMaterial=material;
         }
 
-        private static Transform AnimatedCyclist(out Transform[] wheels, out CapeCrownCyclistAnimation animation)
+        public static Transform AnimatedCyclist(out Transform[] wheels, out CapeCrownCyclistAnimation animation)
         {
             Transform anchor = new GameObject("Cyclist • stylised").transform;
             Transform root = new GameObject("Visual lean pivot").transform;

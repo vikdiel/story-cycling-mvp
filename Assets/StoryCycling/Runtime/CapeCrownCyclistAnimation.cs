@@ -14,6 +14,10 @@ namespace StoryCycling
         private float phase, cadence, lean;
         private static readonly Vector3 SeatedPos = new Vector3(0f, .93f, -.18f);
 
+        // Optional route override: lets a GPX/open-spline ride supply its own curvature
+        // samples instead of the closed CapeCrownRoute. Null → CapeCrownRoute (default).
+        public static System.Func<float, Vector3> ForwardOverride;
+
         // Retained for the validation maths and the procedural crank visuals.
         public const float LegLength = .49f;
         public const float CrankRadius = .17f;
@@ -65,8 +69,9 @@ namespace StoryCycling
             phase = Mathf.Repeat(phase + cadence / 60 * Mathf.PI * 2 * deltaTime, Mathf.PI * 2);
             ApplyPose(phase);
 
-            CapeCrownRoute.Sample(distance, out _, out Vector3 forward);
-            CapeCrownRoute.Sample(distance + 6, out _, out Vector3 ahead);
+            Vector3 forward, ahead;
+            if (ForwardOverride != null) { forward = ForwardOverride(distance); ahead = ForwardOverride(distance + 6); }
+            else { CapeCrownRoute.Sample(distance, out _, out forward); CapeCrownRoute.Sample(distance + 6, out _, out ahead); }
             float curvature = Vector3.SignedAngle(forward, ahead, Vector3.up) * Mathf.Deg2Rad / 6;
             float metresPerSecond = speedKph / 3.6f;
             float targetLean = Mathf.Clamp(-Mathf.Atan(metresPerSecond * metresPerSecond * curvature / 9.81f) * Mathf.Rad2Deg, -24, 24);
