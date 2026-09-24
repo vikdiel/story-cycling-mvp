@@ -13,7 +13,7 @@ namespace StoryCycling.WorldGen.Editor
         // Namen aus dem tatsächlichen Synty-Bestand (PolygonCity + PolygonGeneric).
         private static readonly Dictionary<string, string[]> Map = new Dictionary<string, string[]>
         {
-            { "tree",            new[] { "Env_Tree", "Tree_Pine", "Tree" } },
+            { "tree",            new[] { "Env_Tree", "Tree_Pine" } },
             { "rock",            new[] { "Env_Rock", "Rock" } },
             { "traffic_signals", new[] { "TrafficLight" } },
             { "street_lamp",     new[] { "LightPole_Lights", "LightPole" } },
@@ -33,11 +33,18 @@ namespace StoryCycling.WorldGen.Editor
             { "car",             new[] { "Veh_Car" } },
         };
 
+        // Nie verwenden: Bodenkacheln, Weg-/Flussstücke, Bauteile, tote Bäume, Klippen.
+        private static readonly System.Text.RegularExpressions.Regex Excluded = new System.Text.RegularExpressions.Regex(
+            "Dead|Ground|Pebbles|_Part|Path|Divider|River|Cliff|Mountain|Skyline|Cloud",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        private static Transform Parent;
+
         // Naturelemente bekommen Zufallsdrehung/-skalierung, Möbel richten sich zur Straße aus.
         private static readonly HashSet<string> Nature = new HashSet<string> { "tree", "rock" };
 
-        public static int Place(RouteSpline spline, OsmContext ctx, AssetCatalog catalog, int seed = 777)
+        public static int Place(RouteSpline spline, OsmContext ctx, AssetCatalog catalog, Transform parent = null, int seed = 777)
         {
+            Parent = parent;
             var ground = new RouteHeightField(spline, 5f);
             var rng = new System.Random(seed);
             var warned = new HashSet<string>();
@@ -91,7 +98,7 @@ namespace StoryCycling.WorldGen.Editor
             {
                 var hits = new List<GameObject>();
                 foreach (var e in catalog.entries)
-                    if (e != null && e.prefab != null &&
+                    if (e != null && e.prefab != null && !Excluded.IsMatch(e.prefab.name) &&
                         e.prefab.name.IndexOf(kw, System.StringComparison.OrdinalIgnoreCase) >= 0)
                         hits.Add(e.prefab);
                 if (hits.Count > 0) return hits[rng.Next(hits.Count)];
@@ -147,7 +154,7 @@ namespace StoryCycling.WorldGen.Editor
 
         private static void Instantiate(GameObject prefab, Vector3 pos, Quaternion rot, float scale, RouteHeightField ground)
         {
-            var go = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
+            var go = (GameObject)PrefabUtility.InstantiatePrefab(prefab, Parent);
             go.name = prefab.name;
             go.transform.SetPositionAndRotation(pos, rot);
             go.transform.localScale = Vector3.one * scale;

@@ -108,13 +108,17 @@ namespace StoryCycling.WorldGen
                 switch (lu) {
                     case "residential": case "commercial": case "retail": case "industrial": return "urban";
                     case "forest": return "forest";
-                    case "farmland": case "meadow": case "grass": case "farmyard": case "orchard": return "field";
+                    case "farmland": case "meadow": case "grass": case "farmyard": case "orchard":
+                    case "flowerbed": case "vineyard": case "recreation_ground": return "field";
                 }
             if (t.TryGetValue("natural", out string na))
                 switch (na) {
-                    case "wood": case "scrub": case "heath": return "forest";
+                    case "wood": return "forest";
+                    case "scrub": case "heath": return "scrub";          // Fynbos: Büsche, kaum Bäume
                     case "grassland": return "field";
-                    case "water": return "water";
+                    case "beach": case "sand": return "beach";
+                    case "bare_rock": case "scree": case "cliff": return "rock";
+                    case "water": case "wetland": return "water";
                 }
             return null;
         }

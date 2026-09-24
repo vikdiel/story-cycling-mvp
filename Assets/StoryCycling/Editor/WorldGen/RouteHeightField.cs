@@ -4,7 +4,8 @@ using UnityEngine;
 namespace StoryCycling.WorldGen.Editor
 {
     // Grobes Höhen-/Tangentenfeld entlang des Splines: für Boden-Anker (y am nächsten
-    // Routenpunkt) und Ausrichtung (Straßen-Tangente). Von Gebäude- und Detail-Placer genutzt.
+    // Routenpunkt) und Ausrichtung (Straßen-Tangente). Vom Detail-Placer genutzt; Höhe kommt aus
+    // dem Gelände, sobald RouteHeightField.Terrain gesetzt ist.
     public sealed class RouteHeightField
     {
         private struct S { public Vector3 pos; public Vector3 fwd; }
@@ -37,7 +38,14 @@ namespace StoryCycling.WorldGen.Editor
             return found;
         }
 
-        public float HeightAt(float x, float z) => Nearest(x, z, out var s) ? s.pos.y : 0f;
+        // Wenn echtes Gelände gebaut wurde, liefert es die Höhe (sonst schwebt alles abseits der Straße).
+        public static System.Func<float, float, float> Terrain;
+
+        public float HeightAt(float x, float z)
+        {
+            if (Terrain != null) return Terrain(x, z);
+            return Nearest(x, z, out var s) ? s.pos.y : 0f;
+        }
         public Vector3 ForwardAt(float x, float z) => Nearest(x, z, out var s) ? s.fwd : Vector3.forward;
     }
 }

@@ -4,17 +4,30 @@ using System.IO;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
 
 namespace StoryCycling.WorldGen.Editor
 {
-    // Builds a rideable test scene from the Nordhoek GPX: road strips along the real
-    // track, the six authored landmarks at their key distances, rider + camera + slider HUD.
+    // Baut die befahrbare Nordhoek-Szene aus der GPX:
+    //   echtes Gelände (DEM) mit eingeschnittener Straße, Meer auf Meereshöhe,
+    //   entdoppelte Straße mit Markierungen + Leitplanken, OSM-Gebäude/-Details,
+    //   Vegetation in Bändern, Himmel, Nebel in Horizontfarbe, Color-Grading.
+    // Voraussetzung: einmal 'Fetch DEM for Nordhoek' (und optional 'Fetch OSM for Nordhoek').
     public static class GpxSceneBuilder
     {
-        private const string GpxPath = "Assets/StreamingAssets/Routes/Nordhoek.gpx";
+        private const string GpxPath = DemFetcher.GpxPath;
+        private const string OsmPath = "Assets/StreamingAssets/Osm/Nordhoek.osm.xml";
         private const string ScenePath = "Assets/StoryCycling/Scenes/NordhoekGpxTest.unity";
         private const string OutDir = "Assets/StoryCycling/GeneratedGpx";
+        private const string MeshStorePath = OutDir + "/NordhoekWorldMeshes.asset";
         private static int assetId;
+        private static Mesh meshStore;
+
+        // Licht-Stimmung: später Nachmittag, Sonne im Nordwesten über dem Atlantik.
+        private const float SunAzimuth = 300f, SunElevation = 36f;
+        private static readonly Color Zenith = new Color(.24f, .52f, .80f);
+        private static readonly Color Horizon = new Color(.87f, .86f, .80f);
 
         [MenuItem("Story Cycling/WorldGen/Build Nordhoek GPX Ride")]
         public static void BuildNordhoek()
@@ -22,76 +35,134 @@ namespace StoryCycling.WorldGen.Editor
             if (EditorApplication.isPlaying) throw new InvalidOperationException("Stop Play Mode first.");
             if (!Application.isBatchMode && !EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
             if (!File.Exists(GpxPath)) throw new InvalidOperationException("GPX missing: " + GpxPath);
+            if (!File.Exists(DemFetcher.DemPath))
+                throw new InvalidOperationException("Geländedaten fehlen: erst 'Story Cycling/WorldGen/Fetch DEM for Nordhoek' ausführen.");
 
             Directory.CreateDirectory(OutDir);
             Directory.CreateDirectory("Assets/StoryCycling/Scenes");
             AssetDatabase.Refresh();
             assetId = 0;
+            meshStore = null;
+            AssetDatabase.DeleteAsset(MeshStorePath);
+            // Alt-Meshes der früheren Ribbon-Version (gpx-XXX.asset) aufräumen; Materialien (.mat) bleiben.
+            foreach (string old in Directory.GetFiles(OutDir, "gpx-*.asset"))
+                AssetDatabase.DeleteAsset(old.Replace('\\', '/'));
 
-            var pts = GpxParser.Parse(File.ReadAllText(GpxPath));
-            var local = RoutePreprocessor.Clean(GpxParser.ProjectToLocalMeters(pts));
-            var spline = new RouteSpline();
-            spline.Define(local);
+            try
+            {
+                Progress("GPX + Gelände laden", .02f);
+                var pts = GpxParser.Parse(File.ReadAllText(GpxPath));
+                var local = RoutePreprocessor.Clean(GpxParser.ProjectToLocalMeters(pts));
+                var spline = new RouteSpline();
+                spline.Define(local);
 
-            var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
-            Material asphalt = Mat("GpxAsphalt", new Color(.12f, .15f, .18f));
-            Material white = Mat("GpxRoadPaint", new Color(.94f, .91f, .78f));
-            Material terrain = Mat("GpxTerrain", new Color(.37f, .46f, .32f));
-            Material ocean = Mat("GpxOcean", new Color(.08f, .39f, .52f));
+                var dem = DemGrid.Load(DemFetcher.DemPath);
+                if (!dem.MatchesOrigin(pts[0]))
+                    Debug.LogWarning("DEM wurde für einen anderen GPX-Start erzeugt — bitte 'Fetch DEM for Nordhoek' neu ausführen.");
+                OsmContext osm = File.Exists(OsmPath) ? OsmContext.Load(File.ReadAllText(OsmPath), pts[0]) : null;
+                if (osm == null) Debug.LogWarning("OSM fehlt — erst 'Fetch OSM for Nordhoek'. Gebäude/Details/Biome werden übersprungen.");
 
-            // Ground ribbon follows the track elevation so the climbing road never floats.
-            Ribbon("Terrain ribbon", -90f, 90f, -.08f, 0f, spline.Length, terrain, spline);
-            Ribbon("Asphalt", -4f, 4f, .02f, 0f, spline.Length, asphalt, spline);
-            Ribbon("Inner edge", -3.7f, -3.57f, .03f, 0f, spline.Length, white, spline);
-            Ribbon("Outer edge", 3.57f, 3.7f, .03f, 0f, spline.Length, white, spline);
-            Box("Ocean", new Vector3(0, -6f, 0), new Vector3(40000, 4f, 40000), ocean);
+                var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+                Transform world = new GameObject("World").transform;
+                Func<string, Transform> Group = n => { var t = new GameObject(n).transform; t.SetParent(world, false); return t; };
 
-            PlaceLandmarks(spline);
-            PlaceFiller(spline, pts.Count > 0 ? pts[0] : default);
+                Progress("Straßen-Index", .06f);
+                var road = new RoadField(spline);
+                var terrain = new WorldTerrain(dem, road, (float)pts[0].Ele, osm);
+                RouteHeightField.Terrain = terrain.HeightAt;
 
-            Lighting();
+                Progress("Gelände einfärben", .1f);
+                Texture2D terrainTex = SaveTexture(terrain.BuildColorTexture(), OutDir + "/TerrainColors.png", false, 4096);
+                Material terrainMat = Mat("GpxTerrain", Color.white, .06f, terrainTex);
+                Material ocean = Mat("GpxOcean", new Color(.05f, .33f, .45f), .82f);
 
-            StoryCycling.Editor.CapeCrownSceneBuilder.Generated = OutDir;
-            Transform rider = StoryCycling.Editor.CapeCrownSceneBuilder.AnimatedCyclist(out Transform[] wheels, out CapeCrownCyclistAnimation animation);
-            GameObject camGo = new GameObject("Ride Camera", typeof(Camera), typeof(AudioListener));
-            camGo.tag = "MainCamera";
-            Camera cam = camGo.GetComponent<Camera>();
-            cam.fieldOfView = 58; cam.nearClipPlane = .1f; cam.farClipPlane = 4000; cam.allowHDR = false;
-            cam.clearFlags = CameraClearFlags.SolidColor;
-            cam.backgroundColor = new Color(.48f, .72f, .87f);
+                Progress("Gelände-Kacheln", .2f);
+                terrain.BuildChunks(Group("Terrain"), terrainMat, SaveMesh);
+                terrain.BuildWater(world, ocean, SaveMesh);
 
-            var director = new GameObject("Gpx Ride Director").AddComponent<GpxRideController>();
-            SerializedObject data = new SerializedObject(director);
-            data.FindProperty("rider").objectReferenceValue = rider;
-            data.FindProperty("rideCamera").objectReferenceValue = cam.transform;
-            data.FindProperty("cyclistAnimation").objectReferenceValue = animation;
-            var array = data.FindProperty("wheels");
-            array.arraySize = wheels.Length;
-            for (int i = 0; i < wheels.Length; i++) array.GetArrayElementAtIndex(i).objectReferenceValue = wheels[i];
-            data.ApplyModifiedPropertiesWithoutUndo();
+                Progress("Straße", .4f);
+                Texture2D asphaltTex = SaveTexture(AsphaltTexture(), OutDir + "/Asphalt.png", true, 512);
+                new RoadMeshBuilder(road, terrain).Build(Group("Road"),
+                    Mat("GpxAsphalt", Color.white, .18f, asphaltTex),
+                    Mat("GpxShoulder", new Color(.55f, .51f, .44f), .05f),
+                    Mat("GpxLineYellow", new Color(.95f, .76f, .18f), .3f),
+                    Mat("GpxLineWhite", new Color(.95f, .95f, .92f), .3f),
+                    Mat("GpxGuardrail", new Color(.74f, .76f, .78f), .55f, null, .6f),
+                    SaveMesh);
 
-            var hud = director.gameObject.AddComponent<GpxTestHud>();
-            var hudData = new SerializedObject(hud);
-            hudData.FindProperty("ride").objectReferenceValue = director;
-            hudData.ApplyModifiedPropertiesWithoutUndo();
+                var occupied = new Occupancy();
+                Progress("Landmarks", .5f);
+                PlaceLandmarks(spline, terrain, occupied, Group("Landmarks"));
 
-            AssetDatabase.SaveAssets();
-            EditorSceneManager.SaveScene(scene, ScenePath);
-            EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(ScenePath, true) };
-            Debug.Log(ScenePath + " saved. GPX ride ready — length " + (spline.Length / 1000f).ToString("0.00") + " km.");
+                var catalog = AssetDatabase.LoadAssetAtPath<AssetCatalog>(AssetCatalogBuilder.CatalogPath);
+                if (catalog == null) Debug.LogWarning("WorldGen-Katalog fehlt — erst Katalog bauen. Keine Gebäude/Vegetation.");
+                else
+                {
+                    if (osm != null)
+                    {
+                        Progress("Gebäude (OSM)", .58f);
+                        OsmBuildingPlacer.Place(road, terrain, osm, catalog, occupied, Group("Buildings"));
+                        Progress("Details (OSM)", .66f);
+                        OsmDetailPlacer.Place(spline, osm, catalog, Group("StreetDetails"));
+                    }
+                    Progress("Vegetation", .74f);
+                    VegetationPlacer.Place(terrain, catalog, occupied, Group("Vegetation"));
+                    VegetationPlacer.PlaceClouds(terrain, catalog, Group("Clouds"));
+                }
+
+                Progress("Licht, Himmel, Grading", .9f);
+                Lighting();
+
+                StoryCycling.Editor.CapeCrownSceneBuilder.Generated = OutDir;
+                Transform rider = StoryCycling.Editor.CapeCrownSceneBuilder.AnimatedCyclist(out Transform[] wheels, out CapeCrownCyclistAnimation animation);
+                GameObject camGo = new GameObject("Ride Camera", typeof(Camera), typeof(AudioListener));
+                camGo.tag = "MainCamera";
+                Camera cam = camGo.GetComponent<Camera>();
+                cam.fieldOfView = 58; cam.nearClipPlane = .3f; cam.farClipPlane = 7000; cam.allowHDR = false;
+                cam.clearFlags = CameraClearFlags.Skybox;
+                cam.GetUniversalAdditionalCameraData().renderPostProcessing = true;
+                ColorGrade();
+
+                var director = new GameObject("Gpx Ride Director").AddComponent<GpxRideController>();
+                SerializedObject data = new SerializedObject(director);
+                data.FindProperty("rider").objectReferenceValue = rider;
+                data.FindProperty("rideCamera").objectReferenceValue = cam.transform;
+                data.FindProperty("cyclistAnimation").objectReferenceValue = animation;
+                var array = data.FindProperty("wheels");
+                array.arraySize = wheels.Length;
+                for (int i = 0; i < wheels.Length; i++) array.GetArrayElementAtIndex(i).objectReferenceValue = wheels[i];
+                data.ApplyModifiedPropertiesWithoutUndo();
+
+                var hud = director.gameObject.AddComponent<GpxTestHud>();
+                var hudData = new SerializedObject(hud);
+                hudData.FindProperty("ride").objectReferenceValue = director;
+                hudData.ApplyModifiedPropertiesWithoutUndo();
+
+                AssetDatabase.SaveAssets();
+                EditorSceneManager.SaveScene(scene, ScenePath);
+                EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(ScenePath, true) };
+                Debug.Log(ScenePath + " saved. GPX ride ready — length " + (spline.Length / 1000f).ToString("0.00") + " km.");
+            }
+            finally
+            {
+                RouteHeightField.Terrain = null;
+                EditorUtility.ClearProgressBar();
+            }
         }
 
-        private static void PlaceLandmarks(RouteSpline spline)
+        private static void Progress(string what, float t)
         {
-            // Approximate key distances along the 65 km route; refinable with real km markers.
-            var landmarks = new (string name, float frac, float offset)[]
+            if (!Application.isBatchMode) EditorUtility.DisplayProgressBar("Nordhoek bauen", what, t);
+        }
+
+        // ------------------------------------------------------------------ Landmarks
+        private static void PlaceLandmarks(RouteSpline spline, WorldTerrain terrain, Occupancy occupied, Transform parent)
+        {
+            // Ungefähre Distanzen entlang der Route; mit echten km-Markern verfeinerbar.
+            var landmarks = new (string name, float frac)[]
             {
-                ("Landmark_HoutBayHarbour", .28f, -16f),
-                ("Landmark_EastFort", .36f, 16f),
-                ("Landmark_ChapmansLookout", .40f, -16f),
-                ("Landmark_KakapoShipwreck", .52f, 16f),
-                ("Landmark_SlangkopLighthouse", .60f, -16f),
-                ("Landmark_ConstantiaManor", .88f, 16f)
+                ("Landmark_HoutBayHarbour", .28f), ("Landmark_EastFort", .36f), ("Landmark_ChapmansLookout", .40f),
+                ("Landmark_KakapoShipwreck", .52f), ("Landmark_SlangkopLighthouse", .60f), ("Landmark_ConstantiaManor", .88f)
             };
             foreach (var lm in landmarks)
             {
@@ -99,145 +170,148 @@ namespace StoryCycling.WorldGen.Editor
                 var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
                 if (prefab == null) { Debug.LogWarning("Landmark missing: " + path); continue; }
                 float d = lm.frac * spline.Length;
-                var go = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
-                go.name = lm.name;
                 Vector3 p = spline.SamplePosition(d);
-                Vector3 t = spline.SampleTangent(d);
+                Vector3 t = spline.SampleTangent(d); t.y = 0f; t.Normalize();
                 Vector3 right = Vector3.Cross(Vector3.up, t).normalized;
-                Vector3 pos = p + right * lm.offset;
-                pos.y += .05f;
-                // Ground-anchor: snap the prefab's lowest bound to the terrain ribbon.
-                Bounds b = BoundsOf(go);
-                pos.y -= b.min.y - spline.SamplePosition(d).y;
-                go.transform.position = pos;
-                go.transform.rotation = Quaternion.LookRotation(t, Vector3.up);
+
+                var go = (GameObject)PrefabUtility.InstantiatePrefab(prefab, parent);
+                go.name = lm.name;
+                go.transform.SetPositionAndRotation(p, Quaternion.LookRotation(t, Vector3.up));
+                Bounds b = WorldPlacement.BoundsOf(go);
+                float half = Mathf.Max(b.extents.x, b.extents.z);
+                float offset = Mathf.Max(16f, half + RoadMeshBuilder.HalfWidth + 4f);
+
+                // Seite mit dem flacheren Gelände (nicht in die Klippe, nicht ins Meer).
+                Vector3 l = p - right * offset, r = p + right * offset;
+                float dl = Mathf.Abs(terrain.HeightAt(l.x, l.z) - p.y) + (terrain.DemY(l.x, l.z) < terrain.SeaY + 1f ? 100f : 0f);
+                float dr = Mathf.Abs(terrain.HeightAt(r.x, r.z) - p.y) + (terrain.DemY(r.x, r.z) < terrain.SeaY + 1f ? 100f : 0f);
+                Vector3 target = dl < dr ? l : r;
+
+                // Mitte der Bounds auf das Ziel schieben, Unterkante auf den tiefsten Geländepunkt.
+                go.transform.position += new Vector3(target.x - b.center.x, 0f, target.z - b.center.z);
+                b = WorldPlacement.BoundsOf(go);
+                float ground = terrain.LowestUnder(b.center, Vector3.right, Vector3.forward, b.extents.x, b.extents.z);
+                go.transform.position += Vector3.up * (ground - .2f - b.min.y);
+                foreach (var c in go.GetComponentsInChildren<Collider>()) c.enabled = false;
+                occupied.Add(b.center.x, b.center.z, half + 3f);
             }
         }
 
-        private static void Ribbon(string name, float left, float right, float height, float start, float end, Material material, RouteSpline spline)
-        {
-            int count = Mathf.CeilToInt((end - start) / 2f);
-            var vertices = new Vector3[(count + 1) * 2];
-            var triangles = new int[count * 6];
-            for (int i = 0; i <= count; i++)
-            {
-                float d = Mathf.Lerp(start, end, i / (float)count);
-                Vector3 p = spline.SamplePosition(d);
-                Vector3 t = spline.SampleTangent(d);
-                Vector3 side = Vector3.Cross(Vector3.up, t).normalized;
-                vertices[2 * i] = p + side * left + Vector3.up * height;
-                vertices[2 * i + 1] = p + side * right + Vector3.up * height;
-                if (i == count) continue;
-                int a = 2 * i, tri = 6 * i;
-                triangles[tri] = a; triangles[tri + 1] = a + 2; triangles[tri + 2] = a + 1;
-                triangles[tri + 3] = a + 1; triangles[tri + 4] = a + 2; triangles[tri + 5] = a + 3;
-            }
-            Mesh mesh = new Mesh { name = name, indexFormat = UnityEngine.Rendering.IndexFormat.UInt32 };
-            mesh.vertices = vertices;
-            mesh.triangles = triangles;
-            mesh.RecalculateNormals(); mesh.RecalculateBounds();
-            mesh = Save(mesh);
-            var go = new GameObject(name, typeof(MeshFilter), typeof(MeshRenderer));
-            go.GetComponent<MeshFilter>().sharedMesh = mesh;
-            go.GetComponent<MeshRenderer>().sharedMaterial = material;
-        }
-
-        private static void PlaceFiller(RouteSpline spline, GeoPoint origin)
-        {
-            var catalog = AssetDatabase.LoadAssetAtPath<AssetCatalog>(AssetCatalogBuilder.CatalogPath);
-            if (catalog == null) { Debug.LogWarning("WorldGen catalog missing — no filler."); return; }
-
-            // OSM laden (einmal per 'Fetch OSM for Nordhoek' geholt, dann offline)
-            OsmContext osm = null;
-            string osmPath = "Assets/StreamingAssets/Osm/Nordhoek.osm.xml";
-            if (System.IO.File.Exists(osmPath))
-            {
-                osm = OsmContext.Load(System.IO.File.ReadAllText(osmPath), origin);
-                OsmBuildingPlacer.Place(spline, osm, catalog);   // Gebäude an echten Footprints
-                OsmDetailPlacer.Place(spline, osm, catalog);     // Schilder, Ampeln, Bänke, Bäume, Zäune, Parkautos
-            }
-            else Debug.LogWarning("OSM fehlt — erst 'Fetch OSM for Nordhoek'. Gebäude/Details werden übersprungen.");
-
-            // Vegetation: Dichte aus OSM-Landnutzung (Wald dicht, Feld licht, Stadt kaum Bäume)
-            var vegetation = new List<GameObject>();
-            foreach (var e in catalog.entries)
-                if (e != null && e.prefab != null && e.category == AssetCategory.Vegetation) vegetation.Add(e.prefab);
-            if (vegetation.Count == 0) return;
-
-            var rng = new System.Random(4242);
-            for (float d = 0f; d < spline.Length; d += 10f)
-            {
-                Vector3 p = spline.SamplePosition(d);
-                string biome = osm != null ? osm.BiomeAt(p) : "generic";
-                float step = biome == "forest" ? 12f : biome == "field" ? 45f : biome == "urban" ? 60f : 30f;
-                if (d % step >= 10f) continue;
-                Vector3 t = spline.SampleTangent(d);
-                Vector3 side = Vector3.Cross(Vector3.up, t).normalized;
-                int dir = rng.Next(2) == 0 ? -1 : 1;
-                float offset = 7f + (float)rng.NextDouble() * 15f;
-                int dummy = 0;
-                PlacePrefab(vegetation[rng.Next(vegetation.Count)], p + side * (dir * offset), t, rng, ref dummy);
-            }
-        }
-
-        private static float SlopeDegrees(RouteSpline spline, float d)
-        {
-            Vector3 t = spline.SampleTangent(d);
-            float horiz = new Vector2(t.x, t.z).magnitude;
-            if (horiz < 1e-5f) return 0f;
-            return Mathf.Atan(t.y / horiz) * Mathf.Rad2Deg;
-        }
-
-        private static void PlacePrefab(GameObject prefab, Vector3 pos, Vector3 tangent, System.Random rng, ref int placed)
-        {
-            var go = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
-            go.name = prefab.name;
-            go.transform.position = pos;
-            go.transform.rotation = Quaternion.LookRotation(tangent, Vector3.up) * Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f);
-            // Ground-anchor: snap the prefab's lowest bound to the track elevation at this point.
-            Bounds b = BoundsOf(go);
-            go.transform.position += Vector3.up * (pos.y - b.min.y);
-            foreach (var c in go.GetComponentsInChildren<Collider>()) c.enabled = false;
-            placed++;
-        }
-
-        private static void Box(string name, Vector3 position, Vector3 scale, Material material)
-        {
-            var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            UnityEngine.Object.DestroyImmediate(go.GetComponent<Collider>());
-            go.name = name; go.transform.position = position; go.transform.localScale = scale;
-            go.GetComponent<Renderer>().sharedMaterial = material;
-        }
-
-        private static Bounds BoundsOf(GameObject go)
-        {
-            Renderer[] renderers = go.GetComponentsInChildren<Renderer>();
-            if (renderers.Length == 0) throw new InvalidOperationException("Prefab has no renderers: " + go.name);
-            Bounds bounds = renderers[0].bounds;
-            foreach (Renderer r in renderers) bounds.Encapsulate(r.bounds);
-            return bounds;
-        }
-
+        // ------------------------------------------------------------------ Licht & Stimmung
         private static void Lighting()
         {
-            RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
-            RenderSettings.ambientSkyColor = new Color(.62f, .74f, .88f);
-            RenderSettings.ambientEquatorColor = new Color(.82f, .68f, .52f);
-            RenderSettings.ambientGroundColor = new Color(.45f, .38f, .30f);
-            RenderSettings.fog = true; RenderSettings.fogMode = FogMode.Linear;
-            RenderSettings.fogStartDistance = 500; RenderSettings.fogEndDistance = 4000;
-            RenderSettings.fogColor = new Color(.92f, .78f, .64f);
+            float az = SunAzimuth * Mathf.Deg2Rad, el = SunElevation * Mathf.Deg2Rad;
+            Vector3 toSun = new Vector3(Mathf.Sin(az) * Mathf.Cos(el), Mathf.Sin(el), Mathf.Cos(az) * Mathf.Cos(el)).normalized;
+
             var sun = new GameObject("Sun").AddComponent<Light>();
-            sun.type = LightType.Directional; sun.color = new Color(1f, .76f, .48f); sun.intensity = 1.45f;
-            sun.shadows = LightShadows.Soft; sun.transform.rotation = Quaternion.Euler(18, -55, 0);
+            sun.type = LightType.Directional; sun.color = new Color(1f, .91f, .77f); sun.intensity = 1.35f;
+            sun.shadows = LightShadows.Soft; sun.shadowStrength = .8f;
+            sun.transform.rotation = Quaternion.LookRotation(-toSun, Vector3.up);
+            RenderSettings.sun = sun;
+
+            Shader skyShader = Shader.Find("CapeCrown/CoastalSky");
+            if (skyShader != null)
+            {
+                var sky = new Material(skyShader) { name = "GpxSky" };
+                sky.SetColor("_Zenith", Zenith);
+                sky.SetColor("_Horizon", Horizon);
+                sky.SetVector("_SunDirection", new Vector4(toSun.x, toSun.y, toSun.z, 0f));
+                RenderSettings.skybox = Save(sky);
+            }
+            else Debug.LogWarning("CoastalSky-Shader fehlt — Standard-Skybox.");
+
+            RenderSettings.ambientMode = AmbientMode.Trilight;
+            RenderSettings.ambientSkyColor = new Color(.56f, .68f, .84f);
+            RenderSettings.ambientEquatorColor = new Color(.74f, .72f, .66f);
+            RenderSettings.ambientGroundColor = new Color(.36f, .34f, .29f);
+
+            // Nebel = Horizontfarbe -> Ferne verschmilzt mit dem Himmel statt harter Kante.
+            RenderSettings.fog = true; RenderSettings.fogMode = FogMode.Linear;
+            RenderSettings.fogStartDistance = 350; RenderSettings.fogEndDistance = 6500;
+            RenderSettings.fogColor = Horizon;
         }
 
-        private static Material Mat(string name, Color color)
+        private static void ColorGrade()
+        {
+            var volume = new GameObject("Colour grade").AddComponent<Volume>();
+            volume.isGlobal = true;
+            var profile = ScriptableObject.CreateInstance<VolumeProfile>();
+            profile.name = "GpxGrade";
+            var grade = profile.Add<ColorAdjustments>(true);
+            grade.postExposure.Override(.15f); grade.contrast.Override(10f); grade.saturation.Override(14f);
+            var bloom = profile.Add<Bloom>(true);
+            bloom.intensity.Override(.3f); bloom.threshold.Override(.95f);
+            var vignette = profile.Add<Vignette>(true);
+            vignette.intensity.Override(.22f); vignette.smoothness.Override(.4f);
+            const string profilePath = OutDir + "/GpxGrade.asset";
+            AssetDatabase.DeleteAsset(profilePath);
+            AssetDatabase.CreateAsset(profile, profilePath);
+            AssetDatabase.AddObjectToAsset(grade, profile);
+            AssetDatabase.AddObjectToAsset(bloom, profile);
+            AssetDatabase.AddObjectToAsset(vignette, profile);
+            volume.sharedProfile = profile;
+        }
+
+        // ------------------------------------------------------------------ Assets
+        private static Texture2D AsphaltTexture()
+        {
+            const int n = 256;
+            var rng = new System.Random(99);
+            var px = new Color32[n * n];
+            for (int y = 0; y < n; y++)
+            for (int x = 0; x < n; x++)
+            {
+                // kachelbar: Sinus-Wolken + Körnung
+                float u = x / (float)n * Mathf.PI * 2f, v = y / (float)n * Mathf.PI * 2f;
+                float cloud = .5f + .25f * Mathf.Sin(u * 2f + Mathf.Sin(v * 3f)) * Mathf.Cos(v * 2f + Mathf.Sin(u));
+                float grain = (float)rng.NextDouble();
+                float g = .20f + cloud * .05f + (grain - .5f) * .07f + (grain > .985f ? .12f : 0f);
+                px[y * n + x] = new Color(g, g * 1.02f, g * 1.06f, 1f);
+            }
+            var tex = new Texture2D(n, n, TextureFormat.RGBA32, true) { name = "Asphalt" };
+            tex.SetPixels32(px);
+            tex.Apply();
+            return tex;
+        }
+
+        private static Texture2D SaveTexture(Texture2D tex, string path, bool repeat, int maxSize)
+        {
+            File.WriteAllBytes(path, tex.EncodeToPNG());
+            UnityEngine.Object.DestroyImmediate(tex);
+            AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
+            var importer = (TextureImporter)AssetImporter.GetAtPath(path);
+            importer.textureType = TextureImporterType.Default;
+            importer.sRGBTexture = true;
+            importer.mipmapEnabled = true;
+            importer.wrapMode = repeat ? TextureWrapMode.Repeat : TextureWrapMode.Clamp;
+            importer.filterMode = FilterMode.Bilinear;
+            importer.anisoLevel = repeat ? 4 : 1;
+            importer.maxTextureSize = maxSize;
+            importer.textureCompression = TextureImporterCompression.Compressed;
+            importer.SaveAndReimport();
+            return AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+        }
+
+        // Alle generierten Meshes als Unter-Assets EINER Datei (statt hunderter gpx-XXX.asset).
+        private static Mesh SaveMesh(Mesh mesh)
+        {
+            if (meshStore == null)
+            {
+                meshStore = new Mesh { name = "NordhoekWorldMeshes" };
+                AssetDatabase.CreateAsset(meshStore, MeshStorePath);
+            }
+            AssetDatabase.AddObjectToAsset(mesh, meshStore);
+            return mesh;
+        }
+
+        private static Material Mat(string name, Color color, float smoothness, Texture2D baseMap = null, float metallic = 0f)
         {
             Shader shader = Shader.Find("Universal Render Pipeline/Lit");
             if (shader == null) throw new InvalidOperationException("URP Lit shader unavailable.");
             var mat = new Material(shader) { name = name, color = color };
-            mat.SetFloat("_Smoothness", .12f);
+            mat.SetFloat("_Smoothness", smoothness);
+            mat.SetFloat("_Metallic", metallic);
+            if (baseMap != null) { mat.SetTexture("_BaseMap", baseMap); mat.mainTexture = baseMap; }
             return Save(mat);
         }
 
@@ -253,6 +327,7 @@ namespace StoryCycling.WorldGen.Editor
                 UnityEngine.Object.DestroyImmediate(asset);
                 return existing;
             }
+            if (AssetDatabase.LoadMainAssetAtPath(path) != null) AssetDatabase.DeleteAsset(path);
             AssetDatabase.CreateAsset(asset, path);
             return asset;
         }

@@ -26,16 +26,16 @@ namespace StoryCycling.WorldGen.Editor
 
             string c = BuildCoordList(pts, MaxCoords);
             string query =
-                "[out:xml][timeout:180];\n(\n" +
-                $"  way[\"building\"](around:80,{c});\n" +
-                $"  way[\"landuse\"](around:150,{c});\n" +
-                $"  way[\"natural\"](around:150,{c});\n" +
+                "[out:xml][timeout:300];\n(\n" +
+                $"  way[\"building\"](around:200,{c});\n" +
+                $"  way[\"landuse\"](around:400,{c});\n" +
+                $"  way[\"natural\"](around:400,{c});\n" +
                 $"  way[\"amenity\"=\"parking\"](around:60,{c});\n" +
                 $"  way[\"barrier\"~\"fence|hedge|wall\"](around:60,{c});\n" +
                 $"  node[\"highway\"~\"traffic_signals|street_lamp|bus_stop|stop|give_way\"](around:40,{c});\n" +
                 $"  node[\"amenity\"~\"bench|waste_basket|post_box|parking_meter\"](around:40,{c});\n" +
                 $"  node[\"emergency\"=\"fire_hydrant\"](around:40,{c});\n" +
-                $"  node[\"natural\"~\"tree|stone|rock\"](around:60,{c});\n" +
+                $"  node[\"natural\"~\"tree|stone|rock\"](around:120,{c});\n" +
                 ");\nout geom;";
 
             Directory.CreateDirectory(Path.GetDirectoryName(OutPath));
