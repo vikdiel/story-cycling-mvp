@@ -13,7 +13,7 @@ namespace StoryCycling.WorldGen.Editor
     public static class VegetationPlacer
     {
         private const float Cell = 8f;
-        private const float NearBand = 40f, FarBand = 220f, RoadClear = 7.5f;
+        private const float NearBand = 40f, FarBand = 220f, RoadClear = RoadMeshBuilder.HalfWidth + 3.5f;
         public const int Budget = 14000;
 
         private enum Kind { Tree, Bush, Small, Rock, Boulder, Beach }
@@ -55,7 +55,8 @@ namespace StoryCycling.WorldGen.Editor
             foreach (var c in candidates)
             {
                 if (keep < 1f && rng.NextDouble() > keep) continue;
-                GameObject prefab = Choose(c, a, rng);
+                // Art pro ~30-m-Fleck (verrauschte Zellen): Nachbarn gehören zur selben Art -> natürliche Gruppen
+                GameObject prefab = Choose(c, a, new System.Random(PatchSeed(c.pos, c.kind)));
                 if (prefab == null) continue;
 
                 float y = terrain.HeightAt(c.pos.x, c.pos.z);
@@ -63,8 +64,8 @@ namespace StoryCycling.WorldGen.Editor
                 float scale, sink, cull; bool shadows = true;
                 switch (c.kind)
                 {
-                    case Kind.Tree: scale = WorldPlacement.Range(rng, .8f, 1.25f); sink = .15f; cull = .008f; break;
-                    case Kind.Bush: scale = WorldPlacement.Range(rng, .7f, 1.3f); sink = .1f; cull = .015f; break;
+                    case Kind.Tree: scale = WorldPlacement.Range(rng, .85f, 1.15f); sink = .15f; cull = .008f; break;
+                    case Kind.Bush: scale = WorldPlacement.Range(rng, .8f, 1.15f); sink = .1f; cull = .015f; break;
                     case Kind.Small: scale = WorldPlacement.Range(rng, .9f, 1.5f); sink = .03f; cull = .035f; shadows = false; break;
                     case Kind.Beach: scale = WorldPlacement.Range(rng, .8f, 1.2f); sink = .08f; cull = .02f; shadows = false; break;
                     case Kind.Boulder:
@@ -204,10 +205,18 @@ namespace StoryCycling.WorldGen.Editor
 
                 float[] p = (nearBand ? Near : Mid)[biome];
                 float n = Mathf.PerlinNoise(x / 90f + 31.7f, z / 90f + 7.3f);
-                float clump = nearBand ? .5f + n : Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(.3f, .75f, n)) * 1.8f;
+                // deutliche Gruppen mit Lücken statt gleichmäßigem Streuen
+                float clump = nearBand ? .15f + Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(.35f, .65f, n)) * 1.6f
+                                       : Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(.4f, .72f, n)) * 2f;
                 float pt = p[0], pb = p[1], ps = p[2], pr = p[3];
+                // Gras/Blumen als durchgehender Saum am Straßenrand, sonst nur auf Wiesen
+                bool verge = dist < RoadClear + 7f;
+                ps = verge ? .28f : biome == WorldTerrain.Biome.Field ? ps * .5f : 0f;
+                // Bäume in Natur-Flächen vor allem in Rinnen/Schluchten
+                if (biome == WorldTerrain.Biome.Generic || biome == WorldTerrain.Biome.Scrub)
+                    pt *= .2f + 2.6f * Ravine(terrain, x, z);
                 if (slope > 32f) { pt = 0f; pb *= .5f; ps = 0f; pr += .08f; }
-                pt *= clump; pb *= clump; ps *= clump; pr *= nearBand ? 1f : .8f + n * .4f;
+                pt *= clump; pb *= clump; if (!verge) ps *= clump; pr *= nearBand ? 1f : .8f + n * .4f;
 
                 Kind kind;
                 if (roll < pt) kind = Kind.Tree;
@@ -240,7 +249,7 @@ namespace StoryCycling.WorldGen.Editor
             for (int k = 0; k < s.Count; k += 9)                                      // ~18 m Abstand
                 for (int side = -1; side <= 1; side += 2)
                 {
-                    Vector3 p = s[k].pos + s[k].side * (side * 7.4f);
+                    Vector3 p = s[k].pos + s[k].side * (side * (RoadMeshBuilder.HalfWidth + 3.6f));
                     if (terrain.BiomeAt(p.x, p.z) != WorldTerrain.Biome.Urban) continue;
                     if (terrain.DemY(p.x, p.z) - terrain.SeaY > 30f || terrain.SlopeDeg(p.x, p.z) > 15f) continue;
                     if (terrain.Road.Distance(p.x, p.z, 10f) < RoadMeshBuilder.HalfWidth + 3f) continue;
@@ -304,6 +313,21 @@ namespace StoryCycling.WorldGen.Editor
                 placed++;
             }
             return placed;
+        }
+
+        private static int PatchSeed(Vector3 p, Kind kind)
+        {
+            float wx = p.x + (Mathf.PerlinNoise(p.x * .02f, p.z * .02f) - .5f) * 24f;
+            float wz = p.z + (Mathf.PerlinNoise(p.x * .02f + 40f, p.z * .02f + 40f) - .5f) * 24f;
+            unchecked { return Mathf.FloorToInt(wx / 30f) * 73856093 ^ Mathf.FloorToInt(wz / 30f) * 19349663 ^ (int)kind * 83492791; }
+        }
+
+        // Konkave Stellen (Schluchten, Rinnen): dort wachsen am Kap die Bäume, nicht auf den Kuppen.
+        private static float Ravine(WorldTerrain t, float x, float z)
+        {
+            const float e = 25f;
+            float lap = (t.DemY(x + e, z) + t.DemY(x - e, z) + t.DemY(x, z + e) + t.DemY(x, z - e) - 4f * t.DemY(x, z)) / (e * e);
+            return Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0f, .004f, lap));
         }
 
         private static Transform Group(Dictionary<long, Transform> groups, Transform parent, Vector3 p)

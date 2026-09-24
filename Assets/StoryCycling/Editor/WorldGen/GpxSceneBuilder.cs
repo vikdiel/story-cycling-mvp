@@ -89,7 +89,7 @@ namespace StoryCycling.WorldGen.Editor
                 var roadMats = new RoadMaterials
                 {
                     Asphalt = Mat("GpxAsphalt", Color.white, .18f, asphaltTex),
-                    Shoulder = Mat("GpxShoulder", new Color(.55f, .51f, .44f), .05f),
+                    Shoulder = Mat("GpxShoulder", new Color(.62f, .45f, .33f), .05f),       // rotbrauner Schotter wie am Kap
                     Yellow = Mat("GpxLineYellow", new Color(.95f, .76f, .18f), .3f),
                     White = Mat("GpxLineWhite", new Color(.95f, .95f, .92f), .3f),
                     Rail = Mat("GpxGuardrail", new Color(.74f, .76f, .78f), .55f, null, .6f),
@@ -117,6 +117,7 @@ namespace StoryCycling.WorldGen.Editor
                         PlaceBuildings(osm, terrain, catalog, road, occupied, Group("Buildings"));
                         Progress("Details (OSM)", .66f);
                         OsmDetailPlacer.Place(road, terrain, osm, catalog, assets, occupied, Group("StreetDetails"));
+                        RoadSigns.Place(road, terrain, streets, catalog, occupied, Group("RoadSigns"));
                     }
                     Progress("Vegetation & Küste", .74f);
                     VegetationPlacer.Place(terrain, assets, occupied, Group("Vegetation"));
@@ -256,7 +257,7 @@ namespace StoryCycling.WorldGen.Editor
             var profile = ScriptableObject.CreateInstance<VolumeProfile>();
             profile.name = "GpxGrade";
             var grade = profile.Add<ColorAdjustments>(true);
-            grade.postExposure.Override(.15f); grade.contrast.Override(10f); grade.saturation.Override(14f);
+            grade.postExposure.Override(.15f); grade.contrast.Override(12f); grade.saturation.Override(4f);
             var bloom = profile.Add<Bloom>(true);
             bloom.intensity.Override(.3f); bloom.threshold.Override(.95f);
             var vignette = profile.Add<Vignette>(true);
@@ -277,22 +278,35 @@ namespace StoryCycling.WorldGen.Editor
         private enum BuildingMode { Synty, Procedural, Offices }
         private const BuildingMode Buildings = BuildingMode.Synty;
 
+        // Erste Reihe an der Route (≤ 55 m): gemischt Synty-Baukasten (~70 %) und verputzte Villen.
+        // Dahinter: einfache prozedurale Häuser aus OSM-Grundrissen, dann Hintergrund-Füllung der Wohngebiete.
+        private const float FrontRow = 55f;
+
         private static void PlaceBuildings(OsmContext osm, WorldTerrain terrain, AssetCatalog catalog, RoadField road,
                                            Occupancy occupied, Transform parent)
         {
             if (Buildings == BuildingMode.Offices) { OsmBuildingPlacer.Place(road, terrain, osm, catalog, occupied, parent); return; }
+            var mats = HouseMaterials();
+            var built = new HashSet<OsmContext.Building>();
             if (Buildings == BuildingMode.Synty)
             {
                 var kit = SyntyModularBuildings.LoadKit(catalog);
                 if (kit.Complete)
                 {
-                    SyntyModularBuildings.Build(osm, terrain, occupied, kit, Mat("HousePlinth", new Color(.60f, .58f, .54f), .05f),
-                                                Mat("HouseFar", new Color(.74f, .62f, .52f), .05f), parent, SaveMesh);
-                    return;
+                    System.Func<OsmContext.Building, bool> frontRow = b =>
+                        road.Distance(b.centroid.x, b.centroid.y, FrontRow + 1f) <= FrontRow && HashPercent(b.centroid) < 70;
+                    SyntyModularBuildings.Build(osm, terrain, occupied, kit, mats.Plinth,
+                                                Mat("HouseFar", new Color(.80f, .70f, .60f), .05f), parent, SaveMesh, frontRow, built);
                 }
-                Debug.LogWarning("PolygonCity-Baukasten unvollständig im Katalog — prozedurale Häuser als Ersatz.");
+                else Debug.LogWarning("PolygonCity-Baukasten unvollständig im Katalog — nur prozedurale Häuser.");
             }
-            ProceduralHouses.Build(osm, terrain, occupied, parent, HouseMaterials(), SaveMesh);
+            ProceduralHouses.Build(osm, terrain, occupied, parent, mats, SaveMesh, b => !built.Contains(b));
+            ProceduralHouses.BuildFill(terrain, occupied, parent, mats, SaveMesh);
+        }
+
+        private static int HashPercent(Vector2 c)
+        {
+            unchecked { uint h = (uint)Mathf.RoundToInt(c.x * 7f) * 2654435761u ^ (uint)Mathf.RoundToInt(c.y * 7f) * 40503u; h ^= h >> 15; return (int)(h % 100u); }
         }
 
         private static ProceduralHouses.Materials HouseMaterials()

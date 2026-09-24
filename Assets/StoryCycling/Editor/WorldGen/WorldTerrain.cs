@@ -22,8 +22,8 @@ namespace StoryCycling.WorldGen.Editor
         public float SeaY => -Ele0 + SeaLevelOffset;
 
         // Straßen-Einschnitt
-        public const float FlatRadius = 11f;     // Fahrbahn + Bankett + 1 Zellendiagonale
-        public const float InfluenceRadius = 11f + 50f;
+        public const float FlatRadius = 14.2f;   // Fahrbahn (5,5) + Randstreifen (1,6) + 1 Zellendiagonale (7,1)
+        public const float InfluenceRadius = FlatRadius + 50f;
         private const float RoadInset = 0.3f;    // Gelände knapp unter der Fahrbahn
 
         // Kacheln
@@ -341,10 +341,11 @@ namespace StoryCycling.WorldGen.Editor
         {
             var px = new Color32[rw * rh];
             Color sandDry = new Color(.87f, .80f, .62f), sandWet = new Color(.70f, .64f, .50f);
-            Color rock = new Color(.53f, .50f, .46f), rockDark = new Color(.38f, .36f, .35f);
-            Color fynbos = new Color(.43f, .49f, .29f), fynbosDry = new Color(.60f, .57f, .37f);
+            // Palette nach Referenzfoto (Victoria Road / Zwölf Apostel): olivgrüner Fynbos, graue Sandsteinwände
+            Color rock = new Color(.60f, .59f, .56f), rockDark = new Color(.45f, .44f, .43f);
+            Color fynbos = new Color(.33f, .40f, .22f), fynbosDry = new Color(.47f, .47f, .31f);
             Color forest = new Color(.23f, .35f, .19f), field = new Color(.47f, .62f, .30f);
-            Color scrubDark = new Color(.29f, .35f, .22f);
+            Color scrubDark = new Color(.22f, .29f, .16f);
             Color urban = new Color(.53f, .56f, .43f), seabed = new Color(.18f, .40f, .40f);
 
             for (int j = 0; j < rh; j++)

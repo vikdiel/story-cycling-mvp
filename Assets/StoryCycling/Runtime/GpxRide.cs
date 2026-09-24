@@ -8,7 +8,8 @@ namespace StoryCycling
     // unlike the closed CapeCrownRoute. Reuses the WorldGen parser + open spline.
     public static class GpxRide
     {
-        public const float LaneOffset = -2.2f;
+        // Linksverkehr: auf dem asphaltierten Seitenstreifen links der gelben Linie (wie Radfahrer am Kap)
+        public const float LaneOffset = -4.4f;
         public static RouteSpline Spline { get; private set; }
         public static bool IsLoaded => Spline != null && Spline.Length > 0f;
         public static float Length => Spline != null ? Spline.Length : 0f;

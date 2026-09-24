@@ -8,14 +8,15 @@ namespace StoryCycling.WorldGen.Editor
     //   Etage (5×5×3 m, Fassade vorn), Ecke (Fassade vorn + seitlich), Haustür, Laden, Dachabschluss.
     // Pro OSM-Grundriss: Raster aus 5-m-Zellen (leicht skaliert auf die echte Größe), Außenzellen mit
     // Fassade nach außen, Ecken als Eckmodule, Tür bzw. Läden im Erdgeschoss zur Straße, oben Dachmodule.
-    // Alles wird pro 400-m-Zelle und Material zu EINEM Mesh verschmolzen (sonst ~30.000 GameObjects).
+    // Module werden per GPU-Instancing gezeichnet (InstancedMeshField: nur Matrizen, keine kopierten
+    // Vertices — sonst mehrere GB Text-Assets). Dazu pro Zelle ein einfacher Block als Fernansicht.
     // Maße/Fassadenrichtung werden zur Laufzeit aus den Meshes gemessen, nicht angenommen.
     public static class SyntyModularBuildings
     {
         public const float MaxDistance = 170f;
         private const float Cell = 5f, Bucket = 250f, MaxSlopeDrop = 9f;
         // LOD: voller Baukasten, solange die 250-m-Zelle > 35 % der Bildhöhe (~650 m) einnimmt, danach einfache Blöcke
-        private const float Lod0Screen = .35f, Lod1Screen = .012f;
+        public const float DetailDistance = 600f;          // bis hier Baukasten, dahinter die Blöcke
 
         public sealed class Module
         {
@@ -112,15 +113,17 @@ namespace StoryCycling.WorldGen.Editor
         public sealed class BucketData
         {
             public long Vertices;
-            public readonly Dictionary<Material, List<CombineInstance>> ByMat = new Dictionary<Material, List<CombineInstance>>();
+            public readonly Dictionary<(Mesh, int, Material), List<Matrix4x4>> Instances = new Dictionary<(Mesh, int, Material), List<Matrix4x4>>();
+            public Bounds Bounds; public bool HasBounds;
             public readonly List<Vector3> PlinthV = new List<Vector3>();
             public readonly List<int> PlinthT = new List<int>();
-            public readonly List<Vector3> FarV = new List<Vector3>();      // LOD1: ein Block pro Haus
+            public readonly List<Vector3> FarV = new List<Vector3>();      // Fernansicht: ein Block pro Haus
             public readonly List<int> FarT = new List<int>();
         }
 
         public static int Build(OsmContext osm, WorldTerrain terrain, Occupancy occupied, Kit kit, Material plinthMat,
-                                Material farMat, Transform parent, System.Func<Mesh, Mesh> save)
+                                Material farMat, Transform parent, System.Func<Mesh, Mesh> save,
+                                System.Func<OsmContext.Building, bool> accept, HashSet<OsmContext.Building> built)
         {
             // Eck-Seite für uneindeutige Module (Laden-Ecken) von den Wohn-Ecken übernehmen
             Vector3 defaultSide = kit.Corner[0].Side != Vector3.zero ? kit.Corner[0].Side : Vector3.right;
@@ -128,9 +131,10 @@ namespace StoryCycling.WorldGen.Editor
                 foreach (var mo in arr) if (mo.Side == Vector3.zero) mo.Side = defaultSide;
 
             var buckets = new Dictionary<long, BucketData>();
-            int built = 0, skipRoad = 0, skipSteep = 0, skipOverlap = 0, modules = 0;
+            int count = 0, skipRoad = 0, skipSteep = 0, skipOverlap = 0, modules = 0;
             foreach (var b in osm.Buildings)
             {
+                if (accept != null && !accept(b)) continue;
                 if (b.kind == "roof" || b.kind == "ruins" || b.kind == "construction") continue;
                 Vector2 c2 = b.centroid;
                 if (terrain.Road.Distance(c2.x, c2.y, MaxDistance + 1f) > MaxDistance) continue;
@@ -185,41 +189,54 @@ namespace StoryCycling.WorldGen.Editor
                 Matrix4x4 frame = Matrix4x4.TRS(new Vector3(center.x, baseY, center.z), Quaternion.LookRotation(front, Vector3.up), new Vector3(sx, 1f, sz));
                 modules += Compose(bucket, frame, kit, n, m, floors, style, shops, h);
                 if (baseY - gMin > .2f) Plinth(bucket.PlinthV, bucket.PlinthT, corners, gMin - .6f, baseY + .02f);
-                Plinth(bucket.FarV, bucket.FarT, corners, baseY, baseY + floors * 3f + .4f, true);
+                // Fernblock 15 cm eingerückt: nah verschwindet er in den Modulen, fern ersetzt er sie
+                Plinth(bucket.FarV, bucket.FarT, Inset(corners, .15f), baseY, baseY + floors * 3f + .35f, true);
                 occupied.Add(c2.x, c2.y, Mathf.Sqrt(hw * hw + hd * hd) * .8f);
-                built++;
+                built?.Add(b);
+                count++;
             }
 
-            int cells = 0;
+            int cells = 0, instances = 0;
             long totalVerts = 0; foreach (var kv in buckets) totalVerts += kv.Value.Vertices;
+            var field = parent.gameObject.GetComponent<InstancedMeshField>();
+            if (field == null) field = parent.gameObject.AddComponent<InstancedMeshField>();
+            field.drawDistance = DetailDistance;
+            var instancedMats = new HashSet<Material>();
             foreach (var kv in buckets)
             {
-                var cellRoot = new GameObject($"Buildings_{cells:D3}");
-                cellRoot.transform.SetParent(parent, false);
-                var near = new List<Renderer>();
-                foreach (var mat in kv.Value.ByMat)
+                foreach (var inst in kv.Value.Instances)
                 {
-                    var mesh = new Mesh { indexFormat = IndexFormat.UInt32, name = $"Buildings_{cells:D3}_{mat.Key.name}" };
-                    mesh.CombineMeshes(mat.Value.ToArray(), true, true);
-                    mesh.RecalculateBounds();
-                    near.Add(Child(cellRoot.transform, save(mesh), mat.Key));
+                    field.batches.Add(new InstancedMeshField.Batch
+                    {
+                        mesh = inst.Key.Item1, submesh = inst.Key.Item2, material = inst.Key.Item3,
+                        bounds = kv.Value.Bounds, matrices = inst.Value.ToArray()
+                    });
+                    instances += inst.Value.Count;
+                    instancedMats.Add(inst.Key.Item3);
                 }
-                var plinths = new List<Renderer>();
                 if (kv.Value.PlinthV.Count > 0)
-                    plinths.Add(Child(cellRoot.transform, save(Simple($"Plinths_{cells:D3}", kv.Value.PlinthV, kv.Value.PlinthT)), plinthMat));
-                var far = Child(cellRoot.transform, save(Simple($"BuildingsFar_{cells:D3}", kv.Value.FarV, kv.Value.FarT)), farMat);
+                    Child(parent, save(Simple($"Plinths_{cells:D3}", kv.Value.PlinthV, kv.Value.PlinthT)), plinthMat);
+                var far = Child(parent, save(Simple($"BuildingsFar_{cells:D3}", kv.Value.FarV, kv.Value.FarT)), farMat);
                 far.shadowCastingMode = ShadowCastingMode.Off;
-                near.AddRange(plinths);
-                var lod1 = new List<Renderer> { far }; lod1.AddRange(plinths);
-                var group = cellRoot.AddComponent<LODGroup>();
-                group.SetLODs(new[] { new LOD(Lod0Screen, near.ToArray()), new LOD(Lod1Screen, lod1.ToArray()) });
-                group.RecalculateBounds();
                 cells++;
             }
-            Debug.Log($"Synty-Baukasten: {built} Häuser aus {modules} Modulen ({totalVerts / 1000}k Vertices) in {cells} Zellen " +
-                      $"(weggelassen: Fahrbahn {skipRoad}, zu steil {skipSteep}, Überlappung {skipOverlap}).");
-            return built;
+            // GPU-Instancing muss am Material aktiv sein (ändert das Synty-Material einmalig).
+            foreach (var mat in instancedMats)
+                if (mat != null && !mat.enableInstancing) { mat.enableInstancing = true; UnityEditor.EditorUtility.SetDirty(mat); }
+            Debug.Log($"Synty-Baukasten: {count} Häuser, {instances} Modul-Instanzen in {field.batches.Count} Batches " +
+                      $"(als kopierte Meshes wären es {totalVerts / 1000}k Vertices), " +
+                      $"weggelassen: Fahrbahn {skipRoad}, zu steil {skipSteep}, Überlappung {skipOverlap}.");
+            return count;
         }
+
+        private static List<Vector2> Inset(List<Vector2> ring, float d)
+        {
+            Vector2 c = Vector2.zero; foreach (var p in ring) c += p; c /= ring.Count;
+            var r = new List<Vector2>();
+            foreach (var p in ring) { Vector2 v = p - c; float len = v.magnitude; r.Add(len > d ? c + v * ((len - d) / len) : p); }
+            return r;
+        }
+
 
         private static int Floors(OsmContext.Building b, uint h)
         {
@@ -322,10 +339,14 @@ namespace StoryCycling.WorldGen.Editor
             Matrix4x4 place = frame * Matrix4x4.TRS(pivot, rot, Vector3.one);
             foreach (var part in mod.Parts)
             {
-                if (!bucket.ByMat.TryGetValue(part.mat, out List<CombineInstance> list)) { list = new List<CombineInstance>(); bucket.ByMat[part.mat] = list; }
-                list.Add(new CombineInstance { mesh = part.mesh, subMeshIndex = part.sub, transform = place * part.local });
+                var key = (part.mesh, part.sub, part.mat);
+                if (!bucket.Instances.TryGetValue(key, out List<Matrix4x4> list)) { list = new List<Matrix4x4>(); bucket.Instances[key] = list; }
+                list.Add(place * part.local);
                 bucket.Vertices += part.mesh.vertexCount / Mathf.Max(1, part.mesh.subMeshCount);
             }
+            Vector3 at = place.MultiplyPoint3x4(mod.CoreCenter);
+            var bb = new Bounds(at, new Vector3(9f, 9f, 9f));
+            if (!bucket.HasBounds) { bucket.Bounds = bb; bucket.HasBounds = true; } else bucket.Bounds.Encapsulate(bb);
         }
 
         public static Vector3 PlacedCellCenter(Module mod, Quaternion rot, Vector3 cellCenter)

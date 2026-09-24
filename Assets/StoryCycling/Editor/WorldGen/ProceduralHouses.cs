@@ -29,17 +29,89 @@ namespace StoryCycling.WorldGen.Editor
         }
 
         public static int Build(OsmContext osm, WorldTerrain terrain, Occupancy occupied, Transform parent,
-                                Materials mats, System.Func<Mesh, Mesh> save)
+                                Materials mats, System.Func<Mesh, Mesh> save, System.Func<OsmContext.Building, bool> accept = null)
+        {
+            var list = new List<OsmContext.Building>();
+            foreach (var b in osm.Buildings) if (accept == null || accept(b)) list.Add(b);
+            return BuildList(list, terrain, occupied, parent, mats, save, MaxDistance, "OSM");
+        }
+
+        // Hintergrund-Häuser: füllt Wohngebiete (OSM-Landnutzung) jenseits der ersten Reihe mit
+        // einfachen Häusern, wo OSM keine Grundrisse liefert -> die Orte wirken dicht bebaut.
+        public static int BuildFill(WorldTerrain terrain, Occupancy occupied, Transform parent, Materials mats,
+                                    System.Func<Mesh, Mesh> save, float minDist = 60f, float maxDist = 420f, int max = 3000)
+        {
+            const float grid = 17f;
+            var dem = terrain.Dem;
+            int w = Mathf.CeilToInt((dem.MaxX - dem.MinX) / grid), h = Mathf.CeilToInt((dem.MaxZ - dem.MinZ) / grid);
+            var dist2 = new float[w * h];
+            for (int k = 0; k < dist2.Length; k++) dist2[k] = float.MaxValue;
+            int rad = Mathf.CeilToInt(maxDist / grid);
+            var s = terrain.Road.Samples;
+            for (int si = 0; si < s.Count; si += 8)
+            {
+                Vector3 p = s[si].pos;
+                int ci = Mathf.FloorToInt((p.x - dem.MinX) / grid), cj = Mathf.FloorToInt((p.z - dem.MinZ) / grid);
+                for (int dj = -rad; dj <= rad; dj++)
+                {
+                    int j = cj + dj; if (j < 0 || j >= h) continue;
+                    float dz = dem.MinZ + (j + .5f) * grid - p.z;
+                    for (int di = -rad; di <= rad; di++)
+                    {
+                        int i = ci + di; if (i < 0 || i >= w) continue;
+                        float dx = dem.MinX + (i + .5f) * grid - p.x, d2 = dx * dx + dz * dz;
+                        if (d2 < dist2[j * w + i]) dist2[j * w + i] = d2;
+                    }
+                }
+            }
+            var list = new List<OsmContext.Building>();
+            var rng = new System.Random(515);
+            for (int j = 0; j < h && list.Count < max; j++)
+            for (int i = 0; i < w && list.Count < max; i++)
+            {
+                float d2 = dist2[j * w + i];
+                if (d2 < minDist * minDist || d2 > maxDist * maxDist) continue;
+                float x = dem.MinX + (i + .5f + (float)(rng.NextDouble() - .5) * .3f) * grid;
+                float z = dem.MinZ + (j + .5f + (float)(rng.NextDouble() - .5) * .3f) * grid;
+                if (rng.NextDouble() > .7) continue;                                         // Gärten/Lücken
+                if (terrain.BiomeAt(x, z) != WorldTerrain.Biome.Urban || terrain.SlopeDeg(x, z) > 24f) continue;
+                if (terrain.DemY(x, z) < terrain.SeaY + 1f || !occupied.IsFree(x, z, 7f)) continue;
+                if (VegetationPlacer.OnStreet(terrain, x, z, 3f)) continue;
+                // Ausrichtung am Hang: Längsseite entlang der Höhenlinie (typisch für Hanghäuser)
+                float gx = terrain.DemY(x + 5f, z) - terrain.DemY(x - 5f, z), gz = terrain.DemY(x, z + 5f) - terrain.DemY(x, z - 5f);
+                Vector2 along = new Vector2(-gz, gx);
+                if (along.sqrMagnitude < 1e-4f) along = new Vector2(1f, 0f);
+                along.Normalize();
+                Vector2 across = new Vector2(-along.y, along.x);
+                float lw = 9f + (float)rng.NextDouble() * 6f, ld = 7.5f + (float)rng.NextDouble() * 4f;
+                var c = new Vector2(x, z);
+                var ring = new List<Vector2>
+                {
+                    c - along * lw * .5f - across * ld * .5f, c + along * lw * .5f - across * ld * .5f,
+                    c + along * lw * .5f + across * ld * .5f, c - along * lw * .5f + across * ld * .5f
+                };
+                list.Add(new OsmContext.Building
+                {
+                    ring = ring, centroid = c, width = lw, depth = ld, area = lw * ld, heightM = 7f,
+                    axisDir = new Vector3(along.x, 0f, along.y), kind = "house", heightTagged = false
+                });
+                occupied.Add(x, z, 6f);
+            }
+            return BuildList(list, terrain, occupied, parent, mats, save, maxDist + 20f, "Hintergrund");
+        }
+
+        private static int BuildList(List<OsmContext.Building> source, WorldTerrain terrain, Occupancy occupied, Transform parent,
+                                     Materials mats, System.Func<Mesh, Mesh> save, float maxDistance, string label)
         {
             var buckets = new Dictionary<long, Parts>();
             int built = 0, skippedRoad = 0, skippedSteep = 0, skippedFar = 0;
-            foreach (var b in osm.Buildings)
+            foreach (var b in source)
             {
                 if (b.kind == "roof" || b.kind == "ruins" || b.kind == "construction") continue;
                 var ring = Clean(b.ring);
                 if (ring == null) continue;
                 Vector2 c = b.centroid;
-                if (terrain.Road.Distance(c.x, c.y, MaxDistance + 1f) > MaxDistance) { skippedFar++; continue; }
+                if (terrain.Road.Distance(c.x, c.y, maxDistance + 1f) > maxDistance) { skippedFar++; continue; }
                 if (terrain.DemY(c.x, c.y) < terrain.SeaY + .5f) continue;
                 if (!ClearOfRoads(ring, terrain)) { skippedRoad++; continue; }
 
@@ -71,7 +143,7 @@ namespace StoryCycling.WorldGen.Editor
             foreach (var kv in buckets)
             {
                 var p = kv.Value;
-                var mesh = new Mesh { indexFormat = IndexFormat.UInt32, subMeshCount = p.T.Length, name = $"Houses_{cells:D3}" };
+                var mesh = new Mesh { indexFormat = IndexFormat.UInt32, subMeshCount = p.T.Length, name = $"Houses_{label}_{cells:D3}" };
                 mesh.SetVertices(p.V); mesh.SetNormals(p.N); mesh.SetUVs(0, p.UV);
                 for (int i = 0; i < p.T.Length; i++) mesh.SetTriangles(p.T[i], i);
                 mesh.RecalculateBounds();
@@ -82,8 +154,8 @@ namespace StoryCycling.WorldGen.Editor
                 go.GetComponent<MeshRenderer>().sharedMaterials = materialArray;
                 cells++;
             }
-            Debug.Log($"Häuser (prozedural): {built} aus OSM-Grundrissen in {cells} Zellen " +
-                      $"(weggelassen: Fahrbahn {skippedRoad}, zu steil {skippedSteep}, > {MaxDistance} m {skippedFar}).");
+            Debug.Log($"Häuser (prozedural, {label}): {built} in {cells} Zellen " +
+                      $"(weggelassen: Fahrbahn {skippedRoad}, zu steil {skippedSteep}, zu weit {skippedFar}).");
             return built;
         }
 

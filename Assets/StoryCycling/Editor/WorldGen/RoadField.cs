@@ -35,7 +35,7 @@ namespace StoryCycling.WorldGen.Editor
             Vector3 t = spline.SampleTangent(d);
             Vector3 flat = new Vector3(t.x, 0f, t.z);
             flat = flat.sqrMagnitude < 1e-8f ? Vector3.forward : flat.normalized;
-            Insert(new Sample { pos = p, tangent = t, side = Vector3.Cross(Vector3.up, flat).normalized, distance = d, half = 4f });
+            Insert(new Sample { pos = p, tangent = t, side = Vector3.Cross(Vector3.up, flat).normalized, distance = d, half = RoadMeshBuilder.HalfWidth });
         }
 
         private void Insert(Sample s)

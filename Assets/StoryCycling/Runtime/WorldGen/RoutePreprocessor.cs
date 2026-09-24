@@ -7,8 +7,8 @@ namespace StoryCycling.WorldGen
     //   1) drops points closer than minSpacing (GPS jitter / Strava-densified points)
     //   2) resamples to uniform arc-length spacing (stable spline + even sampling)
     //   3) moving-average smooths elevation (Y) to remove barometric noise / bumpy grade
-    //   4) reconciles overlapping passes (out-and-back): the return uses the SAME height as the
-    //      outbound pass at the same spot — otherwise road and rider differ by up to 4 m there
+    //   4) reconciles overlapping passes (out-and-back): the return uses the SAME centreline and
+    //      height as the outbound pass — one road, lanes by direction of travel
     // XZ corners are preserved — centripetal RouteSpline handles them without overshoot.
     public static class RoutePreprocessor
     {
@@ -19,7 +19,7 @@ namespace StoryCycling.WorldGen
             var dedup = Dedup(pts, minSpacing);
             var resampled = ResampleByArcLength(dedup, resampleStep);
             SmoothElevation(resampled, elevationWindow);
-            ReconcileOverlaps(resampled);
+            if (ReconcileOverlaps(resampled) > 0) resampled = Dedup(resampled, 1f);   // Projektion kann Punkte zusammenschieben
             return resampled;
         }
 
@@ -69,24 +69,27 @@ namespace StoryCycling.WorldGen
 
         // Later passes over the same road take the height of the earlier pass; the correction
         // fades out over 'blend' metres before/after the shared section (no steps).
+        // Spätere Durchfahrten derselben Straße übernehmen Lage UND Höhe der ersten Durchfahrt
+        // (Projektion auf deren Polylinie). Hin- und Rückweg teilen sich so exakt EINE Mittellinie;
+        // die Fahrspur ergibt sich aus der Fahrtrichtung. Übergänge laufen über 'blend' Meter weich aus.
         public static int ReconcileOverlaps(List<Vector3> pts, float radius = 8.5f, float minArcGap = 100f, float blend = 60f, float maxDy = 3f)
         {
             int n = pts.Count;
             if (n < 3) return 0;
             var arc = new float[n];
             for (int i = 1; i < n; i++) arc[i] = arc[i - 1] + Vector2.Distance(new Vector2(pts[i - 1].x, pts[i - 1].z), new Vector2(pts[i].x, pts[i].z));
-            var y = new float[n];
-            var delta = new float[n];
+            var src = new List<Vector3>(pts);                    // Originale (Referenz der ersten Durchfahrt)
+            var outP = new List<Vector3>(pts);
+            var delta = new Vector3[n];
             var matched = new bool[n];
-            for (int i = 0; i < n; i++) y[i] = pts[i].y;
 
             float cell = radius * 2f;
             var grid = new Dictionary<long, List<int>>();
             int count = 0;
             for (int i = 0; i < n; i++)
             {
-                Vector3 p = pts[i];
-                Vector2 ti = Dir(pts, i);
+                Vector3 p = src[i];
+                Vector2 ti = Dir(src, i);
                 int cx = Mathf.FloorToInt(p.x / cell), cz = Mathf.FloorToInt(p.z / cell);
                 int best = -1; float bestD = radius * radius;
                 for (int dx = -1; dx <= 1; dx++)
@@ -96,37 +99,54 @@ namespace StoryCycling.WorldGen
                     foreach (int j in list)
                     {
                         if (arc[i] - arc[j] < minArcGap) continue;                         // derselbe Abschnitt
-                        if (Mathf.Abs(Vector2.Dot(ti, Dir(pts, j))) < .8f) continue;       // Kreuzung, nicht parallel
-                        float d2 = (pts[j].x - p.x) * (pts[j].x - p.x) + (pts[j].z - p.z) * (pts[j].z - p.z);
-                        // Direkt übereinander (< 4 m) = dieselbe Straße, Höhenfehler der Daten; weiter daneben
-                        // nur bei kleiner Differenz (sonst echte Etagen: Serpentine, Parallelstraße am Hang).
-                        float dy = Mathf.Abs(pts[j].y - p.y);
+                        if (Mathf.Abs(Vector2.Dot(ti, Dir(src, j))) < .8f) continue;       // Kreuzung, nicht parallel
+                        float d2 = (outP[j].x - p.x) * (outP[j].x - p.x) + (outP[j].z - p.z) * (outP[j].z - p.z);
+                        // Direkt übereinander (< 4 m) = dieselbe Straße; weiter daneben nur bei kleiner Höhendifferenz
+                        float dy = Mathf.Abs(outP[j].y - p.y);
                         if (dy > (d2 < 16f ? 8f : maxDy)) continue;
                         if (d2 < bestD) { bestD = d2; best = j; }
                     }
                 }
-                if (best >= 0) { delta[i] = y[best] - y[i]; y[i] = y[best]; matched[i] = true; count++; }
+                if (best >= 0)
+                {
+                    // auf die (bereits bereinigte) frühere Durchfahrt projizieren
+                    Vector3 q = ProjectOnto(outP, best, p);
+                    delta[i] = q - p; outP[i] = q; matched[i] = true; count++;
+                }
                 long key = Key(cx, cz);
                 if (!grid.TryGetValue(key, out List<int> l)) { l = new List<int>(); grid[key] = l; }
                 l.Add(i);
             }
             if (count == 0) return 0;
 
-            // Übergänge: Korrektur vor/nach gemeinsamen Abschnitten weich auslaufen lassen.
-            var outY = new float[n];
+            // Übergänge: Verschiebung vor/nach gemeinsamen Abschnitten weich auslaufen lassen.
             for (int i = 0; i < n; i++)
             {
-                outY[i] = y[i];
-                if (matched[i]) continue;
-                float w = 0f, d = 0f;
+                if (matched[i]) { pts[i] = outP[i]; continue; }
+                float w = 0f; Vector3 d = Vector3.zero;
                 for (int k = i - 1; k >= 0 && arc[i] - arc[k] < blend; k--)
                     if (matched[k]) { float t = 1f - (arc[i] - arc[k]) / blend; if (t > w) { w = t; d = delta[k]; } break; }
                 for (int k = i + 1; k < n && arc[k] - arc[i] < blend; k++)
                     if (matched[k]) { float t = 1f - (arc[k] - arc[i]) / blend; if (t > w) { w = t; d = delta[k]; } break; }
-                outY[i] = pts[i].y + d * (w * w * (3f - 2f * w));
+                pts[i] = src[i] + d * (w * w * (3f - 2f * w));
             }
-            for (int i = 0; i < n; i++) { var p = pts[i]; p.y = outY[i]; pts[i] = p; }
             return count;
+        }
+
+        // Nächster Punkt auf den Segmenten (j-1,j) und (j,j+1) der Polylinie.
+        private static Vector3 ProjectOnto(List<Vector3> line, int j, Vector3 p)
+        {
+            Vector3 best = line[j]; float bd = float.MaxValue;
+            for (int s = Mathf.Max(0, j - 1); s <= Mathf.Min(line.Count - 2, j); s++)
+            {
+                Vector3 a = line[s], b = line[s + 1];
+                Vector2 ab = new Vector2(b.x - a.x, b.z - a.z), ap = new Vector2(p.x - a.x, p.z - a.z);
+                float t = ab.sqrMagnitude > 1e-6f ? Mathf.Clamp01(Vector2.Dot(ap, ab) / ab.sqrMagnitude) : 0f;
+                Vector3 q = Vector3.Lerp(a, b, t);
+                float d = (q.x - p.x) * (q.x - p.x) + (q.z - p.z) * (q.z - p.z);
+                if (d < bd) { bd = d; best = q; }
+            }
+            return best;
         }
 
         private static Vector2 Dir(List<Vector3> pts, int i)

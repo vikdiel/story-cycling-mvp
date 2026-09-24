@@ -23,8 +23,8 @@ namespace StoryCycling.WorldGen.Editor
         public struct Island { public Vector3 Center; public float Radius; }
 
         public const float MaxDistance = 100f;       // + Einschnitt-Radius < 150 m (5-m-Geländekacheln)
-        private const float JoinDistance = 3.0f;     // Querstraße beginnt 1 m innerhalb der Hauptfahrbahn
-        private const float ParallelClear = 12f;     // parallel laufende Stücke dichter an der Route verwerfen
+        private const float JoinDistance = RoadMeshBuilder.HalfWidth - 1f;   // Querstraße beginnt 1 m innerhalb der Hauptfahrbahn
+        private const float ParallelClear = 14f;     // parallel laufende Stücke dichter an der Route verwerfen
         private const float JunctionKeep = 16f;      // … außer direkt an der Einmündung
         private const float FlareLength = 7f, FlareWidth = 2.5f;
         private const float MinLength = 12f;

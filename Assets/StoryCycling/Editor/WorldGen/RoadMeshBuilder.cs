@@ -19,8 +19,11 @@ namespace StoryCycling.WorldGen.Editor
     //   - Leitplanken automatisch an der Talseite, wo das Gelände stark abfällt
     public sealed class RoadMeshBuilder
     {
-        public const float HalfWidth = 4f;
-        private const float ShoulderOuter = 5.6f;
+        // Kap-Landstraße: 2 × 3,5 m Fahrstreifen + 2 m asphaltierter Seitenstreifen je Seite (gelbe Linie
+        // an der Fahrstreifenkante), dahinter rotbrauner Schotter-Randstreifen.
+        public const float HalfWidth = 5.5f;
+        public const float ShoulderWidth = 2f;
+        private const float ShoulderOuter = HalfWidth + 1.6f;
         private const float PieceSamples = 250;          // 500 m pro Mesh-Abschnitt
         private readonly RoadField road;
         private readonly WorldTerrain terrain;
@@ -47,7 +50,7 @@ namespace StoryCycling.WorldGen.Editor
                 int last = Mathf.Min(s.Count - 1, end + 1);
 
                 var parts = new RoadProfile.Parts();
-                RoadProfile.Emit(parts, s, start, last, k => leftEdge[k], k => rightEdge[k], true, k => true);
+                RoadProfile.Emit(parts, s, start, last, k => leftEdge[k], k => rightEdge[k], true, k => true, ShoulderWidth);
                 Mesh mesh = parts.ToMesh();
                 mesh.name = $"Road_{pieces:D3}";
                 mesh = save(mesh);
@@ -299,7 +302,7 @@ namespace StoryCycling.WorldGen.Editor
 
         public static void Emit(Parts p, List<RoadField.Sample> s, int from, int to,
                                 System.Func<int, Edge> left, System.Func<int, Edge> right, bool edgeLines,
-                                System.Func<int, bool> centerLine)
+                                System.Func<int, bool> centerLine, float edgeInset = 0f)
         {
             if (to <= from) return;
             int baseIndex = p.V.Count;
@@ -334,8 +337,9 @@ namespace StoryCycling.WorldGen.Editor
             }
             if (edgeLines)
             {
-                Stripe(p, s, from, to, true, .2f, .35f, 2, 0f, 0f, i => left(i) == Edge.Rural);
-                Stripe(p, s, from, to, false, .2f, .35f, 2, 0f, 0f, i => right(i) == Edge.Rural);
+                // gelbe Linie an der Fahrstreifenkante (edgeInset = Breite des Seitenstreifens)
+                Stripe(p, s, from, to, true, edgeInset + .05f, edgeInset + .2f, 2, 0f, 0f, i => left(i) == Edge.Rural);
+                Stripe(p, s, from, to, false, edgeInset + .05f, edgeInset + .2f, 2, 0f, 0f, i => right(i) == Edge.Rural);
             }
             Stripe(p, s, from, to, null, -.07f, .07f, 3, 3f, 9f, centerLine);
         }
