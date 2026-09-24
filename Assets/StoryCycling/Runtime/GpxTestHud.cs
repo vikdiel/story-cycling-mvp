@@ -5,7 +5,7 @@ using UnityEngine.UI;
 
 namespace StoryCycling
 {
-    // Minimal HUD for the GPX test ride: speed + distance readout and a speed slider (0–100 km/h).
+    // Minimal HUD for the GPX test ride: speed + distance readout and a speed slider (0–200 km/h).
     public sealed class GpxTestHud : MonoBehaviour
     {
         [SerializeField] private GpxRideController ride;
@@ -28,7 +28,7 @@ namespace StoryCycling
             distText = Label(panel.transform, "0.00 km", 20, new Vector2(18, -94), new Vector2(300, 30), new Color(.72f, .82f, .82f));
 
             var slider = CreateSlider(panel.transform, new Vector2(230, -95), new Vector2(210, 30));
-            slider.minValue = 0; slider.maxValue = 100; slider.value = 30;
+            slider.minValue = 0; slider.maxValue = 200; slider.value = 30;
             slider.onValueChanged.AddListener(v => ride.SetSpeed(v));
         }
 
