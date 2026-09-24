@@ -19,10 +19,13 @@ namespace StoryCycling.WorldGen.Editor
         private const int StreetRadius = 160;   // Querstraßen/Kreuzungen/Kreisverkehre rund um die Route
 
         [MenuItem("Story Cycling/WorldGen/Fetch OSM for Nordhoek")]
-        public static void Fetch()
+        public static void Fetch() => Fetch(GpxPath, OutPath);
+
+        // Für beliebige Strecken (RouteWorldConfig): GPX rein, Datei raus.
+        public static void Fetch(string gpxPath, string outPath)
         {
-            if (!File.Exists(GpxPath)) throw new System.Exception("GPX missing: " + GpxPath);
-            var pts = GpxParser.Parse(File.ReadAllText(GpxPath));
+            if (!File.Exists(gpxPath)) throw new System.Exception("GPX missing: " + gpxPath);
+            var pts = GpxParser.Parse(File.ReadAllText(gpxPath));
             if (pts.Count < 2) throw new System.Exception("GPX has <2 points.");
 
             string c = BuildCoordList(pts, MaxCoords);
@@ -40,7 +43,7 @@ namespace StoryCycling.WorldGen.Editor
                 $"  node[\"natural\"~\"tree|stone|rock\"](around:120,{c});\n" +
                 ");\nout geom;";
 
-            Directory.CreateDirectory(Path.GetDirectoryName(OutPath));
+            Directory.CreateDirectory(Path.GetDirectoryName(outPath));
             EditorUtility.DisplayProgressBar("OSM", "Overpass-Anfrage läuft…", 0.3f);
             try
             {
@@ -49,13 +52,13 @@ namespace StoryCycling.WorldGen.Editor
                 var op = req.SendWebRequest();
                 while (!op.isDone) System.Threading.Thread.Sleep(50);
                 if (req.result != UnityWebRequest.Result.Success) throw new System.Exception("Overpass failed: " + req.error);
-                File.WriteAllText(OutPath, req.downloadHandler.text, new UTF8Encoding(false));
+                File.WriteAllText(outPath, req.downloadHandler.text, new UTF8Encoding(false));
             }
             finally { EditorUtility.ClearProgressBar(); }
 
             AssetDatabase.Refresh();
-            string xml = File.ReadAllText(OutPath);
-            Debug.Log($"OSM gespeichert: {OutPath} ({xml.Length / 1024} kB, " +
+            string xml = File.ReadAllText(outPath);
+            Debug.Log($"OSM gespeichert: {outPath} ({xml.Length / 1024} kB, " +
                       $"ways ~{Count(xml, "<way ")}, nodes ~{Count(xml, "<node ")}). Jetzt 'Build Nordhoek GPX Ride'.");
         }
 

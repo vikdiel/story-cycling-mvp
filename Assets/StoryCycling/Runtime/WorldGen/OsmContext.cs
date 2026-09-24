@@ -23,7 +23,12 @@ namespace StoryCycling.WorldGen
         public class Point { public Vector2 pos; public string kind; }           // kind = normalised feature
         public class Line { public List<Vector2> pts; public string kind; }      // fence | hedge | wall
         // Befahrbare OSM-Straße (für Querstraßen, Kreuzungen, Kreisverkehre).
-        public class Street { public List<Vector2> pts; public string highway; public bool bridge, tunnel, roundabout, oneway; }
+        public class Street
+        {
+            public List<Vector2> pts; public List<long> nodes;   // nodes: OSM-Knoten-IDs parallel zu pts (Graph)
+            public string highway, name, refTag; public int lanes; public float width;
+            public bool bridge, tunnel, roundabout, oneway;
+        }
 
         public readonly List<Building> Buildings = new List<Building>();
         public readonly List<Area> Areas = new List<Area>();
@@ -48,17 +53,27 @@ namespace StoryCycling.WorldGen
             foreach (XmlNode way in doc.SelectNodes("//*[local-name()='way']"))
             {
                 var ring = new List<Vector2>();
+                var ids = new List<long>();
                 foreach (XmlNode nd in way.SelectNodes("*[local-name()='nd']"))
+                {
                     ring.Add(Project(Attr(nd, "lat"), Attr(nd, "lon")));
+                    var refAttr = nd.Attributes?["ref"];
+                    ids.Add(refAttr != null && long.TryParse(refAttr.Value, out long id) ? id : 0L);
+                }
                 if (ring.Count < 2) continue;
 
                 var tags = ReadTags(way);
                 if (tags.TryGetValue("highway", out string hw) && IsDrivable(hw) && !(tags.TryGetValue("area", out string ar) && ar == "yes"))
                 {
                     tags.TryGetValue("junction", out string jn);
+                    tags.TryGetValue("name", out string nm);
+                    tags.TryGetValue("ref", out string rf);
+                    int.TryParse(tags.TryGetValue("lanes", out string ln) ? ln : "", out int lanes);
+                    float.TryParse(tags.TryGetValue("width", out string wd) ? wd.Replace("m", "").Trim() : "",
+                                   System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float width);
                     ctx.Streets.Add(new Street
                     {
-                        pts = ring, highway = hw,
+                        pts = ring, nodes = ids, highway = hw, name = nm ?? "", refTag = rf ?? "", lanes = lanes, width = width,
                         bridge = tags.ContainsKey("bridge") && tags["bridge"] != "no",
                         tunnel = tags.ContainsKey("tunnel") && tags["tunnel"] != "no",
                         roundabout = jn == "roundabout" || jn == "circular",

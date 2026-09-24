@@ -50,7 +50,7 @@ namespace StoryCycling.WorldGen.Editor
                 int last = Mathf.Min(s.Count - 1, end + 1);
 
                 var parts = new RoadProfile.Parts();
-                RoadProfile.Emit(parts, s, start, last, k => leftEdge[k], k => rightEdge[k], true, k => true, ShoulderWidth);
+                RoadProfile.Emit(parts, s, start, last, k => leftEdge[k], k => rightEdge[k], true, k => true, -1f);   // Seitenstreifen je Probe
                 Mesh mesh = parts.ToMesh();
                 mesh.name = $"Road_{pieces:D3}";
                 mesh = save(mesh);
@@ -198,8 +198,8 @@ namespace StoryCycling.WorldGen.Editor
                 if (need[k] == 0 || need[k + 1] != need[k]) continue;
                 float sideSign = need[k];
                 var a = s[from + k]; var b = s[from + k + 1];
-                Vector3 pa = a.pos + a.side * (sideSign * (ShoulderOuter - .3f));
-                Vector3 pb = b.pos + b.side * (sideSign * (ShoulderOuter - .3f));
+                Vector3 pa = a.pos + a.side * (sideSign * (a.half + 1.3f));
+                Vector3 pb = b.pos + b.side * (sideSign * (b.half + 1.3f));
                 // Planke (beidseitig), 0.55–0.85 m über Fahrbahn
                 DoubleQuad(v, tris, pa + Vector3.up * .55f, pb + Vector3.up * .55f, pa + Vector3.up * .85f, pb + Vector3.up * .85f);
                 // Pfosten alle 4 m
@@ -338,28 +338,32 @@ namespace StoryCycling.WorldGen.Editor
             if (edgeLines)
             {
                 // gelbe Linie an der Fahrstreifenkante (edgeInset = Breite des Seitenstreifens)
-                Stripe(p, s, from, to, true, edgeInset + .05f, edgeInset + .2f, 2, 0f, 0f, i => left(i) == Edge.Rural);
-                Stripe(p, s, from, to, false, edgeInset + .05f, edgeInset + .2f, 2, 0f, 0f, i => right(i) == Edge.Rural);
+                bool per = edgeInset < 0f;
+                float e0 = per ? 0f : edgeInset;
+                Stripe(p, s, from, to, true, e0 + .05f, e0 + .2f, 2, 0f, 0f, i => left(i) == Edge.Rural, per);
+                Stripe(p, s, from, to, false, e0 + .05f, e0 + .2f, 2, 0f, 0f, i => right(i) == Edge.Rural, per);
             }
             Stripe(p, s, from, to, null, -.07f, .07f, 3, 3f, 9f, centerLine);
         }
 
         // Streifen: side true = linker Rand, false = rechter Rand, null = Mitte.
         private static void Stripe(Parts p, List<RoadField.Sample> s, int from, int to, bool? side, float inner, float outer,
-                                   int sub, float dashOn, float dashPeriod, System.Func<int, bool> allowed)
+                                   int sub, float dashOn, float dashPeriod, System.Func<int, bool> allowed, bool perSampleInset = false)
         {
             for (int i = from; i < to; i++)
             {
                 if (!allowed(i) || !allowed(i + 1)) continue;
+                if (perSampleInset && (s[i].inset < 0f || s[i + 1].inset < 0f)) continue;      // Randlinie für diesen Abschnitt aus
                 if (dashOn > 0f && Mathf.Repeat(s[i].distance, dashPeriod) >= dashOn) continue;
                 int b = p.V.Count;
                 for (int k = 0; k < 2; k++)
                 {
                     var q = s[i + k];
                     float l, r;
+                    float ins = perSampleInset ? q.inset : 0f;
                     if (side == null) { l = inner; r = outer; }
-                    else if (side.Value) { l = -q.half + inner; r = -q.half + outer; }
-                    else { l = q.half - outer; r = q.half - inner; }
+                    else if (side.Value) { l = -q.half + ins + inner; r = -q.half + ins + outer; }
+                    else { l = q.half - ins - outer; r = q.half - ins - inner; }
                     Vector3 n = Normal(q);
                     p.V.Add(q.pos + q.side * l + Vector3.up * .035f); p.N.Add(n); p.UV.Add(Vector2.zero);
                     p.V.Add(q.pos + q.side * r + Vector3.up * .035f); p.N.Add(n); p.UV.Add(Vector2.zero);

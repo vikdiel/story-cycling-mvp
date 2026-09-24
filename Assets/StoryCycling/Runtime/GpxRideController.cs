@@ -6,6 +6,7 @@ namespace StoryCycling
     // adjustable field (HUD slider), no trainer/telemetry wiring. Loops the open track.
     public sealed class GpxRideController : MonoBehaviour
     {
+        [SerializeField] private string gpxRelPath = "Routes/Nordhoek.gpx";   // relativ zu StreamingAssets (vom Builder gesetzt)
         [SerializeField] private Transform rider;
         [SerializeField] private Transform rideCamera;
         [SerializeField] private Transform[] wheels;
@@ -33,7 +34,7 @@ namespace StoryCycling
 
         private void Start()
         {
-            GpxRide.Load("Routes/Nordhoek.gpx");
+            GpxRide.Load(gpxRelPath);
             if (rideCamera != null) rideCameraComponent = rideCamera.GetComponent<Camera>();
             if (cyclistAnimation != null) CapeCrownCyclistAnimation.ForwardOverride = GpxRideForward;
             PlaceRider();
@@ -63,7 +64,7 @@ namespace StoryCycling
         {
             if (rider == null) return;
             GpxRide.Sample(routeDistance, out _, out Vector3 forward);
-            rider.SetPositionAndRotation(GpxRide.Position(routeDistance, GpxRide.LaneOffset, .045f), Quaternion.LookRotation(forward, Vector3.up));
+            rider.SetPositionAndRotation(GpxRide.Position(routeDistance, GpxRide.LaneOffsetAt(routeDistance), .045f), Quaternion.LookRotation(forward, Vector3.up));
         }
 
         private void LateUpdate() => UpdateCamera(false);
@@ -79,7 +80,7 @@ namespace StoryCycling
             float lookAhead = Mathf.Lerp(cruiseLookAhead, maxSpeedLookAhead, speedT);
             Vector3 position = rider.position - rider.forward * cameraDistance + Vector3.up * cameraHeight;
             float lookD = Mathf.Min(routeDistance + lookAhead, GpxRide.Length);
-            Vector3 look = GpxRide.Position(lookD, GpxRide.LaneOffset, 1.15f);
+            Vector3 look = GpxRide.Position(lookD, GpxRide.LaneOffsetAt(lookD), 1.15f);
             float blend = snap ? 1f : 1f - Mathf.Exp(-8f * Time.deltaTime);
             rideCamera.position = Vector3.Lerp(rideCamera.position, position, blend);
             rideCamera.rotation = Quaternion.Slerp(rideCamera.rotation, Quaternion.LookRotation(look - rideCamera.position, Vector3.up), blend);

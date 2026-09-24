@@ -22,10 +22,13 @@ namespace StoryCycling.WorldGen.Editor
         private const double R = 6371000.0;   // muss zu GpxParser.ProjectToLocalMeters passen
 
         [MenuItem("Story Cycling/WorldGen/Fetch DEM for Nordhoek")]
-        public static void Fetch()
+        public static void Fetch() => Fetch(GpxPath, DemPath);
+
+        // Für beliebige Strecken (RouteWorldConfig): GPX rein, Datei raus.
+        public static void Fetch(string gpxPath, string outPath)
         {
-            if (!File.Exists(GpxPath)) throw new InvalidOperationException("GPX missing: " + GpxPath);
-            var pts = GpxParser.Parse(File.ReadAllText(GpxPath));
+            if (!File.Exists(gpxPath)) throw new InvalidOperationException("GPX missing: " + gpxPath);
+            var pts = GpxParser.Parse(File.ReadAllText(gpxPath));
             if (pts.Count < 2) throw new InvalidOperationException("GPX hat < 2 Punkte.");
             var local = GpxParser.ProjectToLocalMeters(pts);
 
@@ -78,9 +81,9 @@ namespace StoryCycling.WorldGen.Editor
             }
             finally { EditorUtility.ClearProgressBar(); }
 
-            grid.Save(DemPath);
-            AssetDatabase.ImportAsset(DemPath);
-            Debug.Log($"DEM gespeichert: {DemPath} ({grid.Width}×{grid.Height} @ {Cell} m, {total} Kacheln). " +
+            grid.Save(outPath);
+            AssetDatabase.ImportAsset(outPath);
+            Debug.Log($"DEM gespeichert: {outPath} ({grid.Width}×{grid.Height} @ {Cell} m, {total} Kacheln). " +
                       "Jetzt 'Build Nordhoek GPX Ride'.");
         }
 

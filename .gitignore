@@ -29,3 +29,7 @@ xcuserdata/
 # Nordhoek generated build output
 /Assets/StoryCycling/Scenes/NordhoekGpxTest.unity
 /Assets/StoryCycling/GeneratedGpx/NordhoekWorldMeshes.asset
+
+# Generierte Welt-Meshes (groß, werden lokal gebaut)
+/Assets/StoryCycling/Generated/*/WorldMeshes.asset
+/Assets/StoryCycling/Generated/*/WorldMeshes.asset.meta

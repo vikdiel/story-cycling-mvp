@@ -9,7 +9,7 @@ namespace StoryCycling.WorldGen.Editor
     public sealed class RoadField
     {
         // half = halbe Fahrbahnbreite (Hauptroute: RoadMeshBuilder.HalfWidth; Nebenstraßen je nach OSM-Klasse)
-        public struct Sample { public Vector3 pos; public Vector3 tangent; public Vector3 side; public float distance; public float half; }
+        public struct Sample { public Vector3 pos; public Vector3 tangent; public Vector3 side; public float distance; public float half; public float inset; }
 
         public const float Step = 2f;
         private const float CellSize = 10f;
@@ -23,11 +23,17 @@ namespace StoryCycling.WorldGen.Editor
             foreach (var s in samples) Insert(s);
         }
 
-        public RoadField(RouteSpline spline)
+        public RoadField(RouteSpline spline) : this(spline, null) { }
+
+        // style(d) = (halbe Fahrbahnbreite, Seitenstreifenbreite) je Streckenposition (aus OSM-Map-Matching)
+        public RoadField(RouteSpline spline, System.Func<float, Vector2> style)
         {
+            this.style = style;
             for (float d = 0f; d <= spline.Length; d += Step) Add(spline, d);
             if (Samples.Count == 0 || Samples[Samples.Count - 1].distance < spline.Length - 0.01f) Add(spline, spline.Length);
         }
+
+        private readonly System.Func<float, Vector2> style;
 
         private void Add(RouteSpline spline, float d)
         {
@@ -35,7 +41,8 @@ namespace StoryCycling.WorldGen.Editor
             Vector3 t = spline.SampleTangent(d);
             Vector3 flat = new Vector3(t.x, 0f, t.z);
             flat = flat.sqrMagnitude < 1e-8f ? Vector3.forward : flat.normalized;
-            Insert(new Sample { pos = p, tangent = t, side = Vector3.Cross(Vector3.up, flat).normalized, distance = d, half = RoadMeshBuilder.HalfWidth });
+            Vector2 st = style != null ? style(d) : new Vector2(RoadMeshBuilder.HalfWidth, RoadMeshBuilder.ShoulderWidth);
+            Insert(new Sample { pos = p, tangent = t, side = Vector3.Cross(Vector3.up, flat).normalized, distance = d, half = st.x, inset = st.y });
         }
 
         private void Insert(Sample s)

@@ -16,11 +16,9 @@ namespace StoryCycling.WorldGen.Editor
     // Voraussetzung: einmal 'Fetch DEM for Nordhoek' (und optional 'Fetch OSM for Nordhoek').
     public static class GpxSceneBuilder
     {
-        private const string GpxPath = DemFetcher.GpxPath;
-        private const string OsmPath = "Assets/StreamingAssets/Osm/Nordhoek.osm.xml";
-        private const string ScenePath = "Assets/StoryCycling/Scenes/NordhoekGpxTest.unity";
-        private const string OutDir = "Assets/StoryCycling/GeneratedGpx";
-        private const string MeshStorePath = OutDir + "/NordhoekWorldMeshes.asset";
+        private static string OutDir = "Assets/StoryCycling/GeneratedGpx";
+        private static string MeshStorePath => OutDir + "/WorldMeshes.asset";
+        private static RouteWorldConfig Cfg;
         private static int assetId;
         private static Mesh meshStore;
 
@@ -30,45 +28,85 @@ namespace StoryCycling.WorldGen.Editor
         private static readonly Color Horizon = new Color(.87f, .86f, .80f);
 
         [MenuItem("Story Cycling/WorldGen/Build Nordhoek GPX Ride")]
-        public static void BuildNordhoek()
+        public static void BuildNordhoek() => Build(RouteWorldConfig.LoadOrCreateDefault());
+
+        // Baut die Welt für eine beliebige Strecke (RouteWorldConfig).
+        public static void Build(RouteWorldConfig cfg)
         {
+            Cfg = cfg;
+            string GpxPath = cfg.gpxPath, OsmPath = cfg.osmPath, ScenePath = cfg.scenePath;
+            OutDir = "Assets/StoryCycling/Generated/" + cfg.routeName;
             if (EditorApplication.isPlaying) throw new InvalidOperationException("Stop Play Mode first.");
             if (!Application.isBatchMode && !EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
             if (!File.Exists(GpxPath)) throw new InvalidOperationException("GPX missing: " + GpxPath);
-            if (!File.Exists(DemFetcher.DemPath))
-                throw new InvalidOperationException("Geländedaten fehlen: erst 'Story Cycling/WorldGen/Fetch DEM for Nordhoek' ausführen.");
+            if (!File.Exists(cfg.demPath))
+                throw new InvalidOperationException("Geländedaten fehlen: erst 'Fetch DEM' für diese Strecke ausführen.");
 
             Directory.CreateDirectory(OutDir);
-            Directory.CreateDirectory("Assets/StoryCycling/Scenes");
+            Directory.CreateDirectory(Path.GetDirectoryName(ScenePath));
             AssetDatabase.Refresh();
             assetId = 0;
             meshStore = null;
             AssetDatabase.DeleteAsset(MeshStorePath);
-            // Alt-Meshes der früheren Ribbon-Version (gpx-XXX.asset) aufräumen; Materialien (.mat) bleiben.
-            foreach (string old in Directory.GetFiles(OutDir, "gpx-*.asset"))
-                AssetDatabase.DeleteAsset(old.Replace('\\', '/'));
+            AssetDatabase.DeleteAsset("Assets/StoryCycling/GeneratedGpx/NordhoekWorldMeshes.asset");   // Altlast (mehrere GB Text)
 
             try
             {
                 Progress("GPX + Gelände laden", .02f);
                 var pts = GpxParser.Parse(File.ReadAllText(GpxPath));
-                var local = RoutePreprocessor.Clean(GpxParser.ProjectToLocalMeters(pts));
-                var spline = new RouteSpline();
-                spline.Define(local);
-
-                var dem = DemGrid.Load(DemFetcher.DemPath);
+                var dem = DemGrid.Load(cfg.demPath);
                 if (!dem.MatchesOrigin(pts[0]))
-                    Debug.LogWarning("DEM wurde für einen anderen GPX-Start erzeugt — bitte 'Fetch DEM for Nordhoek' neu ausführen.");
+                    Debug.LogWarning("DEM wurde für einen anderen GPX-Start erzeugt — bitte 'Fetch DEM' neu ausführen.");
                 OsmContext osm = File.Exists(OsmPath) ? OsmContext.Load(File.ReadAllText(OsmPath), pts[0]) : null;
-                if (osm == null) Debug.LogWarning("OSM fehlt — erst 'Fetch OSM for Nordhoek'. Gebäude/Details/Biome werden übersprungen.");
+                if (osm == null) Debug.LogWarning("OSM fehlt — erst 'Fetch OSM'. Gebäude/Details/Biome werden übersprungen.");
+
+                // Fahrlinie: auf das OSM-Straßennetz gelegt (eine Straße für Hin/Rück, saubere Einmündungen)
+                Progress("Route auf OSM-Straßennetz legen", .04f);
+                float ele0 = (float)pts[0].Ele, seaY = -ele0 + WorldTerrain.SeaLevelOffset;
+                RouteMatcher.Result matched = null;
+                if (cfg.useOsmRoadNetwork && osm != null && osm.Streets.Count > 0)
+                {
+                    double lat0 = pts[0].Lat * Math.PI / 180.0, lon0 = pts[0].Lon * Math.PI / 180.0, Re = 6371000.0;
+                    Func<float, float, bool> inZone = (x, z) =>
+                    {
+                        if (cfg.wideShoulderZones == null || cfg.wideShoulderZones.Length == 0) return true;
+                        double lat = (lat0 + z / Re) * 180.0 / Math.PI, lon = (lon0 + x / (Re * Math.Cos(lat0))) * 180.0 / Math.PI;
+                        foreach (var zb in cfg.wideShoulderZones)
+                            if (lat >= zb.minLat && lat <= zb.maxLat && lon >= zb.minLon && lon <= zb.maxLon) return true;
+                        return false;
+                    };
+                    matched = RouteMatcher.Match(GpxParser.ProjectToLocalMeters(pts), osm, (x, z) => dem.Sample(x, z) - ele0, seaY,
+                                                 new System.Text.RegularExpressions.Regex(cfg.wideShoulderRoads), inZone);
+                    Debug.Log($"Map-Matching: {matched.MatchedShare:P0} der GPX-Spur auf OSM-Straßen, {matched.WaysUsed} Wege, {matched.Points.Count} Punkte.");
+                    if (matched.MatchedShare < .85f || matched.Points.Count < 10)
+                    { Debug.LogWarning("Map-Matching unvollständig — nutze die GPX-Linie."); matched = null; }
+                }
+                var spline = new RouteSpline();
+                RoadField road;
+                if (matched != null)
+                {
+                    if (!cfg.edgeLinesOnNormalRoads)
+                        for (int i = 0; i < matched.Inset.Count; i++) if (matched.Inset[i] < 1f) matched.Inset[i] = -1f;   // -1 = keine Randlinie
+                    File.WriteAllText(cfg.BakedRoutePath, BakedRoute.Write(matched.Points, matched.Lane, matched.Half, matched.Inset));
+                    spline.Define(matched.Points);
+                    var cum = new float[matched.Points.Count];
+                    for (int i = 1; i < cum.Length; i++) cum[i] = cum[i - 1] + Vector3.Distance(matched.Points[i - 1], matched.Points[i]);
+                    road = new RoadField(spline, d => StyleAt(matched, cum, d / spline.Length * cum[cum.Length - 1]));
+                }
+                else
+                {
+                    if (File.Exists(cfg.BakedRoutePath)) File.Delete(cfg.BakedRoutePath);     // keine veraltete Route zur Laufzeit
+                    spline.Define(RoutePreprocessor.Clean(GpxParser.ProjectToLocalMeters(pts)));
+                    road = new RoadField(spline);
+                }
+                AssetDatabase.Refresh();
 
                 var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
                 Transform world = new GameObject("World").transform;
                 Func<string, Transform> Group = n => { var t = new GameObject(n).transform; t.SetParent(world, false); return t; };
 
                 Progress("Straßen-Index", .06f);
-                var road = new RoadField(spline);
-                var terrain = new WorldTerrain(dem, road, (float)pts[0].Ele, osm);
+                var terrain = new WorldTerrain(dem, road, ele0, osm);
                 RouteHeightField.Terrain = terrain.HeightAt;
 
                 // Querstraßen/Kreuzungen/Kreisverkehre VOR dem Gelände: sie schneiden sich mit ein.
@@ -122,6 +160,8 @@ namespace StoryCycling.WorldGen.Editor
                     Progress("Vegetation & Küste", .74f);
                     VegetationPlacer.Place(terrain, assets, occupied, Group("Vegetation"));
                     VegetationPlacer.PlaceIslands(streets, road, assets, streetGroup);
+                    Progress("Hangvegetation", .82f);
+                    SlopeVegetation.Place(terrain, assets, occupied, Group("SlopeVegetation"), Cfg.slopeVegetationDistance);
                     VegetationPlacer.PlaceBirds(terrain, assets, Group("Birds"));
                     VegetationPlacer.PlaceClouds(terrain, assets, Group("Clouds"));
                 }
@@ -144,6 +184,8 @@ namespace StoryCycling.WorldGen.Editor
 
                 var director = new GameObject("Gpx Ride Director").AddComponent<GpxRideController>();
                 SerializedObject data = new SerializedObject(director);
+                var gpxProp = data.FindProperty("gpxRelPath");
+                if (gpxProp != null) gpxProp.stringValue = GpxPath.Replace("Assets/StreamingAssets/", "");
                 data.FindProperty("rider").objectReferenceValue = rider;
                 data.FindProperty("rideCamera").objectReferenceValue = cam.transform;
                 data.FindProperty("cyclistAnimation").objectReferenceValue = animation;
@@ -167,6 +209,14 @@ namespace StoryCycling.WorldGen.Editor
                 RouteHeightField.Terrain = null;
                 EditorUtility.ClearProgressBar();
             }
+        }
+
+        private static Vector2 StyleAt(RouteMatcher.Result r, float[] cum, float x)
+        {
+            int lo = 0, hi = cum.Length - 1;
+            while (hi - lo > 1) { int mid = (lo + hi) / 2; if (cum[mid] <= x) lo = mid; else hi = mid; }
+            float t = cum[hi] > cum[lo] ? Mathf.Clamp01((x - cum[lo]) / (cum[hi] - cum[lo])) : 0f;
+            return new Vector2(Mathf.Lerp(r.Half[lo], r.Half[hi], t), Mathf.Lerp(r.Inset[lo], r.Inset[hi], t));
         }
 
         private static void Progress(string what, float t)
@@ -262,7 +312,7 @@ namespace StoryCycling.WorldGen.Editor
             bloom.intensity.Override(.3f); bloom.threshold.Override(.95f);
             var vignette = profile.Add<Vignette>(true);
             vignette.intensity.Override(.22f); vignette.smoothness.Override(.4f);
-            const string profilePath = OutDir + "/GpxGrade.asset";
+            string profilePath = OutDir + "/GpxGrade.asset";
             AssetDatabase.DeleteAsset(profilePath);
             AssetDatabase.CreateAsset(profile, profilePath);
             AssetDatabase.AddObjectToAsset(grade, profile);
@@ -280,7 +330,7 @@ namespace StoryCycling.WorldGen.Editor
 
         // Erste Reihe an der Route (≤ 55 m): gemischt Synty-Baukasten (~70 %) und verputzte Villen.
         // Dahinter: einfache prozedurale Häuser aus OSM-Grundrissen, dann Hintergrund-Füllung der Wohngebiete.
-        private const float FrontRow = 55f;
+        private static float FrontRow => Cfg != null ? Cfg.frontRowDistance : 55f;
 
         private static void PlaceBuildings(OsmContext osm, WorldTerrain terrain, AssetCatalog catalog, RoadField road,
                                            Occupancy occupied, Transform parent)
@@ -288,20 +338,26 @@ namespace StoryCycling.WorldGen.Editor
             if (Buildings == BuildingMode.Offices) { OsmBuildingPlacer.Place(road, terrain, osm, catalog, occupied, parent); return; }
             var mats = HouseMaterials();
             var built = new HashSet<OsmContext.Building>();
+            // Große/hohe Gebäude (Wohntürme, Geschäftshäuser) teils als Synty-Glas-/Bürobauten: die Mischung macht's
+            System.Func<OsmContext.Building, bool> tower = b =>
+                (b.heightTagged && b.heightM >= 12f || Mathf.Abs(b.area) >= 450f &&
+                 (b.kind == "apartments" || b.kind == "commercial" || b.kind == "office" || b.kind == "retail" || b.kind == "hotel")) &&
+                HashPercent(b.centroid + Vector2.one * 3.7f) < Cfg.glassTowerShare;
+            OsmBuildingPlacer.Place(road, terrain, osm, catalog, occupied, parent, tower, built);
             if (Buildings == BuildingMode.Synty)
             {
                 var kit = SyntyModularBuildings.LoadKit(catalog);
                 if (kit.Complete)
                 {
-                    System.Func<OsmContext.Building, bool> frontRow = b =>
-                        road.Distance(b.centroid.x, b.centroid.y, FrontRow + 1f) <= FrontRow && HashPercent(b.centroid) < 70;
+                    System.Func<OsmContext.Building, bool> frontRow = b => !built.Contains(b) &&
+                        road.Distance(b.centroid.x, b.centroid.y, FrontRow + 1f) <= FrontRow && HashPercent(b.centroid) < Cfg.syntyModularShare;
                     SyntyModularBuildings.Build(osm, terrain, occupied, kit, mats.Plinth,
                                                 Mat("HouseFar", new Color(.80f, .70f, .60f), .05f), parent, SaveMesh, frontRow, built);
                 }
                 else Debug.LogWarning("PolygonCity-Baukasten unvollständig im Katalog — nur prozedurale Häuser.");
             }
             ProceduralHouses.Build(osm, terrain, occupied, parent, mats, SaveMesh, b => !built.Contains(b));
-            ProceduralHouses.BuildFill(terrain, occupied, parent, mats, SaveMesh);
+            if (Cfg.backgroundFill) ProceduralHouses.BuildFill(terrain, occupied, parent, mats, SaveMesh);
         }
 
         private static int HashPercent(Vector2 c)

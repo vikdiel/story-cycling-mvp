@@ -22,7 +22,8 @@ namespace StoryCycling.WorldGen.Editor
         private struct Sized { public GameObject prefab; public float w, d, h, area; public Vector3 pivotToCenter; }
 
         public static int Place(RoadField road, WorldTerrain terrain, OsmContext ctx, AssetCatalog catalog,
-                                Occupancy occupied, Transform parent)
+                                Occupancy occupied, Transform parent,
+                                System.Func<OsmContext.Building, bool> accept = null, HashSet<OsmContext.Building> built = null)
         {
             var sizes = MeasurePrefabs(WorldPlacement.Pool(catalog, WholeBuilding));
             if (sizes.Count == 0) { Debug.LogWarning("OSM: keine ganzen Gebäude-Prefabs im Katalog."); return 0; }
@@ -34,6 +35,7 @@ namespace StoryCycling.WorldGen.Editor
 
             foreach (var b in ctx.Buildings)
             {
+                if (accept != null && !accept(b)) continue;
                 Vector3 c = new Vector3(b.centroid.x, 0f, b.centroid.y);
                 if (terrain.DemY(c.x, c.z) < terrain.SeaY + .5f) { skippedSea++; continue; }
 
@@ -58,6 +60,7 @@ namespace StoryCycling.WorldGen.Editor
                 Vector3 pivot = c - rot * (pick.pivotToCenter * scale);
                 WorldPlacement.Spawn(pick.prefab, parent, new Vector3(pivot.x, ground, pivot.z), rot, scale, ground, .15f);
                 occupied.Add(c.x, c.z, radius * .55f);
+                built?.Add(b);
                 placed++;
             }
             Debug.Log($"OSM-Gebäude: {placed} platziert (Prefabs {sizes.Count}, OSM {ctx.Buildings.Count}; " +

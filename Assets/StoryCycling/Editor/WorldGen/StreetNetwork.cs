@@ -87,12 +87,12 @@ namespace StoryCycling.WorldGen.Editor
                 int s0 = -1;
                 for (int i = 0; i <= n; i++)
                 {
-                    bool on = i < n && dMain[i] > JoinDistance && dMain[i] <= MaxDistance;
+                    bool on = i < n && dMain[i] > Join(main, nearMain[i]) && dMain[i] <= MaxDistance;
                     if (on && s0 < 0) s0 = i;
                     if (!on && s0 >= 0)
                     {
-                        bool startJ = s0 > 0 && dMain[s0 - 1] <= JoinDistance;
-                        bool endJ = i < n && dMain[i] <= JoinDistance;
+                        bool startJ = s0 > 0 && dMain[s0 - 1] <= Join(main, nearMain[s0 - 1]);
+                        bool endJ = i < n && dMain[i] <= Join(main, nearMain[i]);
                         foreach (var run in SplitParallel(pts, dMain, s0, i - 1, startJ, endJ))
                         {
                             var st = net.MakeStreet(way, half, pts, dMain, nearMain, run.a, run.b, run.startJ, run.endJ,
@@ -145,9 +145,9 @@ namespace StoryCycling.WorldGen.Editor
         {
             var poly = new List<Vector2>();
             // Einmündung: exakt ab dem Punkt beginnen, an dem die Querstraße die Hauptfahrbahn verlässt.
-            if (startJ) poly.Add(Cross(pts[a - 1], pts[a], dMain[a - 1], dMain[a]));
+            if (startJ) poly.Add(Cross(pts[a - 1], pts[a], dMain[a - 1], dMain[a], Join(main, nearMain[a - 1])));
             for (int i = a; i <= b; i++) poly.Add(pts[i]);
-            if (endJ) poly.Add(Cross(pts[b + 1], pts[b], dMain[b + 1], dMain[b]));
+            if (endJ) poly.Add(Cross(pts[b + 1], pts[b], dMain[b + 1], dMain[b], Join(main, nearMain[b + 1])));
 
             float len = 0f;
             for (int i = 1; i < poly.Count; i++) len += Vector2.Distance(poly[i - 1], poly[i]);
@@ -241,15 +241,18 @@ namespace StoryCycling.WorldGen.Editor
             float open = half + FlareWidth + 1.5f;
             Junctions.Add(new Junction
             {
-                Mouth = ms.pos + ms.side * (side * RoadMeshBuilder.HalfWidth),
-                Half = Mathf.Sqrt(open * open + RoadMeshBuilder.HalfWidth * RoadMeshBuilder.HalfWidth)
+                Mouth = ms.pos + ms.side * (side * ms.half),
+                Half = Mathf.Sqrt(open * open + ms.half * ms.half)
             });
         }
 
         // Punkt zwischen p (auf der Route) und q (außerhalb), an dem der Abstand JoinDistance erreicht.
-        private static Vector2 Cross(Vector2 p, Vector2 q, float dp, float dq)
+        // Querstraße beginnt 1 m innerhalb der Hauptfahrbahn (Breite je Abschnitt)
+        private static float Join(RoadField main, int nearest) => nearest >= 0 ? main.Samples[nearest].half - 1f : JoinDistance;
+
+        private static Vector2 Cross(Vector2 p, Vector2 q, float dp, float dq, float join)
         {
-            float t = Mathf.Clamp01((JoinDistance - dp) / Mathf.Max(1e-3f, dq - dp));
+            float t = Mathf.Clamp01((join - dp) / Mathf.Max(1e-3f, dq - dp));
             return p + (q - p) * t;
         }
 

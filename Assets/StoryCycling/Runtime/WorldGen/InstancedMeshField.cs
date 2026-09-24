@@ -20,6 +20,27 @@ namespace StoryCycling.WorldGen
             public Material material;
             public Bounds bounds;
             public Matrix4x4[] matrices;
+            // Kompakt (Hangvegetation): xyz + Drehung (Grad) und Skalierung; Matrizen entstehen beim Laden
+            public Vector4[] packed;
+            public float[] scales;
+            [NonSerialized] public Matrix4x4[] expanded;
+
+            public Matrix4x4[] Instances
+            {
+                get
+                {
+                    if (matrices != null && matrices.Length > 0) return matrices;
+                    if (expanded == null && packed != null)
+                    {
+                        expanded = new Matrix4x4[packed.Length];
+                        for (int i = 0; i < packed.Length; i++)
+                            expanded[i] = Matrix4x4.TRS(new Vector3(packed[i].x, packed[i].y, packed[i].z),
+                                                        Quaternion.Euler(0f, packed[i].w, 0f),
+                                                        Vector3.one * (scales != null && i < scales.Length ? scales[i] : 1f));
+                    }
+                    return expanded;
+                }
+            }
         }
 
         public List<Batch> batches = new List<Batch>();
@@ -42,7 +63,7 @@ namespace StoryCycling.WorldGen
             float d2 = far * far;
             foreach (var b in batches)
             {
-                if (b == null || b.mesh == null || b.material == null || b.matrices == null || b.matrices.Length == 0) continue;
+                if (b == null || b.mesh == null || b.material == null) continue;
                 if (b.bounds.SqrDistance(cp) > d2 || !GeometryUtility.TestPlanesAABB(planes, b.bounds)) continue;
                 var rp = new RenderParams(b.material)
                 {
@@ -52,8 +73,10 @@ namespace StoryCycling.WorldGen
                     receiveShadows = true,
                     layer = gameObject.layer
                 };
-                for (int start = 0; start < b.matrices.Length; start += MaxPerCall)
-                    Graphics.RenderMeshInstanced(rp, b.mesh, b.submesh, b.matrices, Mathf.Min(MaxPerCall, b.matrices.Length - start), start);
+                var inst = b.Instances;
+                if (inst == null || inst.Length == 0) continue;
+                for (int start = 0; start < inst.Length; start += MaxPerCall)
+                    Graphics.RenderMeshInstanced(rp, b.mesh, b.submesh, inst, Mathf.Min(MaxPerCall, inst.Length - start), start);
             }
         }
     }
