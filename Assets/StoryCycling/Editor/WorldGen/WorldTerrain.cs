@@ -14,6 +14,8 @@ namespace StoryCycling.WorldGen.Editor
 
         public readonly DemGrid Dem;
         public readonly RoadField Road;
+        // Optional OSM side streets; assigned before terrain chunks are baked.
+        public RoadField Streets;
         public readonly float Ele0;      // Höhe des ersten GPX-Punkts (lokales y = absolut - Ele0)
         // Terrarium-Küstendaten liegen oft geringfügig über dem echten Meeresspiegel.
         // Ein kleiner Offset erzeugt natürlichere, breitere Strände.
@@ -65,8 +67,21 @@ namespace StoryCycling.WorldGen.Editor
         {
             float demY = DemY(x, z);
             if (Road.Nearest(x, z, InfluenceRadius, out int i, out float dist))
-                return Carve(demY, dist, Road.Samples[i].pos.y);
+                demY = Carve(demY, dist, Road.Samples[i].pos.y);
+            if (Streets != null && Streets.Nearest(x, z, SideInfluence, out int j, out float sideDist))
+                demY = CarveSide(demY, sideDist, Streets.Samples[j].pos.y, Streets.Samples[j].half);
             return demY;
+        }
+
+        public const float SideInfluence = 32f;
+        private static float CarveSide(float terrainY, float distance, float roadY, float halfWidth)
+        {
+            float flat = halfWidth + 5f;
+            float target = roadY - RoadInset;
+            if (distance <= flat) return target;
+            float bank = Mathf.Clamp(Mathf.Abs(terrainY - target) * 1.1f, 6f, 22f);
+            float t = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((distance - flat) / bank));
+            return Mathf.Lerp(target, terrainY, t);
         }
 
         // Tiefste Geländehöhe unter einer (gedrehten) Rechteck-Grundfläche -> nichts schwebt.
@@ -179,6 +194,21 @@ namespace StoryCycling.WorldGen.Editor
                     if (minDist[k] == float.MaxValue) continue;
                     float d = Mathf.Sqrt(minDist[k]);
                     if (d < R) h[k] = Carve(h[k], d, roadY[k]);
+                }
+                // Side streets share the same carved terrain frame. This direct pass is
+                // intentionally local to 5m chunks, where their detail is visible.
+                if (Streets != null && Streets.Samples.Count > 0)
+                {
+                    for (int j = 0; j < g; j++)
+                    for (int i = 0; i < g; i++)
+                    {
+                        float x = gx0 + i * cell, z = gz0 + j * cell;
+                        if (Streets.Nearest(x, z, SideInfluence, out int si, out float d))
+                        {
+                            var s = Streets.Samples[si];
+                            h[j * g + i] = CarveSide(h[j * g + i], d, s.pos.y, s.half);
+                        }
+                    }
                 }
             }
 

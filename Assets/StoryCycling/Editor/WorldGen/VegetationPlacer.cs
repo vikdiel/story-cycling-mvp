@@ -196,5 +196,45 @@ namespace StoryCycling.WorldGen.Editor
             }
             return count;
         }
+
+        // Nature Biomes accents are intentionally sparse: palms only in low urban coastal
+        // sections, birds only above water. They complement, rather than replace, the seeded bands.
+        public static int PlaceCoastalAccents(WorldTerrain terrain, WorldAssets assets, Occupancy occupied, Transform parent, int seed = 318)
+        {
+            if (assets == null) return 0;
+            var rng = new System.Random(seed);
+            int placed = 0;
+            if (assets.Palms != null)
+            {
+                var road = terrain.Road.Samples;
+                for (int i = 0; i < road.Count; i += 10)
+                for (int side = -1; side <= 1; side += 2)
+                {
+                    Vector3 p = road[i].pos + road[i].side * (side * 7.5f);
+                    if (terrain.BiomeAt(p.x, p.z) != WorldTerrain.Biome.Urban || terrain.DemY(p.x, p.z) - terrain.SeaY > 30f) continue;
+                    if (terrain.Road.Distance(p.x, p.z, 10f) < RoadMeshBuilder.HalfWidth + 3f || !occupied.IsFree(p.x, p.z, 2.5f)) continue;
+                    float y = terrain.HeightAt(p.x, p.z);
+                    var go = WorldPlacement.Spawn(WorldPlacement.Pick(assets.Palms, rng), parent, new Vector3(p.x, y, p.z), Quaternion.Euler(0f, WorldPlacement.Range(rng, 0f, 360f), 0f), WorldPlacement.Range(rng, .85f, 1.15f), y, .12f);
+                    WorldPlacement.CullWhenSmall(go, .008f, true);
+                    occupied.Add(p.x, p.z, 2.5f); placed++;
+                }
+            }
+            if (assets.Birds != null && assets.Birds.Count > 0)
+            {
+                for (int i = 0; i < 10; i++)
+                {
+                    var r = terrain.Road.Samples[rng.Next(terrain.Road.Samples.Count)];
+                    Vector3 p = r.pos + r.side * WorldPlacement.Range(rng, -160f, 160f);
+                    if (terrain.DemY(p.x, p.z) - terrain.SeaY > 25f) continue;
+                    var bird = (GameObject)UnityEditor.PrefabUtility.InstantiatePrefab(WorldPlacement.Pick(assets.Birds, rng), parent);
+                    bird.transform.position = new Vector3(p.x, Mathf.Max(r.pos.y, terrain.SeaY) + WorldPlacement.Range(rng, 16f, 38f), p.z);
+                    bird.transform.rotation = Quaternion.Euler(0f, WorldPlacement.Range(rng, 0f, 360f), 0f);
+                    foreach (var renderer in bird.GetComponentsInChildren<Renderer>()) renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                    placed++;
+                }
+            }
+            Debug.Log($"Küsten-Akzente: {placed} Palmen/Vögel.");
+            return placed;
+        }
     }
 }

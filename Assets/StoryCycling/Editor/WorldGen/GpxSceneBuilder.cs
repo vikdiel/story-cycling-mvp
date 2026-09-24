@@ -70,34 +70,43 @@ namespace StoryCycling.WorldGen.Editor
                 var road = new RoadField(spline);
                 var terrain = new WorldTerrain(dem, road, (float)pts[0].Ele, osm);
                 RouteHeightField.Terrain = terrain.HeightAt;
+                Progress("Querstraßen & Kreisverkehre", .08f);
+                var streets = StreetNetwork.Build(osm, road, terrain);
+                terrain.Streets = streets.Field;
 
                 Progress("Gelände einfärben", .1f);
                 Texture2D terrainTex = SaveTexture(terrain.BuildColorTexture(), OutDir + "/TerrainColors.png", false, 4096);
                 Material terrainMat = Mat("GpxTerrain", Color.white, .06f, terrainTex);
-                Material ocean = Mat("GpxOcean", new Color(.05f, .33f, .45f), .82f);
+                Material ocean = OceanMaterial();
 
                 Progress("Gelände-Kacheln", .2f);
                 terrain.BuildChunks(Group("Terrain"), terrainMat, SaveMesh);
                 terrain.BuildWater(world, ocean, SaveMesh);
 
-                Progress("Straße", .4f);
+                Progress("Straßen", .4f);
                 Texture2D asphaltTex = SaveTexture(AsphaltTexture(), OutDir + "/Asphalt.png", true, 512);
-                new RoadMeshBuilder(road, terrain).Build(Group("Road"),
-                    Mat("GpxAsphalt", Color.white, .18f, asphaltTex),
-                    Mat("GpxShoulder", new Color(.55f, .51f, .44f), .05f),
+                Material asphalt = Mat("GpxAsphalt", Color.white, .18f, asphaltTex);
+                Material shoulder = Mat("GpxShoulder", new Color(.55f, .51f, .44f), .05f);
+                new RoadMeshBuilder(road, terrain).Build(Group("Road"), asphalt, shoulder,
                     Mat("GpxLineYellow", new Color(.95f, .76f, .18f), .3f),
                     Mat("GpxLineWhite", new Color(.95f, .95f, .92f), .3f),
                     Mat("GpxGuardrail", new Color(.74f, .76f, .78f), .55f, null, .6f),
                     SaveMesh);
+                Transform streetGroup = Group("Streets");
+                StreetMeshBuilder.Build(streets, streetGroup, asphalt, shoulder,
+                    Mat("GpxIslandGrass", new Color(.33f, .50f, .22f), .05f), SaveMesh);
 
                 var occupied = new Occupancy();
+                foreach (var island in streets.Islands) occupied.Add(island.Center.x, island.Center.z, island.Radius + 1f);
                 Progress("Landmarks", .5f);
                 PlaceLandmarks(spline, terrain, occupied, Group("Landmarks"));
 
                 var catalog = AssetDatabase.LoadAssetAtPath<AssetCatalog>(AssetCatalogBuilder.CatalogPath);
-                if (catalog == null) Debug.LogWarning("WorldGen-Katalog fehlt — erst Katalog bauen. Keine Gebäude/Vegetation.");
+                if (catalog == null) Debug.LogWarning("WorldGen-Katalog fehlt — erst 'Build Catalog from Synty'. Keine Gebäude/Vegetation.");
                 else
                 {
+                    var assets = WorldAssets.From(catalog);
+                    assets.Log();
                     if (osm != null)
                     {
                         Progress("Gebäude (OSM)", .58f);
@@ -105,8 +114,9 @@ namespace StoryCycling.WorldGen.Editor
                         Progress("Details (OSM)", .66f);
                         OsmDetailPlacer.Place(road, terrain, osm, catalog, occupied, Group("StreetDetails"));
                     }
-                    Progress("Vegetation", .74f);
+                    Progress("Vegetation & Küste", .74f);
                     VegetationPlacer.Place(terrain, catalog, occupied, Group("Vegetation"));
+                    VegetationPlacer.PlaceCoastalAccents(terrain, assets, occupied, Group("Coastal Accents"));
                     VegetationPlacer.PlaceClouds(terrain, catalog, Group("Clouds"));
                 }
 
@@ -120,7 +130,9 @@ namespace StoryCycling.WorldGen.Editor
                 Camera cam = camGo.GetComponent<Camera>();
                 cam.fieldOfView = 58; cam.nearClipPlane = .3f; cam.farClipPlane = 7000; cam.allowHDR = false;
                 cam.clearFlags = CameraClearFlags.Skybox;
-                cam.GetUniversalAdditionalCameraData().renderPostProcessing = true;
+                var cameraData = cam.GetUniversalAdditionalCameraData();
+                cameraData.renderPostProcessing = true;
+                cameraData.requiresDepthOption = CameraOverrideOption.On;
                 ColorGrade();
 
                 var director = new GameObject("Gpx Ride Director").AddComponent<GpxRideController>();
@@ -250,6 +262,28 @@ namespace StoryCycling.WorldGen.Editor
             AssetDatabase.AddObjectToAsset(bloom, profile);
             AssetDatabase.AddObjectToAsset(vignette, profile);
             volume.sharedProfile = profile;
+        }
+
+        // Prefer the Nature Biomes water material when the pack is present; keep the
+        // URP-Lit fallback so the builder remains usable without that optional pack.
+        private static Material OceanMaterial()
+        {
+            foreach (string guid in AssetDatabase.FindAssets("Water_Ocean_Day t:Material"))
+            {
+                var source = AssetDatabase.LoadAssetAtPath<Material>(AssetDatabase.GUIDToAssetPath(guid));
+                if (source == null) continue;
+                var ocean = new Material(source) { name = "GpxOceanCape" };
+                SetColorIfPresent(ocean, "_Very_Deep_Color", new Color(.03f, .25f, .38f));
+                SetColorIfPresent(ocean, "_Deep_Color", new Color(.10f, .42f, .48f));
+                return Save(ocean);
+            }
+            Debug.LogWarning("Water_Ocean_Day nicht gefunden — einfaches URP-Wasser wird verwendet.");
+            return Mat("GpxOcean", new Color(.05f, .33f, .45f), .82f);
+        }
+
+        private static void SetColorIfPresent(Material material, string property, Color color)
+        {
+            if (material.HasProperty(property)) material.SetColor(property, color);
         }
 
         // ------------------------------------------------------------------ Assets

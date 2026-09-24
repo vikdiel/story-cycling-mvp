@@ -20,11 +20,18 @@ namespace StoryCycling.WorldGen
         public class Area { public List<Vector2> ring; public string biome; }   // biome incl. "parking"
         public class Point { public Vector2 pos; public string kind; }           // kind = normalised feature
         public class Line { public List<Vector2> pts; public string kind; }      // fence | hedge | wall
+        // Drivable OSM way for secondary streets, junctions and roundabouts.
+        public class Street
+        {
+            public List<Vector2> pts; public string highway;
+            public bool bridge, tunnel, roundabout, oneway;
+        }
 
         public readonly List<Building> Buildings = new List<Building>();
         public readonly List<Area> Areas = new List<Area>();
         public readonly List<Point> Points = new List<Point>();
         public readonly List<Line> Lines = new List<Line>();
+        public readonly List<Street> Streets = new List<Street>();
 
         private const double R = 6371000.0; // must match GpxParser.ProjectToLocalMeters
 
@@ -48,7 +55,19 @@ namespace StoryCycling.WorldGen
                 if (ring.Count < 2) continue;
 
                 var tags = ReadTags(way);
-                if (tags.ContainsKey("building") && ring.Count >= 3)
+                if (tags.TryGetValue("highway", out string hw) && IsDrivable(hw) && !(tags.TryGetValue("area", out string area) && area == "yes"))
+                {
+                    tags.TryGetValue("junction", out string junction);
+                    ctx.Streets.Add(new Street
+                    {
+                        pts = ring, highway = hw,
+                        bridge = tags.TryGetValue("bridge", out string bridge) && bridge != "no",
+                        tunnel = tags.TryGetValue("tunnel", out string tunnel) && tunnel != "no",
+                        roundabout = junction == "roundabout" || junction == "circular",
+                        oneway = tags.TryGetValue("oneway", out string oneway) && oneway == "yes"
+                    });
+                }
+                else if (tags.ContainsKey("building") && ring.Count >= 3)
                     ctx.Buildings.Add(MakeBuilding(ring, tags));
                 else if (tags.TryGetValue("barrier", out string bar) && (bar == "fence" || bar == "hedge" || bar == "wall"))
                     ctx.Lines.Add(new Line { pts = ring, kind = bar });
@@ -75,6 +94,17 @@ namespace StoryCycling.WorldGen
             var p = new Vector2(worldPos.x, worldPos.z);
             foreach (var a in Areas) if (a.biome != "parking" && PointInPolygon(p, a.ring)) return a.biome;
             return "generic";
+        }
+
+        public static bool IsDrivable(string highway)
+        {
+            switch (highway)
+            {
+                case "motorway": case "trunk": case "primary": case "secondary": case "tertiary":
+                case "motorway_link": case "trunk_link": case "primary_link": case "secondary_link": case "tertiary_link":
+                case "residential": case "unclassified": case "living_street": return true;
+                default: return false;
+            }
         }
 
         // --- tag → normalised kind ------------------------------------------------

@@ -16,6 +16,7 @@ namespace StoryCycling.WorldGen.Editor
         private const string OutPath = "Assets/StreamingAssets/Osm/Nordhoek.osm.xml";
         private const string Endpoint = "https://overpass-api.de/api/interpreter";
         private const int MaxCoords = 300;
+        private const int StreetRadius = 160;
 
         [MenuItem("Story Cycling/WorldGen/Fetch OSM for Nordhoek")]
         public static void Fetch()
@@ -32,6 +33,7 @@ namespace StoryCycling.WorldGen.Editor
                 $"  way[\"natural\"](around:400,{c});\n" +
                 $"  way[\"amenity\"=\"parking\"](around:60,{c});\n" +
                 $"  way[\"barrier\"~\"fence|hedge|wall\"](around:60,{c});\n" +
+                $"  way[\"highway\"~\"^(trunk|primary|secondary|tertiary|residential|unclassified|living_street|trunk_link|primary_link|secondary_link|tertiary_link)$\"](around:{StreetRadius},{c});\n" +
                 $"  node[\"highway\"~\"traffic_signals|street_lamp|bus_stop|stop|give_way\"](around:40,{c});\n" +
                 $"  node[\"amenity\"~\"bench|waste_basket|post_box|parking_meter\"](around:40,{c});\n" +
                 $"  node[\"emergency\"=\"fire_hydrant\"](around:40,{c});\n" +

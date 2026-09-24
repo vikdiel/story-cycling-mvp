@@ -17,8 +17,72 @@ namespace StoryCycling.WorldGen
             var dedup = Dedup(pts, minSpacing);
             var resampled = ResampleByArcLength(dedup, resampleStep);
             SmoothElevation(resampled, elevationWindow);
+            ReconcileOverlaps(resampled);
             return resampled;
         }
+
+        // GPX out-and-back segments can have slightly different barometric heights even
+        // when their XY centreline is identical. Later passes inherit the first pass and
+        // blend in/out, preventing a double road and rider height disagreement.
+        public static int ReconcileOverlaps(List<Vector3> points, float radius = 8.5f, float minArcGap = 120f, float maxHeightDelta = 4f, float blend = 30f)
+        {
+            if (points == null || points.Count < 3) return 0;
+            int count = points.Count;
+            var arc = new float[count];
+            for (int i = 1; i < count; i++) arc[i] = arc[i - 1] + Vector2.Distance(new Vector2(points[i - 1].x, points[i - 1].z), new Vector2(points[i].x, points[i].z));
+            float cell = radius * 2f;
+            var grid = new Dictionary<long, List<int>>();
+            var corrections = new float[count];
+            var matched = new bool[count];
+            int corrected = 0;
+            for (int i = 0; i < count; i++)
+            {
+                var p = points[i]; var direction = Direction(points, i);
+                int cx = Mathf.FloorToInt(p.x / cell), cz = Mathf.FloorToInt(p.z / cell);
+                int best = -1; float bestDistance = radius * radius;
+                for (int dx = -1; dx <= 1; dx++)
+                for (int dz = -1; dz <= 1; dz++)
+                {
+                    if (!grid.TryGetValue(Key(cx + dx, cz + dz), out var candidates)) continue;
+                    foreach (int candidate in candidates)
+                    {
+                        if (arc[i] - arc[candidate] < minArcGap) continue;
+                        if (Mathf.Abs(Vector2.Dot(direction, Direction(points, candidate))) < .8f) continue;
+                        float x = p.x - points[candidate].x, z = p.z - points[candidate].z, distance = x * x + z * z;
+                        if (distance >= bestDistance || Mathf.Abs(p.y - points[candidate].y) > maxHeightDelta) continue;
+                        best = candidate; bestDistance = distance;
+                    }
+                }
+                if (best >= 0) { corrections[i] = points[best].y - p.y; matched[i] = true; corrected++; }
+                long key = Key(cx, cz);
+                if (!grid.TryGetValue(key, out var bucket)) { bucket = new List<int>(); grid[key] = bucket; }
+                bucket.Add(i);
+            }
+            for (int i = 0; i < count; i++)
+            {
+                float correction = corrections[i];
+                if (!matched[i])
+                {
+                    float bestWeight = 0f;
+                    for (int j = i - 1; j >= 0 && arc[i] - arc[j] <= blend; j--)
+                        if (matched[j]) { float w = 1f - (arc[i] - arc[j]) / blend; if (w > bestWeight) { bestWeight = w; correction = corrections[j]; } }
+                    for (int j = i + 1; j < count && arc[j] - arc[i] <= blend; j++)
+                        if (matched[j]) { float w = 1f - (arc[j] - arc[i]) / blend; if (w > bestWeight) { bestWeight = w; correction = corrections[j]; } }
+                    correction *= bestWeight * bestWeight * (3f - 2f * bestWeight);
+                }
+                if (Mathf.Abs(correction) > .0001f) { var p = points[i]; p.y += correction; points[i] = p; }
+            }
+            return corrected;
+        }
+
+        private static Vector2 Direction(List<Vector3> points, int index)
+        {
+            Vector3 a = points[Mathf.Max(0, index - 1)], b = points[Mathf.Min(points.Count - 1, index + 1)];
+            var direction = new Vector2(b.x - a.x, b.z - a.z);
+            return direction.sqrMagnitude > 1e-6f ? direction.normalized : Vector2.up;
+        }
+
+        private static long Key(int x, int z) => ((long)x << 32) | (uint)z;
 
         // Remove points closer than minSpacing to the last kept point.
         private static List<Vector3> Dedup(List<Vector3> pts, float minSpacing)

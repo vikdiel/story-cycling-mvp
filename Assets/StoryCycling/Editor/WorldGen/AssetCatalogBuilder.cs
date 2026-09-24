@@ -17,10 +17,19 @@ namespace StoryCycling.WorldGen.Editor
         public static void BuildCatalog()
         {
             Directory.CreateDirectory(OutputRoot);
+            // Rebuild deterministically: stale entry assets otherwise accumulate as "Name 1".
+            AssetDatabase.StartAssetEditing();
+            try
+            {
+                foreach (string old in Directory.GetFiles(OutputRoot, "*.asset"))
+                    AssetDatabase.DeleteAsset(old.Replace('\\', '/'));
+            }
+            finally { AssetDatabase.StopAssetEditing(); }
             var entries = new List<AssetEntry>();
 
-            Scan(PolygonCityRoot, entries);
-            Scan(PolygonGenericRoot, entries);
+            Scan(PolygonCityRoot, entries, "");
+            Scan(PolygonGenericRoot, entries, "");
+            Scan(NatureBiomesRoot, entries, "PNB_");
 
             // Persist one AssetEntry asset per prefab, deterministically ordered by path.
             entries.Sort((a, b) => string.CompareOrdinal(a.name, b.name));
@@ -39,8 +48,9 @@ namespace StoryCycling.WorldGen.Editor
 
         private const string PolygonCityRoot = "Assets/Synty/PolygonCity/Prefabs";
         private const string PolygonGenericRoot = "Assets/Synty/PolygonGeneric/Prefabs";
+        private const string NatureBiomesRoot = "Assets/Synty/PolygonNatureBiomes";
 
-        private static void Scan(string root, List<AssetEntry> entries)
+        private static void Scan(string root, List<AssetEntry> entries, string prefix)
         {
             if (!Directory.Exists(root)) return;
             foreach (string path in Directory.GetFiles(root, "*.prefab", SearchOption.AllDirectories))
@@ -48,9 +58,11 @@ namespace StoryCycling.WorldGen.Editor
                 string assetPath = path.Replace('\\', '/');
                 var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(assetPath);
                 if (prefab == null) continue;
+                string lowerPath = assetPath.ToLowerInvariant();
+                if (lowerPath.Contains("/scenes/") || lowerPath.Contains("/terrain/")) continue;
 
                 var entry = ScriptableObject.CreateInstance<AssetEntry>();
-                entry.name = Path.GetFileNameWithoutExtension(assetPath);
+                entry.name = prefix + Path.GetFileNameWithoutExtension(assetPath);
                 entry.prefab = prefab;
                 Classify(entry, assetPath);
                 entries.Add(entry);
@@ -61,6 +73,14 @@ namespace StoryCycling.WorldGen.Editor
         {
             // Best-effort categorisation from the Synty folder/name conventions.
             string lower = path.ToLowerInvariant();
+            if (lower.Contains("/polygonnaturebiomes/"))
+            {
+                string file = Path.GetFileNameWithoutExtension(path);
+                entry.category = file.StartsWith("SM_Env_") && IsVegetation(path)
+                    ? AssetCategory.Vegetation
+                    : file.StartsWith("SM_Env_") ? AssetCategory.GroundCover : AssetCategory.Prop;
+                return;
+            }
             if (lower.Contains("/buildings/"))
                 entry.category = AssetCategory.Building;
             else if (lower.Contains("/environments/"))
@@ -80,7 +100,8 @@ namespace StoryCycling.WorldGen.Editor
             string lower = path.ToLowerInvariant();
             return lower.Contains("tree") || lower.Contains("bush") || lower.Contains("fern") ||
                    lower.Contains("flower") || lower.Contains("grass") || lower.Contains("shrub") ||
-                   lower.Contains("plant") || lower.Contains("rock");
+                   lower.Contains("plant") || lower.Contains("rock") || lower.Contains("palm") ||
+                   lower.Contains("seaweed") || lower.Contains("driftwood");
         }
 
         private static bool IsRoadFurniture(string path)

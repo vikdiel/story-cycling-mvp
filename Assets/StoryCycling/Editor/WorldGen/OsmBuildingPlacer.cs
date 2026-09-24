@@ -29,6 +29,7 @@ namespace StoryCycling.WorldGen.Editor
             if (ctx.Buildings.Count == 0) { Debug.LogWarning("OSM: keine Gebäude im OSM-Dump (erst 'Fetch OSM')."); return 0; }
 
             var nearby = new List<int>();
+            Streets = terrain.Streets;
             int placed = 0, skippedRoad = 0, skippedOverlap = 0, skippedSea = 0;
 
             foreach (var b in ctx.Buildings)
@@ -88,14 +89,21 @@ namespace StoryCycling.WorldGen.Editor
 
         private static bool ClearOfRoad(RoadField road, List<int> scratch, Vector3 c, Vector3 right, Vector3 fwd, float hw, float hd)
         {
+            return ClearOf(road, scratch, c, right, fwd, hw, hd, RoadClearance) &&
+                   (Streets == null || ClearOf(Streets, scratch, c, right, fwd, hw, hd, 2.5f));
+        }
+
+        private static RoadField Streets;
+        private static bool ClearOf(RoadField field, List<int> scratch, Vector3 c, Vector3 right, Vector3 fwd, float hw, float hd, float clearance)
+        {
             float reach = Mathf.Sqrt(hw * hw + hd * hd) + RoadClearance;
-            road.Query(c.x - reach, c.z - reach, c.x + reach, c.z + reach, scratch);
+            field.Query(c.x - reach, c.z - reach, c.x + reach, c.z + reach, scratch);
             foreach (int i in scratch)
             {
-                Vector3 d = road.Samples[i].pos - c;
+                Vector3 d = field.Samples[i].pos - c;
                 float lx = Mathf.Max(0f, Mathf.Abs(Vector3.Dot(d, right)) - hw);
                 float lz = Mathf.Max(0f, Mathf.Abs(Vector3.Dot(d, fwd)) - hd);
-                if (lx * lx + lz * lz < RoadClearance * RoadClearance) return false;
+                if (lx * lx + lz * lz < clearance * clearance) return false;
             }
             return true;
         }
