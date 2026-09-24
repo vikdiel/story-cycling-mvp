@@ -22,7 +22,7 @@ namespace StoryCycling.WorldGen.Editor
         }
 
         public static int Place(RoadField road, WorldTerrain terrain, OsmContext ctx, AssetCatalog catalog,
-                                WorldAssets assets, Occupancy occupied, Transform parent, int seed = 777)
+                                WorldAssets assets, Occupancy occupied, Transform parent, RoadNet net = null, int seed = 777)
         {
             var pal = Load(catalog);
             RoadRef = road;
@@ -31,8 +31,29 @@ namespace StoryCycling.WorldGen.Editor
             var dedupe = new Dictionary<string, List<Vector2>>();
             int placed = 0, skippedSideStreet = 0;
 
+            // Straßennetz: Ampeln/Stoppschilder gehören zur KREUZUNG (OSM trägt sie pro Richtung ein -> Dubletten)
+            var signalJ = new HashSet<int>(); var stopJ = new HashSet<int>();
+            if (net != null)
+            {
+                foreach (var pt in ctx.Points)
+                {
+                    if (pt.kind != "traffic_signals" && pt.kind != "sign_stop" && pt.kind != "sign_give_way") continue;
+                    int best = -1; float bd = 35f * 35f;
+                    for (int ji = 0; ji < net.Junctions.Count; ji++)
+                    {
+                        var np = net.Nodes[net.Junctions[ji].Node].P;
+                        float d2 = (np - pt.pos).sqrMagnitude;
+                        if (d2 < bd) { bd = d2; best = ji; }
+                    }
+                    if (best < 0) continue;
+                    if (pt.kind == "traffic_signals") signalJ.Add(best); else stopJ.Add(best);
+                }
+                placed += PlaceJunctionControls(net, signalJ, stopJ, pal, rng, parent, occupied);
+            }
+
             foreach (var pt in ctx.Points)
             {
+                if (net != null && (pt.kind == "traffic_signals" || pt.kind == "sign_stop" || pt.kind == "sign_give_way")) continue;
                 float x = pt.pos.x, z = pt.pos.y;
                 bool hasRoad = road.Nearest(x, z, 60f, out int ri, out float dist);
                 var rs = hasRoad ? road.Samples[ri] : default(RoadField.Sample);
@@ -99,6 +120,64 @@ namespace StoryCycling.WorldGen.Editor
             placed += PlaceHedges(road, terrain, ctx, pal, occupied, parent, rng);
             placed += PlaceParking(road, terrain, ctx, pal, occupied, parent, rng);
             Debug.Log($"OSM-Details: {placed} Objekte (Nebenstraßen-Objekte weggelassen: {skippedSideStreet}).");
+            return placed;
+        }
+
+        // Pro Kreuzung: je Zufahrt EIN Ampelmast (links am Rand, Ausleger über die Fahrspur, Köpfe zum
+        // ankommenden Verkehr). Stoppschild nur an untergeordneten Zufahrten (niedrigere Straßenklasse).
+        private static int PlaceJunctionControls(RoadNet net, HashSet<int> signals, HashSet<int> stops, Palette pal,
+                                                 System.Random rng, Transform parent, Occupancy occupied)
+        {
+            int placed = 0;
+            foreach (int ji in signals)
+            {
+                var j = net.Junctions[ji];
+                if (pal.pole == null || pal.arm == null || pal.heads.Count == 0) break;
+                foreach (var e in j.Ends)
+                {
+                    var sg = net.Segs[e.Seg];
+                    if (sg.Length - e.Trim < 8f) continue;                                  // Stummel ohne Zufahrt
+                    var at = RoadNet.At(sg, e.AtA ? e.Trim + 1.5f : sg.Length - e.Trim - 1.5f);
+                    Vector3 dir = new Vector3(e.Dir.x, 0f, e.Dir.y);                        // vom Knoten weg
+                    Vector3 travel = -dir;                                                  // Verkehr fährt zur Kreuzung
+                    Vector3 left = new Vector3(-travel.z, 0f, travel.x);                    // Linksverkehr: linker Rand
+                    Vector3 foot = at.pos + left * (at.half + 1.1f);
+                    foot.y = at.pos.y - .05f;
+                    Quaternion rot = Quaternion.LookRotation(-left, Vector3.up);             // Ausleger über die Fahrbahn
+                    var mast = new GameObject("TrafficSignal").transform;
+                    mast.SetParent(parent, false);
+                    mast.SetPositionAndRotation(foot, rot);
+                    Part(pal.pole, mast, Vector3.zero, Quaternion.identity);
+                    Part(pal.arm, mast, Vector3.zero, Quaternion.identity);
+                    Vector3 facing = SignalFrontIsPositiveZ ? dir : -dir;                   // Leuchtseite zum ankommenden Verkehr
+                    Quaternion headRot = Quaternion.Inverse(rot) * Quaternion.LookRotation(facing, Vector3.up);
+                    Part(WorldPlacement.Pick(pal.heads, rng), mast, new Vector3(0f, 4.12f, Mathf.Min(5.6f, at.half + .5f)), headRot);
+                    occupied.Add(foot.x, foot.z, .6f);
+                    placed++;
+                }
+            }
+            foreach (int ji in stops)
+            {
+                if (signals.Contains(ji) || pal.stop == null) continue;
+                var j = net.Junctions[ji];
+                int best = int.MaxValue;
+                foreach (var e in j.Ends) best = Mathf.Min(best, net.Segs[e.Seg].Rank[e.AtA ? 0 : net.Segs[e.Seg].Rank.Count - 1]);
+                foreach (var e in j.Ends)
+                {
+                    var sg = net.Segs[e.Seg];
+                    int rank = sg.Rank[e.AtA ? 0 : sg.Rank.Count - 1];
+                    if (rank <= best || sg.Length - e.Trim < 8f) continue;                  // nur untergeordnete Zufahrten
+                    var at = RoadNet.At(sg, e.AtA ? e.Trim + 1f : sg.Length - e.Trim - 1f);
+                    Vector3 dir = new Vector3(e.Dir.x, 0f, e.Dir.y);
+                    Vector3 left = new Vector3(dir.z, 0f, -dir.x);                          // links bezogen auf die Fahrt zur Kreuzung
+                    Vector3 p = at.pos + left * (at.half + 1.2f);
+                    float y = at.pos.y - .05f;
+                    WorldPlacement.Spawn(pal.stop, parent, new Vector3(p.x, y, p.z),
+                        Quaternion.LookRotation(SignalFrontIsPositiveZ ? dir : -dir, Vector3.up), 1f, y, .02f);
+                    placed++;
+                }
+            }
+            Debug.Log($"Kreuzungen: Ampeln an {signals.Count}, Stoppschilder an {stops.Count} Kreuzungen.");
             return placed;
         }
 

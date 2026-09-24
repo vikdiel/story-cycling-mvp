@@ -31,7 +31,7 @@ namespace StoryCycling.WorldGen.Editor
 
         public RoadMeshBuilder(RoadField road, WorldTerrain terrain) { this.road = road; this.terrain = terrain; }
 
-        public void Build(Transform parent, RoadMaterials mats, StreetNetwork streets, System.Func<Mesh, Mesh> save)
+        public void Build(Transform parent, RoadMaterials mats, StreetNetwork streets, System.Func<Mesh, Mesh> save, bool railsOnly = false)
         {
             bool[] draw = ComputeCoverage(out bool[] lower);
             ComputeEdges(streets);
@@ -49,17 +49,20 @@ namespace StoryCycling.WorldGen.Editor
                 while (end + 1 < s.Count && draw[end + 1] && end - start < PieceSamples) end++;
                 int last = Mathf.Min(s.Count - 1, end + 1);
 
-                var parts = new RoadProfile.Parts();
-                RoadProfile.Emit(parts, s, start, last, k => leftEdge[k], k => rightEdge[k], true, k => true, -1f);   // Seitenstreifen je Probe
-                Mesh mesh = parts.ToMesh();
-                mesh.name = $"Road_{pieces:D3}";
-                mesh = save(mesh);
-                var go = new GameObject(mesh.name, typeof(MeshFilter), typeof(MeshRenderer));
-                go.transform.SetParent(parent, false);
-                go.GetComponent<MeshFilter>().sharedMesh = mesh;
-                var mr = go.GetComponent<MeshRenderer>();
-                mr.sharedMaterials = mats.Ribbon;
-                mr.shadowCastingMode = ShadowCastingMode.Off;
+                if (!railsOnly)
+                {
+                    var parts = new RoadProfile.Parts();
+                    RoadProfile.Emit(parts, s, start, last, k => leftEdge[k], k => rightEdge[k], true, k => true, -1f);   // Seitenstreifen je Probe
+                    Mesh mesh = parts.ToMesh();
+                    mesh.name = $"Road_{pieces:D3}";
+                    mesh = save(mesh);
+                    var go = new GameObject(mesh.name, typeof(MeshFilter), typeof(MeshRenderer));
+                    go.transform.SetParent(parent, false);
+                    go.GetComponent<MeshFilter>().sharedMesh = mesh;
+                    var mr = go.GetComponent<MeshRenderer>();
+                    mr.sharedMaterials = mats.Ribbon;
+                    mr.shadowCastingMode = ShadowCastingMode.Off;
+                }
                 pieces++;
 
                 Mesh rails = BuildRails(start, last);

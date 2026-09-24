@@ -22,6 +22,8 @@ namespace StoryCycling.WorldGen.Editor
         [Header("Straße")]
         [Tooltip("Route auf das OSM-Straßennetz legen (empfohlen). Aus = GPX-Linie direkt.")]
         public bool useOsmRoadNetwork = true;
+        [Tooltip("Straßennetz-Modell: Route und Querstraßen aus einem Guss, echte Kreuzungsflächen (empfohlen).")]
+        public bool useRoadNetwork = true;
         [Tooltip("Regex auf OSM name/ref: diese Straßen bekommen breite Seitenstreifen mit gelber Linie an der Fahrstreifenkante.")]
         public string wideShoulderRoads = "Victoria Road|^M6$";
         [Tooltip("Breiter Stil nur innerhalb dieser Gebiete (Breite/Länge). Leer = überall, wo der Name passt.")]

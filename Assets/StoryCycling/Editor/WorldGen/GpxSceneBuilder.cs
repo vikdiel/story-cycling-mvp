@@ -83,6 +83,22 @@ namespace StoryCycling.WorldGen.Editor
                 }
                 var spline = new RouteSpline();
                 RoadField road;
+                // Straßennetz: Route + Querstraßen als ein Modell mit echten Kreuzungen (Fahrlinie liegt darauf)
+                RoadNet net = null;
+                if (matched != null && cfg.useRoadNetwork)
+                {
+                    Progress("Straßennetz & Kreuzungen", .05f);
+                    var centroids = new List<Vector2>(); foreach (var b in osm.Buildings) centroids.Add(b.centroid);
+                    net = RoadNet.Build(osm, matched.Points, (x, z) => dem.Sample(x, z) - ele0,
+                                        new System.Text.RegularExpressions.Regex(cfg.wideShoulderRoads), centroids);
+                    var onNet = RoadNetRoute.Build(net, matched.Points);
+                    Debug.Log($"Straßennetz: {net.Segs.Count} Abschnitte, {net.Junctions.Count} Kreuzungen; Fahrlinie {onNet.OnNetShare:P0} auf dem Netz.");
+                    if (onNet.OnNetShare < .9f) { Debug.LogWarning("Fahrlinie liegt zu wenig auf dem Netz — alter Straßenbau."); net = null; }
+                    else
+                    {
+                        matched.Points = onNet.Points; matched.Lane = onNet.Lane; matched.Half = onNet.Half; matched.Inset = onNet.Inset;
+                    }
+                }
                 if (matched != null)
                 {
                     if (!cfg.edgeLinesOnNormalRoads)
@@ -111,7 +127,7 @@ namespace StoryCycling.WorldGen.Editor
 
                 // Querstraßen/Kreuzungen/Kreisverkehre VOR dem Gelände: sie schneiden sich mit ein.
                 Progress("Querstraßen & Kreisverkehre", .08f);
-                var streets = StreetNetwork.Build(osm, road, terrain);
+                var streets = net != null ? StreetNetwork.FromNet(net, osm, terrain) : StreetNetwork.Build(osm, road, terrain);
                 terrain.Streets = streets.Field;
 
                 Progress("Gelände einfärben", .1f);
@@ -134,9 +150,19 @@ namespace StoryCycling.WorldGen.Editor
                     Sidewalk = Mat("GpxSidewalk", new Color(.72f, .71f, .68f), .08f),
                     IslandGrass = Mat("GpxIslandGrass", new Color(.33f, .50f, .22f), .05f),
                 };
-                new RoadMeshBuilder(road, terrain).Build(Group("Road"), roadMats, streets, SaveMesh);
                 Transform streetGroup = Group("Streets");
-                StreetMeshBuilder.Build(streets, terrain, road, streetGroup, roadMats, SaveMesh);
+                if (net != null)
+                {
+                    // EIN Generator für Route, Querstraßen und Kreuzungen; Leitplanken weiterhin entlang der Route
+                    RoadNetMesher.Build(net, Group("Road"), roadMats, SaveMesh);
+                    new RoadMeshBuilder(road, terrain).Build(Group("Guardrails"), roadMats, streets, SaveMesh, railsOnly: true);
+                    StreetMeshBuilder.BuildIslandsOnly(streets, road, streetGroup, roadMats, SaveMesh);
+                }
+                else
+                {
+                    new RoadMeshBuilder(road, terrain).Build(Group("Road"), roadMats, streets, SaveMesh);
+                    StreetMeshBuilder.Build(streets, terrain, road, streetGroup, roadMats, SaveMesh);
+                }
 
                 var occupied = new Occupancy();
                 foreach (var isl in streets.Islands) occupied.Add(isl.Center.x, isl.Center.z, isl.Radius + 1f);
@@ -154,7 +180,7 @@ namespace StoryCycling.WorldGen.Editor
                         Progress("Gebäude (OSM)", .58f);
                         PlaceBuildings(osm, terrain, catalog, road, occupied, Group("Buildings"));
                         Progress("Details (OSM)", .66f);
-                        OsmDetailPlacer.Place(road, terrain, osm, catalog, assets, occupied, Group("StreetDetails"));
+                        OsmDetailPlacer.Place(road, terrain, osm, catalog, assets, occupied, Group("StreetDetails"), net);
                         RoadSigns.Place(road, terrain, streets, catalog, occupied, Group("RoadSigns"));
                     }
                     Progress("Vegetation & Küste", .74f);

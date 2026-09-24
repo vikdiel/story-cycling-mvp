@@ -57,6 +57,24 @@ namespace StoryCycling.WorldGen.Editor
             }
         }
 
+        // Aus dem Straßennetz-Modell: Abstandsfeld aller Straßen, Kreisverkehr-Inseln, Einmündungen (für Schilder)
+        public static StreetNetwork FromNet(RoadNet net, OsmContext osm, WorldTerrain terrain)
+        {
+            var sn = new StreetNetwork();
+            sn.Field = net.Field();
+            sn.BuildIslands(osm, terrain);
+            foreach (var j in net.Junctions)
+                foreach (var e in j.Ends)
+                {
+                    if (net.Segs[e.Seg].OnRoute) continue;
+                    var sg = net.Segs[e.Seg];
+                    var at = RoadNet.At(sg, e.AtA ? e.Trim : sg.Length - e.Trim);
+                    sn.Junctions.Add(new Junction { Mouth = at.pos, Half = e.Half + 2f });
+                }
+            Debug.Log($"Straßennetz-Felder: {sn.Field.Samples.Count} Proben, {sn.Islands.Count} Kreisverkehr-Inseln, {sn.Junctions.Count} Einmündungen.");
+            return sn;
+        }
+
         public static StreetNetwork Build(OsmContext osm, RoadField main, WorldTerrain terrain)
         {
             var net = new StreetNetwork();

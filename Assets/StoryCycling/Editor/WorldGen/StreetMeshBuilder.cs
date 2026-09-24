@@ -10,6 +10,25 @@ namespace StoryCycling.WorldGen.Editor
     {
         private const float BucketSize = 400f;
 
+        public static void BuildIslandsOnly(StreetNetwork net, RoadField main, Transform parent, RoadMaterials mats, System.Func<Mesh, Mesh> save)
+        {
+            int islands = 0;
+            foreach (var isl in net.Islands)
+            {
+                float y = net.IslandBaseY(isl, main);
+                if (float.IsNaN(y)) continue;
+                Mesh m = IslandMesh(isl.Radius);
+                m.name = $"RoundaboutIsland_{islands:D2}";
+                m = save(m);
+                var go = new GameObject(m.name, typeof(MeshFilter), typeof(MeshRenderer));
+                go.transform.SetParent(parent, false);
+                go.transform.position = new Vector3(isl.Center.x, y, isl.Center.z);
+                go.GetComponent<MeshFilter>().sharedMesh = m;
+                go.GetComponent<MeshRenderer>().sharedMaterials = new[] { mats.IslandGrass, mats.Sidewalk };
+                islands++;
+            }
+        }
+
         public static void Build(StreetNetwork net, WorldTerrain terrain, RoadField main, Transform parent,
                                  RoadMaterials mats, System.Func<Mesh, Mesh> save)
         {
