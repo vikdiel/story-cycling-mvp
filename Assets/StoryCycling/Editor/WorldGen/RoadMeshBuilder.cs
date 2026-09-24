@@ -267,7 +267,7 @@ namespace StoryCycling.WorldGen.Editor
     //   Submeshes: 0 Asphalt, 1 Bankett, 2 gelbe Linie, 3 weiße Linie, 4 Gehweg/Bordstein
     public static class RoadProfile
     {
-        public enum Edge : byte { Rural, Urban, Mouth }
+        public enum Edge : byte { Rural, Urban, Mouth, Median }
 
         public sealed class Parts
         {
@@ -294,6 +294,8 @@ namespace StoryCycling.WorldGen.Editor
             // col 0..3 = links (negativ), Werte hier als Betrag
             switch (e)
             {
+                case Edge.Median:   // Doppelfahrbahn: schmaler erhöhter Bordstein zum Mittelstreifen, kein Randstreifen
+                    lat = col == 0 ? half + .8f : col == 1 ? half + .5f : col == 2 ? half + .05f : half; h = col == 0 ? -.4f : col == 3 ? .02f : .12f; break;
                 case Edge.Urban:
                     lat = col == 0 ? half + 2.8f : col == 1 ? half + 2f : half; h = col == 0 ? -1.4f : col == 3 ? .02f : .16f; break;
                 case Edge.Mouth:
@@ -333,8 +335,8 @@ namespace StoryCycling.WorldGen.Editor
                 {
                     int sub;
                     if (c == 3) sub = 0;
-                    else if (c < 3) sub = le == Edge.Urban ? 4 : 1;
-                    else sub = re == Edge.Urban ? 4 : 1;
+                    else if (c < 3) sub = le == Edge.Urban || le == Edge.Median ? 4 : 1;
+                    else sub = re == Edge.Urban || re == Edge.Median ? 4 : 1;
                     Quad(p.T[sub], a + c, a + c + 1, a + cols + c, a + cols + c + 1);
                 }
             }

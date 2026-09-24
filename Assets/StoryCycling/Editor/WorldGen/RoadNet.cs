@@ -28,11 +28,22 @@ namespace StoryCycling.WorldGen.Editor
             public readonly List<int> Rank = new List<int>();                          // Straßenklasse je Probe
             public float TrimA, TrimB;
             public bool OnRoute;
+            public bool Internal;                    // liegt komplett in einer Kreuzung (z. B. über den Mittelstreifen)
+            public bool Oneway;
+            public readonly List<byte> LeftKind = new List<byte>(), RightKind = new List<byte>();   // 0 normal, 2 Mittelstreifen
             public float Length => S.Count > 0 ? S[S.Count - 1].distance : 0f;
         }
 
-        public sealed class End { public int Seg; public bool AtA; public Vector2 Dir; public float Half, Outer, Trim; public bool Urban; }
-        public sealed class Junction { public int Node; public readonly List<End> Ends = new List<End>(); }
+        public sealed class End { public int Seg; public bool AtA; public int NodeIdx; public Vector2 Dir; public float Half, Outer, Trim; public bool Urban; }
+        // Kreuzung = ein oder mehrere dicht beieinander liegende OSM-Knoten (Doppelfahrbahnen, Abbiegespuren)
+        public sealed class Junction
+        {
+            public int Node;                          // erster Knoten (Kompatibilität)
+            public readonly List<int> NodesIn = new List<int>();
+            public Vector2 Center; public float Y;
+            public readonly List<End> Ends = new List<End>();
+        }
+        public const byte KindNormal = 0, KindMedian = 2;
 
         public readonly List<Node> Nodes = new List<Node>();
         public readonly List<Segment> Segs = new List<Segment>();
@@ -149,9 +160,11 @@ namespace StoryCycling.WorldGen.Editor
             // 4) Knotenhöhen: auf der Route aus dem Routenprofil (fest), sonst Gelände; Steigung begrenzen
             foreach (var n in net.Nodes)
             {
-                float d = routeHash.Nearest(n.P, 6f, out int ri);
-                if (d <= 5f) { n.Y = route[ri].y; n.Fixed = true; }
-                else n.Y = AvgDem(demY, n.P, 15f);
+                float d = routeHash.Nearest(n.P, 40f, out int ri);
+                float dem = AvgDem(demY, n.P, 15f);
+                if (d <= 15f) { n.Y = route[ri].y; n.Fixed = true; }                 // Gegenfahrbahn, Einmündungen
+                else if (d <= 35f) n.Y = Mathf.Lerp(route[ri].y, dem, Mathf.InverseLerp(15f, 35f, d));
+                else n.Y = dem;
             }
             for (int iter = 0; iter < 60; iter++)
             {
@@ -171,9 +184,10 @@ namespace StoryCycling.WorldGen.Editor
             var bHash = new PointHash(ToV3(buildings), 20f);
             for (int si = 0; si < net.Segs.Count; si++) net.Sample(si, route, routeHash, demY, wideShoulder, bHash);
 
-            // 6) Kreuzungen: Enden, Richtungen, Beschnitt
-            for (int ni = 0; ni < net.Nodes.Count; ni++)
-                if (net.Nodes[ni].Segs.Count >= 3) net.BuildJunction(ni);
+            // 6) Doppelfahrbahnen: Mittelstreifen-Seite erkennen (kein Randstreifen/Gehweg zur Gegenfahrbahn)
+            net.DetectMedians();
+            // 7) Kreuzungen: dicht beieinander liegende Knoten zu EINER Kreuzung zusammenfassen
+            net.BuildClusters();
             net.pendingPoly.Clear(); net.pendingWay.Clear();
             return net;
         }
@@ -208,10 +222,19 @@ namespace StoryCycling.WorldGen.Editor
                 routeY[i] = ri >= 0 ? route[ri].y : float.NaN;
             }
             sg.OnRoute = near >= .7f * n;
+            foreach (var w in pw) if (w != null && w.oneway) { sg.Oneway = true; break; }
 
             // Höhen: Route -> Routenprofil; sonst Gelände geglättet, in Steigungskegeln beider Enden
             var y = new float[n];
-            for (int i = 0; i < n; i++) y[i] = sg.OnRoute ? routeY[i] : AvgDem(demY, p[i], 8f);
+            bool bridge = false; foreach (var w in pw) if (w != null && w.bridge) { bridge = true; break; }
+            for (int i = 0; i < n; i++)
+            {
+                if (sg.OnRoute) { y[i] = routeY[i]; continue; }
+                float dem = AvgDem(demY, p[i], 8f);
+                float dR = routeHash.Nearest(p[i], 40f, out int rj);
+                // bis 15 m exakt Routenhöhe (Doppelfahrbahn, Promenade), bis 35 m weich ins Gelände
+                y[i] = !bridge && rj >= 0 ? Mathf.Lerp(route[rj].y, dem, Mathf.InverseLerp(15f, 35f, dR)) : dem;
+            }
             if (sg.OnRoute) FillNaN(y, i => AvgDem(demY, p[i], 8f));
             y = Smooth(y, sg.OnRoute ? 5 : 8);
             if (!sg.OnRoute)
@@ -221,10 +244,30 @@ namespace StoryCycling.WorldGen.Editor
                     float lo = Mathf.Max(a.Y - MaxGrade * arc[i], b.Y - MaxGrade * (len - arc[i]));
                     float hi = Mathf.Min(a.Y + MaxGrade * arc[i], b.Y + MaxGrade * (len - arc[i]));
                     y[i] = lo <= hi ? Mathf.Clamp(y[i], lo, hi) : Mathf.Lerp(a.Y, b.Y, arc[i] / Mathf.Max(len, .01f));
+                    // nahe der Route nicht vom Steigungskegel wegziehen lassen (Knoten sind dort ohnehin Routenhöhe)
+                }
+            // Brücken: das Gelände darunter (Fluss, Tal) zählt nicht -> gerade zwischen den Brückenenden
+            if (bridge && !sg.OnRoute)
+                for (int i = 0; i < n;)
+                {
+                    if (pw[i] == null || !pw[i].bridge) { i++; continue; }
+                    int e = i; while (e < n && pw[e] != null && pw[e].bridge) e++;
+                    float y0 = i > 0 ? y[i - 1] : (e < n ? y[e] : y[i]), y1 = e < n ? y[e] : y0;
+                    for (int k = i; k < e; k++) y[k] = Mathf.Lerp(y0, y1, (k - i + 1f) / (e - i + 1f));
+                    i = e;
                 }
             // Enden exakt auf Knotenhöhe: lineare Korrektur über den ganzen Abschnitt (glatt, keine Stufe)
             float dA = a.Y - y[0], dB = b.Y - y[n - 1];
             for (int i = 0; i < n; i++) y[i] += Mathf.Lerp(dA, dB, arc[i] / Mathf.Max(len, .01f));
+            // Gegenfahrbahn / Parallelweg direkt neben der Route: exakt Routenhöhe (hat Vorrang vor allem anderen)
+            if (!sg.OnRoute)
+                for (int i = 0; i < n; i++)
+                {
+                    float dR = routeHash.Nearest(p[i], 16f, out int rj);
+                    if (rj < 0) continue;
+                    float w = 1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(9f, 15f, dR));
+                    y[i] = Mathf.Lerp(y[i], route[rj].y, w);
+                }
 
             // Ortslage je Probe: Gebäude auf beiden Seiten in 45 m, Mindestlänge 120 m
             var urban = new bool[n];
@@ -267,54 +310,156 @@ namespace StoryCycling.WorldGen.Editor
                     distance = arc[i], half = half[i], inset = inset[i]
                 });
                 sg.Urban.Add(urban[i]); sg.Rank.Add(rank[i]);
+                sg.LeftKind.Add(KindNormal); sg.RightKind.Add(KindNormal);
             }
         }
 
-        // ------------------------------------------------------------------ Kreuzungen
-        private void BuildJunction(int ni)
+        // ------------------------------------------------------------------ Mittelstreifen
+        private void DetectMedians()
         {
-            var node = Nodes[ni];
-            var j = new Junction { Node = ni };
-            var seen = new HashSet<int>();
-            foreach (int si in node.Segs)
+            var all = new List<Vector3>(); var who = new List<int>(); var idx = new List<int>();
+            for (int si = 0; si < Segs.Count; si++)
+                if (Segs[si].Oneway)
+                    for (int k = 0; k < Segs[si].S.Count; k += 2) { all.Add(Segs[si].S[k].pos); who.Add(si); idx.Add(k); }
+            if (all.Count == 0) return;
+            var hash = new PointHash(all, 10f);
+            int marked = 0;
+            for (int si = 0; si < Segs.Count; si++)
             {
-                if (!seen.Add(si)) continue;
                 var sg = Segs[si];
-                if (sg.S.Count < 4) continue;
-                bool atA = sg.A == ni;
-                // bei Schleifen (A == B) beide Enden
-                int k = SampleAt(sg, atA ? 6f : sg.Length - 6f);
-                var sm = sg.S[k];
-                Vector2 dir = (new Vector2(sm.pos.x, sm.pos.z) - node.P).normalized;
-                bool urb = sg.Urban[atA ? 0 : sg.Urban.Count - 1];
-                j.Ends.Add(new End { Seg = si, AtA = atA, Dir = dir, Half = sm.half, Outer = sm.half + (urb ? 2f : 1.6f), Urban = urb });
-                if (sg.A == sg.B && atA)
+                if (!sg.Oneway) continue;
+                for (int k = 0; k < sg.S.Count; k++)
                 {
-                    int k2 = SampleAt(sg, sg.Length - 6f); var s2 = sg.S[k2];
-                    j.Ends.Add(new End { Seg = si, AtA = false, Dir = (new Vector2(s2.pos.x, s2.pos.z) - node.P).normalized, Half = s2.half, Outer = s2.half + (urb ? 2f : 1.6f), Urban = urb });
+                    var sm = sg.S[k]; var q = new Vector2(sm.pos.x, sm.pos.z);
+                    foreach (int oi in hash.WithinIdx(q, 25f))
+                    {
+                        // Partner: andere Einbahn-Fahrbahn, entgegengesetzt, seitlich versetzt
+                        if (who[oi] == si) continue;
+                        var os = Segs[who[oi]].S[idx[oi]];
+                        if (Vector3.Dot(os.tangent, sm.tangent) > -.8f) continue;
+                        float lat = Vector3.Dot(os.pos - sm.pos, sm.side);
+                        if (Mathf.Abs(lat) > sm.half + os.half + 12f || Mathf.Abs(lat) < sm.half) continue;
+                        if (lat > 0f) sg.RightKind[k] = KindMedian; else sg.LeftKind[k] = KindMedian;
+                        marked++;
+                        break;
+                    }
                 }
             }
-            if (j.Ends.Count < 3) return;
-            j.Ends.Sort((u, v) => Mathf.Atan2(u.Dir.y, u.Dir.x).CompareTo(Mathf.Atan2(v.Dir.y, v.Dir.x)));
-            int m = j.Ends.Count;
-            var tL = new float[m]; var tR = new float[m];
-            for (int i = 0; i < m; i++)
+            if (marked > 0) Debug.Log($"Straßennetz: Mittelstreifen an {marked * SampleStep / 1000f:0.0} km Doppelfahrbahn erkannt.");
+        }
+
+        // ------------------------------------------------------------------ Kreuzungen (Cluster)
+        private void BuildClusters()
+        {
+            // Union-Find: Kreuzungsknoten, die über kurze Abschnitte (≤ 25 m) verbunden sind, bilden eine Kreuzung
+            var parent = new int[Nodes.Count];
+            for (int i = 0; i < parent.Length; i++) parent[i] = i;
+            System.Func<int, int> Find = null;
+            Find = x => parent[x] == x ? x : (parent[x] = Find(parent[x]));
+            System.Func<int, bool> IsJ = x => Nodes[x].Segs.Count >= 3;
+            foreach (var sg in Segs)
+                if (sg.A != sg.B && IsJ(sg.A) && IsJ(sg.B) && sg.Length <= 25f)
+                { parent[Find(sg.A)] = Find(sg.B); sg.Internal = true; }
+
+            var groups = new Dictionary<int, List<int>>();
+            for (int ni = 0; ni < Nodes.Count; ni++)
             {
-                var e1 = j.Ends[i]; var e2 = j.Ends[(i + 1) % m];
-                // linke Kante von e1 trifft rechte Kante von e2 (Drehsinn gegen den Uhrzeiger)
-                if (EdgeIntersect(e1.Dir, Left(e1.Dir) * e1.Half, e2.Dir, Right(e2.Dir) * e2.Half, out float t1, out float t2))
-                { tL[i] = t1; tR[(i + 1) % m] = t2; }
-                else { tL[i] = e1.Half; tR[(i + 1) % m] = e2.Half; }
+                if (!IsJ(ni)) continue;
+                int r = Find(ni);
+                if (!groups.TryGetValue(r, out var l)) { l = new List<int>(); groups[r] = l; }
+                l.Add(ni);
             }
-            foreach (var e in j.Ends) e.Trim = 0f;
-            for (int i = 0; i < m; i++)
+            foreach (var g in groups.Values) BuildCluster(g);
+            junctionOfNode = new int[Nodes.Count];
+            for (int i = 0; i < junctionOfNode.Length; i++) junctionOfNode[i] = -1;
+            for (int ji = 0; ji < Junctions.Count; ji++) foreach (int ni in Junctions[ji].NodesIn) junctionOfNode[ni] = ji;
+        }
+
+        private int[] junctionOfNode;
+        public int JunctionOf(int node) => junctionOfNode != null && node >= 0 && node < junctionOfNode.Length ? junctionOfNode[node] : -1;
+
+        private void BuildCluster(List<int> nodes)
+        {
+            var j = new Junction { Node = nodes[0] };
+            j.NodesIn.AddRange(nodes);
+            foreach (int ni in nodes) { j.Center += Nodes[ni].P; j.Y += Nodes[ni].Y; }
+            j.Center /= nodes.Count; j.Y /= nodes.Count;
+
+            foreach (int ni in nodes)
+                foreach (int si in Nodes[ni].Segs)
+                {
+                    var sg = Segs[si];
+                    if (sg.Internal || sg.S.Count < 4) continue;
+                    for (int endSide = 0; endSide < 2; endSide++)
+                    {
+                        bool atA = endSide == 0;
+                        if ((atA ? sg.A : sg.B) != ni) continue;
+                        bool dup = false; foreach (var e0 in j.Ends) if (e0.Seg == si && e0.AtA == atA) dup = true;
+                        if (dup) continue;
+                        int k = SampleAt(sg, atA ? 6f : sg.Length - 6f);
+                        var sm = sg.S[k];
+                        Vector2 dir = (new Vector2(sm.pos.x, sm.pos.z) - Nodes[ni].P).normalized;
+                        int ek = atA ? 0 : sg.S.Count - 1;
+                        bool urb = sg.Urban[ek];
+                        j.Ends.Add(new End { Seg = si, AtA = atA, NodeIdx = ni, Dir = dir, Half = sm.half, Outer = sm.half + (urb ? 2f : 1.6f), Urban = urb });
+                    }
+                }
+            if (j.Ends.Count < 3 && nodes.Count == 1) return;
+            if (j.Ends.Count < 2) return;
+
+            // Beschnitt: so weit, dass sich die AUSSENKANTEN (Randstreifen/Gehweg) benachbarter Zufahrten nicht mehr
+            // überlappen und keine anderen Knoten der Kreuzung im Weg liegen
+            foreach (var e in j.Ends)
             {
-                var e = j.Ends[i]; var sg = Segs[e.Seg];
-                float t = Mathf.Max(tL[i], tR[i]) + 1.5f;
-                e.Trim = Mathf.Clamp(t, e.Half, Mathf.Min(35f, sg.Length * .45f));
+                var sg = Segs[e.Seg];
+                Vector2 P = Nodes[e.NodeIdx].P;
+                float t = e.Half;
+                foreach (var o in j.Ends)
+                {
+                    if (o == e) continue;
+                    Vector2 Q = Nodes[o.NodeIdx].P;
+                    for (int s1 = -1; s1 <= 1; s1 += 2)
+                    for (int s2 = -1; s2 <= 1; s2 += 2)
+                    {
+                        Vector2 pe = P + (s1 < 0 ? Left(e.Dir) : Right(e.Dir)) * e.Outer;
+                        Vector2 po = Q + (s2 < 0 ? Left(o.Dir) : Right(o.Dir)) * o.Outer;
+                        if (LineX(pe, e.Dir, po, o.Dir, out float te, out float to) && te > 0f && te < 40f && to > -5f && to < 40f &&
+                            ((pe + e.Dir * te) - j.Center).magnitude < 40f)
+                            t = Mathf.Max(t, te);
+                    }
+                }
+                foreach (int ni in j.NodesIn)
+                {
+                    if (ni == e.NodeIdx) continue;
+                    Vector2 w = Nodes[ni].P - P;
+                    float proj = Vector2.Dot(w, e.Dir), lat = Mathf.Abs(e.Dir.x * w.y - e.Dir.y * w.x);
+                    if (proj > 0f && lat < e.Outer + 3f) t = Mathf.Max(t, proj + 3f);
+                }
+                e.Trim = Mathf.Clamp(t + .5f, e.Half, Mathf.Min(35f, sg.Length * .45f));
                 if (e.AtA) sg.TrimA = Mathf.Max(sg.TrimA, e.Trim); else sg.TrimB = Mathf.Max(sg.TrimB, e.Trim);
             }
+            // Reihenfolge gegen den Uhrzeiger um die Kreuzungsmitte (nach Lage der Beschnittpunkte)
+            j.Ends.Sort((u, v) => AngleAround(j.Center, u).CompareTo(AngleAround(j.Center, v)));
             Junctions.Add(j);
+        }
+
+        private float AngleAround(Vector2 c, End e)
+        {
+            var sg = Segs[e.Seg];
+            var at = At(sg, e.AtA ? e.Trim : sg.Length - e.Trim);
+            return Mathf.Atan2(at.pos.z - c.y, at.pos.x - c.x);
+        }
+
+        // Schnitt zweier Geraden p1 + d1*t1 = p2 + d2*t2 (absolut)
+        public static bool LineX(Vector2 p1, Vector2 d1, Vector2 p2, Vector2 d2, out float t1, out float t2)
+        {
+            float den = d1.x * d2.y - d1.y * d2.x;
+            t1 = t2 = 0f;
+            if (Mathf.Abs(den) < .15f) return false;
+            Vector2 w = p2 - p1;
+            t1 = (w.x * d2.y - w.y * d2.x) / den;
+            t2 = (w.x * d1.y - w.y * d1.x) / den;
+            return true;
         }
 
         // Schnitt zweier Kantenlinien:  o1 + d1*t1  ==  o2 + d2*t2  (Ursprung = Knoten)
@@ -361,12 +506,16 @@ namespace StoryCycling.WorldGen.Editor
         {
             var all = new List<RoadField.Sample>();
             foreach (var sg in Segs)
+            {
+                if (sg.Internal) continue;
                 foreach (var s in sg.S)
                     if (s.distance >= sg.TrimA - .01f && s.distance <= sg.Length - sg.TrimB + .01f) all.Add(s);
+            }
             foreach (var j in Junctions)
             {
-                var n = Nodes[j.Node]; float r = 0f;
-                foreach (var e in j.Ends) r = Mathf.Max(r, e.Trim);
+                float r = 0f;
+                foreach (var e in j.Ends) r = Mathf.Max(r, e.Trim + (Nodes[e.NodeIdx].P - j.Center).magnitude);
+                var n = new Node { P = j.Center, Y = j.Y };
                 // Scheibe aus mehreren Proben (Nearest-Suche in 10-m-Zellen findet sie sicher)
                 for (int k = 0; k < 8; k++)
                 {
@@ -496,6 +645,21 @@ namespace StoryCycling.WorldGen.Editor
                         }
                 return idx >= 0 ? Mathf.Sqrt(best) : float.MaxValue;
             }
+            public List<int> WithinIdx(Vector2 q, float rad)
+            {
+                var res = new List<int>();
+                int r = Mathf.CeilToInt(rad / cell), cx = Mathf.FloorToInt(q.x / cell), cz = Mathf.FloorToInt(q.y / cell);
+                for (int dx = -r; dx <= r; dx++)
+                for (int dz = -r; dz <= r; dz++)
+                {
+                    List<int> l;
+                    if (!map.TryGetValue(Key(cx + dx, cz + dz), out l)) continue;
+                    foreach (int i in l)
+                        if ((pts[i].x - q.x) * (pts[i].x - q.x) + (pts[i].z - q.y) * (pts[i].z - q.y) <= rad * rad) res.Add(i);
+                }
+                return res;
+            }
+
             public List<Vector2> Within(Vector2 q, float rad)
             {
                 var res = new List<Vector2>();

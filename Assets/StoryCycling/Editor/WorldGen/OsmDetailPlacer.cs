@@ -41,7 +41,7 @@ namespace StoryCycling.WorldGen.Editor
                     int best = -1; float bd = 35f * 35f;
                     for (int ji = 0; ji < net.Junctions.Count; ji++)
                     {
-                        var np = net.Nodes[net.Junctions[ji].Node].P;
+                        var np = net.Junctions[ji].Center;
                         float d2 = (np - pt.pos).sqrMagnitude;
                         if (d2 < bd) { bd = d2; best = ji; }
                     }
