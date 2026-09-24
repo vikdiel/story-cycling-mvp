@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: 3fc4a1c7f57aac9488ad800d897ecfc4
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 234253
+  packageName: POLYGON - Tropical Jungle - Nature Biomes - 3D Environment Art by Synty
+  packageVersion: 1.10.6
+  assetPath: Assets/Synty/PNB_Core/Scripts/HeightMapAssigner.cs
+  uploadId: 983704

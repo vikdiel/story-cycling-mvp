@@ -25,3 +25,7 @@ Recordings/
 # Xcode per-user state
 *.xcuserstate
 xcuserdata/
+
+# Nordhoek generated build output
+/Assets/StoryCycling/Scenes/NordhoekGpxTest.unity
+/Assets/StoryCycling/GeneratedGpx/NordhoekWorldMeshes.asset
