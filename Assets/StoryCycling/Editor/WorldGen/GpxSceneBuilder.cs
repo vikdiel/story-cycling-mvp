@@ -156,7 +156,8 @@ namespace StoryCycling.WorldGen.Editor
                     // EIN Generator für Route, Querstraßen und Kreuzungen; Leitplanken weiterhin entlang der Route
                     RoadNetMesher.Build(net, Group("Road"), roadMats, SaveMesh);
                     new RoadMeshBuilder(road, terrain).Build(Group("Guardrails"), roadMats, streets, SaveMesh, railsOnly: true);
-                    StreetMeshBuilder.BuildIslandsOnly(streets, road, streetGroup, roadMats, SaveMesh);
+                    // Kreisverkehr-Inseln ergeben sich aus der vereinigten Fläche (Loch im Asphalt) -> kein Extra-Mesh
+                    if (!RoadNetMesher.UseSurfaceUnion) StreetMeshBuilder.BuildIslandsOnly(streets, road, streetGroup, roadMats, SaveMesh);
                 }
                 else
                 {
@@ -186,6 +187,7 @@ namespace StoryCycling.WorldGen.Editor
                     Progress("Vegetation & Küste", .74f);
                     VegetationPlacer.Place(terrain, assets, occupied, Group("Vegetation"));
                     VegetationPlacer.PlaceIslands(streets, road, assets, streetGroup);
+                    if (net != null) VegetationPlacer.PlaceMedianPalms(net, assets, occupied, Group("MedianPalms"));
                     Progress("Hangvegetation", .82f);
                     SlopeVegetation.Place(terrain, assets, occupied, Group("SlopeVegetation"), Cfg.slopeVegetationDistance);
                     VegetationPlacer.PlaceBirds(terrain, assets, Group("Birds"));

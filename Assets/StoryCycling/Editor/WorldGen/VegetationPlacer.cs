@@ -265,6 +265,25 @@ namespace StoryCycling.WorldGen.Editor
             return placed;
         }
 
+        // Palmen im Mittelstreifen von Doppelfahrbahnen (Lücke > 1 m), alle 20 m
+        public static int PlaceMedianPalms(RoadNet net, WorldAssets a, Occupancy occupied, Transform parent, int seed = 2024)
+        {
+            if (a.Palms.Count == 0 || net == null) return 0;
+            var rng = new System.Random(seed);
+            int placed = 0;
+            foreach (var p in net.MedianPalmSpots)
+            {
+                if (!occupied.IsFree(p.x, p.z, 2f)) continue;
+                var go = WorldPlacement.Spawn(WorldPlacement.Pick(a.Palms, rng), parent, p,
+                    Quaternion.Euler(0f, WorldPlacement.Range(rng, 0f, 360f), 0f), WorldPlacement.Range(rng, .9f, 1.1f), p.y + .12f, .05f);
+                WorldPlacement.CullWhenSmall(go, .006f, true);
+                occupied.Add(p.x, p.z, 2f);
+                placed++;
+            }
+            Debug.Log($"Mittelstreifen: {placed} Palmen.");
+            return placed;
+        }
+
         // Kreisverkehr-Mittelinseln bepflanzen.
         public static int PlaceIslands(StreetNetwork net, RoadField main, WorldAssets a, Transform parent, int seed = 77)
         {

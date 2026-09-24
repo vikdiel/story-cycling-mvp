@@ -11,8 +11,12 @@ namespace StoryCycling.WorldGen.Editor
     {
         private const float Bucket = 400f;
 
+        // Standard: vereinigte Oberfläche (robust für alle Kreuzungsformen). useSurfaceUnion=false: alte Bänder + Flächen.
+        public static bool UseSurfaceUnion = true;
+
         public static void Build(RoadNet net, Transform parent, RoadMaterials mats, System.Func<Mesh, Mesh> save)
         {
+            if (UseSurfaceUnion) { RoadSurface.Build(net, parent, mats, save); return; }
             var buckets = new Dictionary<long, RoadProfile.Parts>();
             System.Func<Vector3, RoadProfile.Parts> PartsAt = p =>
             {

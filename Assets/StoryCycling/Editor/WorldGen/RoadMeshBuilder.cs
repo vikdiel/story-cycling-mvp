@@ -351,6 +351,16 @@ namespace StoryCycling.WorldGen.Editor
             Stripe(p, s, from, to, null, -.07f, .07f, 3, 3f, 9f, centerLine);
         }
 
+        // Nur Markierungen (für die vereinigte Straßenoberfläche): gelbe Randlinien je Seite, weiße Mittellinie
+        public static void EmitMarkings(Parts p, List<RoadField.Sample> s, int from, int to,
+                                        System.Func<int, bool> leftLine, System.Func<int, bool> rightLine, System.Func<int, bool> centerLine)
+        {
+            if (to <= from) return;
+            Stripe(p, s, from, to, true, .05f, .2f, 2, 0f, 0f, leftLine, true);
+            Stripe(p, s, from, to, false, .05f, .2f, 2, 0f, 0f, rightLine, true);
+            Stripe(p, s, from, to, null, -.07f, .07f, 3, 3f, 9f, centerLine);
+        }
+
         // Streifen: side true = linker Rand, false = rechter Rand, null = Mitte.
         private static void Stripe(Parts p, List<RoadField.Sample> s, int from, int to, bool? side, float inner, float outer,
                                    int sub, float dashOn, float dashPeriod, System.Func<int, bool> allowed, bool perSampleInset = false)

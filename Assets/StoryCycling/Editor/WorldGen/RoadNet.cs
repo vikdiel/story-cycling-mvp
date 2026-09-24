@@ -48,6 +48,8 @@ namespace StoryCycling.WorldGen.Editor
         public readonly List<Node> Nodes = new List<Node>();
         public readonly List<Segment> Segs = new List<Segment>();
         public readonly List<Junction> Junctions = new List<Junction>();
+        // Mittelstreifen-Mitten (Lücke > 1 m) alle 20 m: Standorte für Palmen
+        public readonly List<Vector3> MedianPalmSpots = new List<Vector3>();
 
         public const float ScopeDistance = 150f, MaxGrade = .12f, SampleStep = 2f;
 
@@ -341,6 +343,16 @@ namespace StoryCycling.WorldGen.Editor
                         if (Mathf.Abs(lat) > sm.half + os.half + 12f || Mathf.Abs(lat) < sm.half) continue;
                         if (lat > 0f) sg.RightKind[k] = KindMedian; else sg.LeftKind[k] = KindMedian;
                         marked++;
+                        // Palme mittig im Mittelstreifen: nur von einer der beiden Fahrbahnen aus (kleinerer Index),
+                        // wenn die Lücke > 1 m ist, alle 20 m, nicht in Kreuzungsnähe
+                        float gap = Mathf.Abs(lat) - sm.half - os.half;
+                        if (si < who[oi] && gap > 1f && Mathf.Floor(sm.distance / 20f) != Mathf.Floor((sm.distance - SampleStep) / 20f) &&
+                            sm.distance > 25f && sm.distance < sg.Length - 25f)
+                        {
+                            Vector3 mid = sm.pos + sm.side * (Mathf.Sign(lat) * (sm.half + gap * .5f));
+                            mid.y = (sm.pos.y + os.pos.y) * .5f;
+                            MedianPalmSpots.Add(mid);
+                        }
                         break;
                     }
                 }
