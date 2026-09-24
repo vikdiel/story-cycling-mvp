@@ -11,8 +11,12 @@ namespace StoryCycling.WorldGen.Editor
     {
         private const float Bucket = 400f;
 
-        // Standard: vereinigte Oberfläche (robust für alle Kreuzungsformen). useSurfaceUnion=false: alte Bänder + Flächen.
-        public static bool UseSurfaceUnion = true;
+        // Die globale LibTess-Vereinigung wächst bei langen OSM-Korridoren mit vielen
+        // Querstraßen/Kreuzungen extrem schnell (mehrere komplette Tesselations-Pässe
+        // über alle 2-m-Proben) und blockiert dann den Unity-Hauptthread. Deshalb ist
+        // sie nur noch ein expliziter Opt-in für kleine Testnetze; der Standard baut
+        // die bewährten 400-m-Bänder plus Kreuzungsflächen.
+        public static bool UseSurfaceUnion = false;
 
         public static void Build(RoadNet net, Transform parent, RoadMaterials mats, System.Func<Mesh, Mesh> save)
         {
