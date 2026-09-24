@@ -15,7 +15,10 @@ namespace StoryCycling.WorldGen.Editor
         public readonly DemGrid Dem;
         public readonly RoadField Road;
         public readonly float Ele0;      // Höhe des ersten GPX-Punkts (lokales y = absolut - Ele0)
-        public float SeaY => -Ele0;
+        // Terrarium-Küstendaten liegen oft geringfügig über dem echten Meeresspiegel.
+        // Ein kleiner Offset erzeugt natürlichere, breitere Strände.
+        public const float SeaLevelOffset = 1.5f;
+        public float SeaY => -Ele0 + SeaLevelOffset;
 
         // Straßen-Einschnitt
         public const float FlatRadius = 11f;     // Fahrbahn + Bankett + 1 Zellendiagonale
@@ -274,6 +277,7 @@ namespace StoryCycling.WorldGen.Editor
             Color rock = new Color(.53f, .50f, .46f), rockDark = new Color(.38f, .36f, .35f);
             Color fynbos = new Color(.43f, .49f, .29f), fynbosDry = new Color(.60f, .57f, .37f);
             Color forest = new Color(.23f, .35f, .19f), field = new Color(.47f, .62f, .30f);
+            Color scrubDark = new Color(.29f, .35f, .22f);
             Color urban = new Color(.53f, .56f, .43f), seabed = new Color(.18f, .40f, .40f);
 
             for (int j = 0; j < rh; j++)
@@ -286,16 +290,24 @@ namespace StoryCycling.WorldGen.Editor
                 Biome b = biomes[j * rw + i];
 
                 Color baseColor;
-                switch (b)
-                {
+            switch (b)
+            {
                     case Biome.Urban: baseColor = Color.Lerp(urban, field, n2 * .6f); break;
                     case Biome.Forest: baseColor = Color.Lerp(forest, fynbos, n2 * .35f); break;
                     case Biome.Field: baseColor = Color.Lerp(field, fynbos, n1 * .4f); break;
                     case Biome.Beach: baseColor = sandDry; break;
                     case Biome.Rock: baseColor = rock; break;
-                    default: baseColor = Color.Lerp(fynbos, fynbosDry, Mathf.SmoothStep(0f, 1f, n1 * .8f + Mathf.Clamp01(above / 900f))); break;
-                }
-                // Hänge -> Fels (Tafelberg / Zwölf Apostel / Chapman's Peak)
+                default: baseColor = Color.Lerp(fynbos, fynbosDry, Mathf.SmoothStep(0f, 1f, n1 * .8f + Mathf.Clamp01(above / 900f))); break;
+            }
+            // Großflächige Busch- und Trockenflecken verhindern eine gleichförmige Rasenoptik.
+            if (b != Biome.Beach && b != Biome.Rock && b != Biome.Urban)
+            {
+                float n3 = Mathf.PerlinNoise(x * .0021f + 41.3f, z * .0021f + 9.7f);
+                float n4 = Mathf.PerlinNoise(x * .011f + 2.9f, z * .011f + 77.1f);
+                baseColor = Color.Lerp(baseColor, scrubDark, Mathf.SmoothStep(0f, .75f, Mathf.InverseLerp(.52f, .8f, n3 * .7f + n4 * .3f)));
+                baseColor = Color.Lerp(baseColor, fynbosDry, Mathf.SmoothStep(0f, .5f, Mathf.InverseLerp(.62f, .85f, n4)));
+            }
+            // Hänge -> Fels (Tafelberg / Zwölf Apostel / Chapman's Peak)
                 float rockW = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(24f, 38f, slope));
                 baseColor = Color.Lerp(baseColor, Color.Lerp(rock, rockDark, n2), rockW);
                 // Strand an flachen Küstenstreifen

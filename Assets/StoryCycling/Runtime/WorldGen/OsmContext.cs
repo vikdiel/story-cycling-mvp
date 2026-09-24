@@ -103,7 +103,12 @@ namespace StoryCycling.WorldGen
 
         private static string AreaKind(Dictionary<string, string> t)
         {
-            if (t.TryGetValue("amenity", out string am) && am == "parking") return "parking";
+            if (t.TryGetValue("amenity", out string am) && am == "parking")
+            {
+                // Nur ebenerdige Parkplätze: Tiefgaragen und Parkhäuser würden Autos schweben lassen.
+                t.TryGetValue("parking", out string kind);
+                return kind == null || kind == "surface" ? "parking" : null;
+            }
             if (t.TryGetValue("landuse", out string lu))
                 switch (lu) {
                     case "residential": case "commercial": case "retail": case "industrial": return "urban";

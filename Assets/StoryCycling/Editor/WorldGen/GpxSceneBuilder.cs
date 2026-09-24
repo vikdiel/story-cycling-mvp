@@ -103,7 +103,7 @@ namespace StoryCycling.WorldGen.Editor
                         Progress("Gebäude (OSM)", .58f);
                         OsmBuildingPlacer.Place(road, terrain, osm, catalog, occupied, Group("Buildings"));
                         Progress("Details (OSM)", .66f);
-                        OsmDetailPlacer.Place(spline, osm, catalog, Group("StreetDetails"));
+                        OsmDetailPlacer.Place(road, terrain, osm, catalog, occupied, Group("StreetDetails"));
                     }
                     Progress("Vegetation", .74f);
                     VegetationPlacer.Place(terrain, catalog, occupied, Group("Vegetation"));
