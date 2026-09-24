@@ -10,7 +10,9 @@ namespace StoryCycling
         [SerializeField] private Transform rideCamera;
         [SerializeField] private Transform[] wheels;
         [SerializeField] private CapeCrownCyclistAnimation cyclistAnimation;
-        [SerializeField] private float maxSpeedKph = 200f;
+        // Fixed demo ceiling: do not serialize this. Existing scenes still carry the former
+        // inspector value (100), which would otherwise silently clamp the HUD slider.
+        private const float MaxSpeedKph = 200f;
         [Header("Speed feel camera")]
         [SerializeField] private float cruiseFov = 58f;
         [SerializeField] private float maxSpeedFov = 78f;
@@ -27,7 +29,7 @@ namespace StoryCycling
         public float TotalMetres => totalMetres;
         public float Length => GpxRide.Length;
 
-        public void SetSpeed(float kph) => speedKph = Mathf.Clamp(kph, 0f, maxSpeedKph);
+        public void SetSpeed(float kph) => speedKph = Mathf.Clamp(kph, 0f, MaxSpeedKph);
 
         private void Start()
         {
@@ -71,7 +73,7 @@ namespace StoryCycling
             if (rider == null || rideCamera == null) return;
             // Actual progression remains exactly speed / 3.6 metres per second. These values only
             // strengthen optical speed cues at high demo speeds.
-            float speedT = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(25f, maxSpeedKph, speedKph));
+            float speedT = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(25f, MaxSpeedKph, speedKph));
             float cameraDistance = Mathf.Lerp(cruiseCameraDistance, maxSpeedCameraDistance, speedT);
             float cameraHeight = Mathf.Lerp(cruiseCameraHeight, maxSpeedCameraHeight, speedT);
             float lookAhead = Mathf.Lerp(cruiseLookAhead, maxSpeedLookAhead, speedT);
