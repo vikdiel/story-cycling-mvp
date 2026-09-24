@@ -4,47 +4,105 @@ using UnityEngine.Rendering;
 
 namespace StoryCycling.WorldGen.Editor
 {
-    // Lightweight road ribbons for OSM side streets and planted roundabout islands.
+    // Meshes für Querstraßen (gleiches Querprofil wie die Route, in 400-m-Zellen gebündelt)
+    // und Kreisverkehr-Mittelinseln (Bordsteinring + Grünfläche).
     public static class StreetMeshBuilder
     {
-        public static void Build(StreetNetwork network, Transform parent, Material asphalt, Material shoulder, Material island, System.Func<Mesh, Mesh> save)
+        private const float BucketSize = 400f;
+
+        public static void Build(StreetNetwork net, WorldTerrain terrain, RoadField main, Transform parent,
+                                 RoadMaterials mats, System.Func<Mesh, Mesh> save)
         {
-            int created = 0;
-            foreach (var street in network.Streets)
+            var buckets = new Dictionary<long, RoadProfile.Parts>();
+            foreach (var st in net.Streets)
             {
-                if (street.Samples.Count < 2) continue;
-                var vertices = new List<Vector3>(); var uvs = new List<Vector2>(); var asphaltTriangles = new List<int>(); var shoulderTriangles = new List<int>();
-                for (int i = 0; i < street.Samples.Count; i++)
+                var s = st.Samples;
+                if (s.Count < 2) continue;
+                float baseHalf = StreetNetwork.HalfWidthFor(st.Highway);
+                var edges = new RoadProfile.Edge[s.Count];
+                for (int i = 0; i < s.Count; i++)
                 {
-                    var s = street.Samples[i];
-                    vertices.Add(s.pos - s.side * (s.half + 1.2f) + Vector3.down * .06f);
-                    vertices.Add(s.pos - s.side * s.half + Vector3.up * .01f);
-                    vertices.Add(s.pos + s.side * s.half + Vector3.up * .01f);
-                    vertices.Add(s.pos + s.side * (s.half + 1.2f) + Vector3.down * .06f);
-                    uvs.Add(new Vector2(-1f, s.distance / 6f)); uvs.Add(new Vector2(0f, s.distance / 6f));
-                    uvs.Add(new Vector2(1f, s.distance / 6f)); uvs.Add(new Vector2(2f, s.distance / 6f));
+                    bool flare = s[i].half > baseHalf + .05f;
+                    edges[i] = flare ? RoadProfile.Edge.Mouth
+                             : terrain.BiomeAt(s[i].pos.x, s[i].pos.z) == WorldTerrain.Biome.Urban ? RoadProfile.Edge.Urban
+                             : RoadProfile.Edge.Rural;
                 }
-                for (int i = 0; i < street.Samples.Count - 1; i++)
-                {
-                    int a = i * 4, b = a + 4;
-                    Quad(shoulderTriangles, a, a + 1, b, b + 1); Quad(asphaltTriangles, a + 1, a + 2, b + 1, b + 2); Quad(shoulderTriangles, a + 2, a + 3, b + 2, b + 3);
-                }
-                var mesh = new Mesh { name = $"Street_{created:D3}", indexFormat = IndexFormat.UInt32, subMeshCount = 2 };
-                mesh.SetVertices(vertices); mesh.SetUVs(0, uvs); mesh.SetTriangles(asphaltTriangles, 0); mesh.SetTriangles(shoulderTriangles, 1); mesh.RecalculateNormals(); mesh.RecalculateBounds();
+                RoadProfile.RemoveShortRuns(edges, RoadProfile.Edge.Urban, 8);
+
+                Vector3 mid = s[s.Count / 2].pos;
+                long key = ((long)Mathf.FloorToInt(mid.x / BucketSize) << 32) | (uint)Mathf.FloorToInt(mid.z / BucketSize);
+                if (!buckets.TryGetValue(key, out RoadProfile.Parts parts)) { parts = new RoadProfile.Parts(); buckets[key] = parts; }
+                bool center = st.CenterLine;
+                RoadProfile.Emit(parts, s, 0, s.Count - 1, i => edges[i], i => edges[i], false,
+                                 i => center && edges[i] != RoadProfile.Edge.Mouth);
+            }
+
+            int count = 0;
+            foreach (var kv in buckets)
+            {
+                if (kv.Value.IsEmpty) continue;
+                Mesh mesh = kv.Value.ToMesh();
+                mesh.name = $"Streets_{count:D3}";
                 mesh = save(mesh);
-                var go = new GameObject(mesh.name, typeof(MeshFilter), typeof(MeshRenderer)); go.transform.SetParent(parent, false);
-                go.GetComponent<MeshFilter>().sharedMesh = mesh; go.GetComponent<MeshRenderer>().sharedMaterials = new[] { asphalt, shoulder }; go.GetComponent<MeshRenderer>().shadowCastingMode = ShadowCastingMode.Off;
-                created++;
+                var go = new GameObject(mesh.name, typeof(MeshFilter), typeof(MeshRenderer));
+                go.transform.SetParent(parent, false);
+                go.GetComponent<MeshFilter>().sharedMesh = mesh;
+                var mr = go.GetComponent<MeshRenderer>();
+                mr.sharedMaterials = mats.Ribbon;
+                mr.shadowCastingMode = ShadowCastingMode.Off;
+                count++;
             }
+
             int islands = 0;
-            foreach (var ring in network.Islands)
+            foreach (var isl in net.Islands)
             {
-                float y = network.IslandBaseY(ring, network.Field); if (float.IsNaN(y)) continue;
-                var go = GameObject.CreatePrimitive(PrimitiveType.Cylinder); Object.DestroyImmediate(go.GetComponent<Collider>()); go.name = $"RoundaboutIsland_{islands:D2}";
-                go.transform.SetParent(parent, false); go.transform.position = new Vector3(ring.Center.x, y + .08f, ring.Center.z); go.transform.localScale = new Vector3(ring.Radius * 2f, .16f, ring.Radius * 2f); go.GetComponent<Renderer>().sharedMaterial = island; islands++;
+                float y = net.IslandBaseY(isl, main);
+                if (float.IsNaN(y)) continue;
+                Mesh m = IslandMesh(isl.Radius);
+                m.name = $"RoundaboutIsland_{islands:D2}";
+                m = save(m);
+                var go = new GameObject(m.name, typeof(MeshFilter), typeof(MeshRenderer));
+                go.transform.SetParent(parent, false);
+                go.transform.position = new Vector3(isl.Center.x, y, isl.Center.z);
+                go.GetComponent<MeshFilter>().sharedMesh = m;
+                go.GetComponent<MeshRenderer>().sharedMaterials = new[] { mats.IslandGrass, mats.Sidewalk };
+                islands++;
             }
-            Debug.Log($"Querstraßen-Meshes: {created}, Kreisverkehr-Inseln: {islands}.");
+            Debug.Log($"Querstraßen-Meshes: {count} Zellen, {islands} Kreisverkehr-Inseln.");
         }
-        private static void Quad(List<int> triangles, int a, int b, int c, int d) { triangles.Add(a); triangles.Add(c); triangles.Add(b); triangles.Add(b); triangles.Add(c); triangles.Add(d); }
+
+        // Scheibe (Grün, 0.18 m hoch) mit 0.5 m Bordsteinring und senkrechter Außenkante.
+        private static Mesh IslandMesh(float radius)
+        {
+            const int seg = 40;
+            const float top = .18f, curb = .5f;
+            var v = new List<Vector3>(); var n = new List<Vector3>();
+            var grass = new List<int>(); var stone = new List<int>();
+            v.Add(new Vector3(0f, top, 0f)); n.Add(Vector3.up);
+            for (int k = 0; k < seg; k++)
+            {
+                float a = k * Mathf.PI * 2f / seg;
+                Vector3 dir = new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a));
+                v.Add(dir * (radius - curb) + Vector3.up * top); n.Add(Vector3.up);   // 1 + 4k: innen Grünkante
+                v.Add(dir * (radius - curb) + Vector3.up * top); n.Add(Vector3.up);   // 2 + 4k: Bordstein innen
+                v.Add(dir * radius + Vector3.up * top); n.Add(Vector3.up);            // 3 + 4k: Bordstein außen oben
+                v.Add(dir * radius + Vector3.down * .1f); n.Add(dir);                 // 4 + 4k: Außenkante unten
+            }
+            for (int k = 0; k < seg; k++)
+            {
+                int a = 1 + 4 * k, b = 1 + 4 * ((k + 1) % seg);
+                // Draufsicht: Winkel steigt gegen den Uhrzeigersinn -> Reihenfolge für Oberseite (Unity: im Uhrzeigersinn)
+                grass.Add(0); grass.Add(b); grass.Add(a);
+                stone.Add(a + 1); stone.Add(b + 1); stone.Add(a + 2);
+                stone.Add(b + 1); stone.Add(b + 2); stone.Add(a + 2);
+                stone.Add(a + 2); stone.Add(b + 2); stone.Add(a + 3);
+                stone.Add(b + 2); stone.Add(b + 3); stone.Add(a + 3);
+            }
+            var mesh = new Mesh { subMeshCount = 2 };
+            mesh.SetVertices(v); mesh.SetNormals(n);
+            mesh.SetTriangles(grass, 0); mesh.SetTriangles(stone, 1);
+            mesh.RecalculateBounds();
+            return mesh;
+        }
     }
 }

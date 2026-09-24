@@ -7,6 +7,8 @@ namespace StoryCycling.WorldGen
     //   1) drops points closer than minSpacing (GPS jitter / Strava-densified points)
     //   2) resamples to uniform arc-length spacing (stable spline + even sampling)
     //   3) moving-average smooths elevation (Y) to remove barometric noise / bumpy grade
+    //   4) reconciles overlapping passes (out-and-back): the return uses the SAME height as the
+    //      outbound pass at the same spot — otherwise road and rider differ by up to 4 m there
     // XZ corners are preserved — centripetal RouteSpline handles them without overshoot.
     public static class RoutePreprocessor
     {
@@ -20,69 +22,6 @@ namespace StoryCycling.WorldGen
             ReconcileOverlaps(resampled);
             return resampled;
         }
-
-        // GPX out-and-back segments can have slightly different barometric heights even
-        // when their XY centreline is identical. Later passes inherit the first pass and
-        // blend in/out, preventing a double road and rider height disagreement.
-        public static int ReconcileOverlaps(List<Vector3> points, float radius = 8.5f, float minArcGap = 120f, float maxHeightDelta = 4f, float blend = 30f)
-        {
-            if (points == null || points.Count < 3) return 0;
-            int count = points.Count;
-            var arc = new float[count];
-            for (int i = 1; i < count; i++) arc[i] = arc[i - 1] + Vector2.Distance(new Vector2(points[i - 1].x, points[i - 1].z), new Vector2(points[i].x, points[i].z));
-            float cell = radius * 2f;
-            var grid = new Dictionary<long, List<int>>();
-            var corrections = new float[count];
-            var matched = new bool[count];
-            int corrected = 0;
-            for (int i = 0; i < count; i++)
-            {
-                var p = points[i]; var direction = Direction(points, i);
-                int cx = Mathf.FloorToInt(p.x / cell), cz = Mathf.FloorToInt(p.z / cell);
-                int best = -1; float bestDistance = radius * radius;
-                for (int dx = -1; dx <= 1; dx++)
-                for (int dz = -1; dz <= 1; dz++)
-                {
-                    if (!grid.TryGetValue(Key(cx + dx, cz + dz), out var candidates)) continue;
-                    foreach (int candidate in candidates)
-                    {
-                        if (arc[i] - arc[candidate] < minArcGap) continue;
-                        if (Mathf.Abs(Vector2.Dot(direction, Direction(points, candidate))) < .8f) continue;
-                        float x = p.x - points[candidate].x, z = p.z - points[candidate].z, distance = x * x + z * z;
-                        if (distance >= bestDistance || Mathf.Abs(p.y - points[candidate].y) > maxHeightDelta) continue;
-                        best = candidate; bestDistance = distance;
-                    }
-                }
-                if (best >= 0) { corrections[i] = points[best].y - p.y; matched[i] = true; corrected++; }
-                long key = Key(cx, cz);
-                if (!grid.TryGetValue(key, out var bucket)) { bucket = new List<int>(); grid[key] = bucket; }
-                bucket.Add(i);
-            }
-            for (int i = 0; i < count; i++)
-            {
-                float correction = corrections[i];
-                if (!matched[i])
-                {
-                    float bestWeight = 0f;
-                    for (int j = i - 1; j >= 0 && arc[i] - arc[j] <= blend; j--)
-                        if (matched[j]) { float w = 1f - (arc[i] - arc[j]) / blend; if (w > bestWeight) { bestWeight = w; correction = corrections[j]; } }
-                    for (int j = i + 1; j < count && arc[j] - arc[i] <= blend; j++)
-                        if (matched[j]) { float w = 1f - (arc[j] - arc[i]) / blend; if (w > bestWeight) { bestWeight = w; correction = corrections[j]; } }
-                    correction *= bestWeight * bestWeight * (3f - 2f * bestWeight);
-                }
-                if (Mathf.Abs(correction) > .0001f) { var p = points[i]; p.y += correction; points[i] = p; }
-            }
-            return corrected;
-        }
-
-        private static Vector2 Direction(List<Vector3> points, int index)
-        {
-            Vector3 a = points[Mathf.Max(0, index - 1)], b = points[Mathf.Min(points.Count - 1, index + 1)];
-            var direction = new Vector2(b.x - a.x, b.z - a.z);
-            return direction.sqrMagnitude > 1e-6f ? direction.normalized : Vector2.up;
-        }
-
-        private static long Key(int x, int z) => ((long)x << 32) | (uint)z;
 
         // Remove points closer than minSpacing to the last kept point.
         private static List<Vector3> Dedup(List<Vector3> pts, float minSpacing)
@@ -127,6 +66,77 @@ namespace StoryCycling.WorldGen
                 outp.Add(pts[pts.Count - 1]);
             return outp;
         }
+
+        // Later passes over the same road take the height of the earlier pass; the correction
+        // fades out over 'blend' metres before/after the shared section (no steps).
+        public static int ReconcileOverlaps(List<Vector3> pts, float radius = 8.5f, float minArcGap = 100f, float blend = 60f, float maxDy = 3f)
+        {
+            int n = pts.Count;
+            if (n < 3) return 0;
+            var arc = new float[n];
+            for (int i = 1; i < n; i++) arc[i] = arc[i - 1] + Vector2.Distance(new Vector2(pts[i - 1].x, pts[i - 1].z), new Vector2(pts[i].x, pts[i].z));
+            var y = new float[n];
+            var delta = new float[n];
+            var matched = new bool[n];
+            for (int i = 0; i < n; i++) y[i] = pts[i].y;
+
+            float cell = radius * 2f;
+            var grid = new Dictionary<long, List<int>>();
+            int count = 0;
+            for (int i = 0; i < n; i++)
+            {
+                Vector3 p = pts[i];
+                Vector2 ti = Dir(pts, i);
+                int cx = Mathf.FloorToInt(p.x / cell), cz = Mathf.FloorToInt(p.z / cell);
+                int best = -1; float bestD = radius * radius;
+                for (int dx = -1; dx <= 1; dx++)
+                for (int dz = -1; dz <= 1; dz++)
+                {
+                    if (!grid.TryGetValue(Key(cx + dx, cz + dz), out List<int> list)) continue;
+                    foreach (int j in list)
+                    {
+                        if (arc[i] - arc[j] < minArcGap) continue;                         // derselbe Abschnitt
+                        if (Mathf.Abs(Vector2.Dot(ti, Dir(pts, j))) < .8f) continue;       // Kreuzung, nicht parallel
+                        float d2 = (pts[j].x - p.x) * (pts[j].x - p.x) + (pts[j].z - p.z) * (pts[j].z - p.z);
+                        // Direkt übereinander (< 4 m) = dieselbe Straße, Höhenfehler der Daten; weiter daneben
+                        // nur bei kleiner Differenz (sonst echte Etagen: Serpentine, Parallelstraße am Hang).
+                        float dy = Mathf.Abs(pts[j].y - p.y);
+                        if (dy > (d2 < 16f ? 8f : maxDy)) continue;
+                        if (d2 < bestD) { bestD = d2; best = j; }
+                    }
+                }
+                if (best >= 0) { delta[i] = y[best] - y[i]; y[i] = y[best]; matched[i] = true; count++; }
+                long key = Key(cx, cz);
+                if (!grid.TryGetValue(key, out List<int> l)) { l = new List<int>(); grid[key] = l; }
+                l.Add(i);
+            }
+            if (count == 0) return 0;
+
+            // Übergänge: Korrektur vor/nach gemeinsamen Abschnitten weich auslaufen lassen.
+            var outY = new float[n];
+            for (int i = 0; i < n; i++)
+            {
+                outY[i] = y[i];
+                if (matched[i]) continue;
+                float w = 0f, d = 0f;
+                for (int k = i - 1; k >= 0 && arc[i] - arc[k] < blend; k--)
+                    if (matched[k]) { float t = 1f - (arc[i] - arc[k]) / blend; if (t > w) { w = t; d = delta[k]; } break; }
+                for (int k = i + 1; k < n && arc[k] - arc[i] < blend; k++)
+                    if (matched[k]) { float t = 1f - (arc[k] - arc[i]) / blend; if (t > w) { w = t; d = delta[k]; } break; }
+                outY[i] = pts[i].y + d * (w * w * (3f - 2f * w));
+            }
+            for (int i = 0; i < n; i++) { var p = pts[i]; p.y = outY[i]; pts[i] = p; }
+            return count;
+        }
+
+        private static Vector2 Dir(List<Vector3> pts, int i)
+        {
+            Vector3 a = pts[Mathf.Max(0, i - 1)], b = pts[Mathf.Min(pts.Count - 1, i + 1)];
+            var d = new Vector2(b.x - a.x, b.z - a.z);
+            return d.sqrMagnitude > 1e-6f ? d.normalized : Vector2.up;
+        }
+
+        private static long Key(int x, int z) => ((long)x << 32) | (uint)z;
 
         // Centered moving average on elevation only.
         private static void SmoothElevation(List<Vector3> pts, int window)

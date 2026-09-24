@@ -87,23 +87,27 @@ namespace StoryCycling.WorldGen.Editor
             return Quaternion.LookRotation(best, Vector3.up);
         }
 
+        // Route (feste Breite) und Querstraßen (Breite je Probe + Gehweg) freihalten.
+        private static RoadField Streets;
         private static bool ClearOfRoad(RoadField road, List<int> scratch, Vector3 c, Vector3 right, Vector3 fwd, float hw, float hd)
         {
-            return ClearOf(road, scratch, c, right, fwd, hw, hd, RoadClearance) &&
-                   (Streets == null || ClearOf(Streets, scratch, c, right, fwd, hw, hd, 2.5f));
+            return ClearOf(road, scratch, c, right, fwd, hw, hd, 0f, RoadClearance) &&
+                   (Streets == null || ClearOf(Streets, scratch, c, right, fwd, hw, hd, 2.5f, 0f));
         }
 
-        private static RoadField Streets;
-        private static bool ClearOf(RoadField field, List<int> scratch, Vector3 c, Vector3 right, Vector3 fwd, float hw, float hd, float clearance)
+        private static bool ClearOf(RoadField field, List<int> scratch, Vector3 c, Vector3 right, Vector3 fwd, float hw, float hd,
+                                    float extraOverHalf, float fixedClearance)
         {
-            float reach = Mathf.Sqrt(hw * hw + hd * hd) + RoadClearance;
+            float reach = Mathf.Sqrt(hw * hw + hd * hd) + Mathf.Max(fixedClearance, 6.5f + extraOverHalf);
             field.Query(c.x - reach, c.z - reach, c.x + reach, c.z + reach, scratch);
             foreach (int i in scratch)
             {
-                Vector3 d = field.Samples[i].pos - c;
+                var sm = field.Samples[i];
+                float clear = fixedClearance > 0f ? fixedClearance : sm.half + extraOverHalf;
+                Vector3 d = sm.pos - c;
                 float lx = Mathf.Max(0f, Mathf.Abs(Vector3.Dot(d, right)) - hw);
                 float lz = Mathf.Max(0f, Mathf.Abs(Vector3.Dot(d, fwd)) - hd);
-                if (lx * lx + lz * lz < clearance * clearance) return false;
+                if (lx * lx + lz * lz < clear * clear) return false;
             }
             return true;
         }

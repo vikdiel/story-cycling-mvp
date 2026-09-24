@@ -16,16 +16,14 @@ namespace StoryCycling.WorldGen
         {
             public List<Vector2> ring; public Vector2 centroid;
             public float heightM, width, depth, area; public Vector3 axisDir;
+            public string kind;          // OSM building=* (yes, house, apartments, garage, roof …)
+            public bool heightTagged;    // height/building:levels vorhanden
         }
         public class Area { public List<Vector2> ring; public string biome; }   // biome incl. "parking"
         public class Point { public Vector2 pos; public string kind; }           // kind = normalised feature
         public class Line { public List<Vector2> pts; public string kind; }      // fence | hedge | wall
-        // Drivable OSM way for secondary streets, junctions and roundabouts.
-        public class Street
-        {
-            public List<Vector2> pts; public string highway;
-            public bool bridge, tunnel, roundabout, oneway;
-        }
+        // Befahrbare OSM-Straße (für Querstraßen, Kreuzungen, Kreisverkehre).
+        public class Street { public List<Vector2> pts; public string highway; public bool bridge, tunnel, roundabout, oneway; }
 
         public readonly List<Building> Buildings = new List<Building>();
         public readonly List<Area> Areas = new List<Area>();
@@ -55,16 +53,16 @@ namespace StoryCycling.WorldGen
                 if (ring.Count < 2) continue;
 
                 var tags = ReadTags(way);
-                if (tags.TryGetValue("highway", out string hw) && IsDrivable(hw) && !(tags.TryGetValue("area", out string area) && area == "yes"))
+                if (tags.TryGetValue("highway", out string hw) && IsDrivable(hw) && !(tags.TryGetValue("area", out string ar) && ar == "yes"))
                 {
-                    tags.TryGetValue("junction", out string junction);
+                    tags.TryGetValue("junction", out string jn);
                     ctx.Streets.Add(new Street
                     {
                         pts = ring, highway = hw,
-                        bridge = tags.TryGetValue("bridge", out string bridge) && bridge != "no",
-                        tunnel = tags.TryGetValue("tunnel", out string tunnel) && tunnel != "no",
-                        roundabout = junction == "roundabout" || junction == "circular",
-                        oneway = tags.TryGetValue("oneway", out string oneway) && oneway == "yes"
+                        bridge = tags.ContainsKey("bridge") && tags["bridge"] != "no",
+                        tunnel = tags.ContainsKey("tunnel") && tags["tunnel"] != "no",
+                        roundabout = jn == "roundabout" || jn == "circular",
+                        oneway = tags.ContainsKey("oneway") && tags["oneway"] == "yes"
                     });
                 }
                 else if (tags.ContainsKey("building") && ring.Count >= 3)
@@ -96,13 +94,14 @@ namespace StoryCycling.WorldGen
             return "generic";
         }
 
-        public static bool IsDrivable(string highway)
+        public static bool IsDrivable(string hw)
         {
-            switch (highway)
+            switch (hw)
             {
                 case "motorway": case "trunk": case "primary": case "secondary": case "tertiary":
                 case "motorway_link": case "trunk_link": case "primary_link": case "secondary_link": case "tertiary_link":
-                case "residential": case "unclassified": case "living_street": return true;
+                case "residential": case "unclassified": case "living_street":
+                    return true;
                 default: return false;
             }
         }
@@ -171,6 +170,8 @@ namespace StoryCycling.WorldGen
                 aMin = Mathf.Min(aMin, pm); aMax = Mathf.Max(aMax, pm); bMin = Mathf.Min(bMin, pn); bMax = Mathf.Max(bMax, pn); }
             return new Building {
                 ring = ring, centroid = Centroid(ring), heightM = HeightFromTags(tags),
+                kind = tags.TryGetValue("building", out string bk) ? bk : "yes",
+                heightTagged = tags.ContainsKey("height") || tags.ContainsKey("building:levels"),
                 width = Mathf.Max(1f, aMax - aMin), depth = Mathf.Max(1f, bMax - bMin),
                 area = Mathf.Abs(ShoelaceArea(ring)), axisDir = new Vector3(major.x, 0f, major.y).normalized };
         }

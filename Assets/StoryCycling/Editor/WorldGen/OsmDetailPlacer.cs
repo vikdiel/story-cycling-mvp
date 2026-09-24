@@ -22,7 +22,7 @@ namespace StoryCycling.WorldGen.Editor
         }
 
         public static int Place(RoadField road, WorldTerrain terrain, OsmContext ctx, AssetCatalog catalog,
-                                Occupancy occupied, Transform parent, int seed = 777)
+                                WorldAssets assets, Occupancy occupied, Transform parent, int seed = 777)
         {
             var pal = Load(catalog);
             RoadRef = road;
@@ -76,13 +76,17 @@ namespace StoryCycling.WorldGen.Editor
                     case "tree":
                     case "rock":
                     {
-                        var pool = pt.kind == "tree" ? pal.trees : pal.rocks;
-                        if (pool.Count == 0) continue;
+                        // Echte OSM-Bäume: Straßenbäume in Meeresnähe gern Palmen, sonst Laub-/Küstenbäume.
+                        bool coastal = terrain.DemY(x, z) - terrain.SeaY < 35f;
+                        GameObject prefab = pt.kind == "tree"
+                            ? WorldAssets.Pick(rng, (assets.Palms, coastal ? .35f : .08f), (assets.BroadTrees, .35f), (assets.CoastalTrees, .3f), (assets.Pines, .1f))
+                            : WorldAssets.Pick(rng, (assets.Rocks, .7f), (assets.Boulders, .3f));
+                        if (prefab == null) continue;
                         if (hasRoad && dist < (pt.kind == "tree" ? 6.5f : 5.5f)) continue;
-                        if (OnSideStreet(x, z, .5f)) continue;
+                        if (VegetationPlacer.OnStreet(terrain, x, z, .5f)) continue;
                         if (!occupied.IsFree(x, z, 1.5f)) continue;
                         float y = terrain.HeightAt(x, z);
-                        var go = WorldPlacement.Spawn(WorldPlacement.Pick(pool, rng), parent, new Vector3(x, y, z),
+                        var go = WorldPlacement.Spawn(prefab, parent, new Vector3(x, y, z),
                             Quaternion.Euler(0f, WorldPlacement.Range(rng, 0f, 360f), 0f), WorldPlacement.Range(rng, .85f, 1.3f),
                             y, pt.kind == "tree" ? .15f : .25f);
                         WorldPlacement.CullWhenSmall(go, .01f, true);
@@ -112,9 +116,9 @@ namespace StoryCycling.WorldGen.Editor
                 case "traffic_signals":
                 {
                     if (pal.pole == null || pal.arm == null || pal.heads.Count == 0) return 0;
-                    Vector3 foot = rs.pos + rs.side * (sideSign * (RoadMeshBuilder.HalfWidth + 1.0f));
+                    // An Kreuzungen steht der Mast neben der Einmündung, nicht in der Querstraße.
+                    if (!KerbSpot(rs, sideSign, RoadMeshBuilder.HalfWidth + 1.0f, trafficDir, out Vector3 foot)) return 0;
                     foot.y = y;
-                    if (!ClearOfAsphalt(foot)) return 0;
                     Quaternion rot = Quaternion.LookRotation(toRoad, Vector3.up);
                     var mast = new GameObject("TrafficSignal").transform;
                     mast.SetParent(parent, false);
@@ -132,8 +136,7 @@ namespace StoryCycling.WorldGen.Editor
                 {
                     var prefab = kind == "sign_stop" ? pal.stop : pal.giveWay;
                     if (prefab == null) return 0;
-                    Vector3 p = rs.pos + rs.side * (sideSign * (RoadMeshBuilder.HalfWidth + 1.2f));
-                    if (!ClearOfAsphalt(p)) return 0;
+                    if (!KerbSpot(rs, sideSign, RoadMeshBuilder.HalfWidth + 1.2f, trafficDir, out Vector3 p)) return 0;
                     WorldPlacement.Spawn(prefab, parent, new Vector3(p.x, y, p.z), Quaternion.LookRotation(facing, Vector3.up), 1f, y, .02f);
                     return 1;
                 }
@@ -155,13 +158,20 @@ namespace StoryCycling.WorldGen.Editor
 
         private static RoadField RoadRef;
         private static WorldTerrain TerrainRef;
-        private static bool ClearOfAsphalt(Vector3 p) =>
-            RoadRef.Distance(p.x, p.z, 10f) >= RoadMeshBuilder.HalfWidth + .8f && !OnSideStreet(p.x, p.z, .8f);
-        private static bool OnSideStreet(float x, float z, float margin)
+
+        // Randposition; falls dort eine Querstraße einmündet, bis zu 9 m davor ausweichen.
+        private static bool KerbSpot(RoadField.Sample rs, float sideSign, float offset, Vector3 trafficDir, out Vector3 p)
         {
-            if (TerrainRef?.Streets == null || !TerrainRef.Streets.Nearest(x, z, 12f, out int i, out float d)) return false;
-            return d < TerrainRef.Streets.Samples[i].half + 2.2f + margin;
+            foreach (float shift in new[] { 0f, -4.5f, -9f, 4.5f })
+            {
+                p = rs.pos + rs.side * (sideSign * offset) + trafficDir * shift;
+                if (ClearOfAsphalt(p)) return true;
+            }
+            p = rs.pos;
+            return false;
         }
+        private static bool ClearOfAsphalt(Vector3 p) =>
+            RoadRef.Distance(p.x, p.z, 10f) >= RoadMeshBuilder.HalfWidth + .8f && !VegetationPlacer.OnStreet(TerrainRef, p.x, p.z, -2.3f);
 
         private static void Part(GameObject prefab, Transform mast, Vector3 localPos, Quaternion localRot)
         {
@@ -196,8 +206,9 @@ namespace StoryCycling.WorldGen.Editor
                     for (float d = 0f; d < len; d += 2.2f)
                     {
                         Vector2 p = a + (b - a) * (d / Mathf.Max(len, 1e-3f));
-                float rd = road.Distance(p.x, p.y, 70f);
-                if (rd < 6f || rd >= 70f || OnSideStreet(p.x, p.y, 0f) || !occupied.IsFree(p.x, p.y, .8f)) continue;
+                        float rd = road.Distance(p.x, p.y, 70f);
+                        if (rd < 6f || rd >= 70f || !occupied.IsFree(p.x, p.y, .8f)) continue;
+                        if (VegetationPlacer.OnStreet(terrain, p.x, p.y, 0f)) continue;
                         float y = terrain.HeightAt(p.x, p.y);
                         var go = WorldPlacement.Spawn(WorldPlacement.Pick(pal.bushes, rng), parent, new Vector3(p.x, y, p.y),
                             Quaternion.Euler(0f, WorldPlacement.Range(rng, 0f, 360f), 0f), WorldPlacement.Range(rng, .8f, 1.1f), y, .1f);
@@ -251,7 +262,8 @@ namespace StoryCycling.WorldGen.Editor
                     Vector2 c = mean + major * a + minor * b;
                     Vector2 front = c + minor * 2.3f, back = c - minor * 2.3f;
                     if (!OsmContext.PointInPolygon(c, ring) || !OsmContext.PointInPolygon(front, ring) || !OsmContext.PointInPolygon(back, ring)) continue;
-                if (road.Distance(c.x, c.y, 10f) < RoadMeshBuilder.HalfWidth + 3f || OnSideStreet(c.x, c.y, -1f)) continue;
+                    if (road.Distance(c.x, c.y, 10f) < RoadMeshBuilder.HalfWidth + 3f) continue;
+                    if (VegetationPlacer.OnStreet(terrain, c.x, c.y, -1.8f)) continue;   // nicht auf Querstraßen
                     if (terrain.SlopeDeg(c.x, c.y) > 10f || !occupied.IsFree(c.x, c.y, 1.2f)) continue;
 
                     Vector3 fwd = new Vector3(minor.x, 0f, minor.y) * (row % 2 == 0 ? 1f : -1f);

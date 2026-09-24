@@ -14,8 +14,7 @@ namespace StoryCycling.WorldGen.Editor
 
         public readonly DemGrid Dem;
         public readonly RoadField Road;
-        // Optional OSM side streets; assigned before terrain chunks are baked.
-        public RoadField Streets;
+        public RoadField Streets;        // Querstraßen (optional; vor BuildChunks setzen)
         public readonly float Ele0;      // Höhe des ersten GPX-Punkts (lokales y = absolut - Ele0)
         // Terrarium-Küstendaten liegen oft geringfügig über dem echten Meeresspiegel.
         // Ein kleiner Offset erzeugt natürlichere, breitere Strände.
@@ -62,26 +61,92 @@ namespace StoryCycling.WorldGen.Editor
             return Mathf.Lerp(target, demY, t);
         }
 
-        // Endgültige Geländehöhe inkl. Straßen-Einschnitt (für alle Platzierer).
+        // Endgültige Geländehöhe inkl. Einschnitt für Route UND Querstraßen (für alle Platzierer).
         public float HeightAt(float x, float z)
         {
-            float demY = DemY(x, z);
-            if (Road.Nearest(x, z, InfluenceRadius, out int i, out float dist))
-                demY = Carve(demY, dist, Road.Samples[i].pos.y);
-            if (Streets != null && Streets.Nearest(x, z, SideInfluence, out int j, out float sideDist))
-                demY = CarveSide(demY, sideDist, Streets.Samples[j].pos.y, Streets.Samples[j].half);
-            return demY;
+            float mainD = float.MaxValue, mainY = 0f, sideD = float.MaxValue, sideY = 0f, sideH = 0f;
+            if (Road.Nearest(x, z, InfluenceRadius, out int i, out float d)) { mainD = d * d; mainY = Road.Samples[i].pos.y; }
+            if (Streets != null && Streets.Nearest(x, z, SideInfluence, out int j, out float ds))
+            { sideD = ds * ds; sideY = Streets.Samples[j].pos.y; sideH = Streets.Samples[j].half; }
+            float mainMin = mainD <= FlatRadius * FlatRadius ? MinYWithinFlat(Road, x, z, true) : float.MaxValue;
+            float sideMin = Streets != null && sideD <= SideFlatMax * SideFlatMax ? MinYWithinFlat(Streets, x, z, false) : float.MaxValue;
+            return CarveAll(DemY(x, z), mainD, mainY, sideD, sideY, sideH, mainMin, sideMin);
         }
 
-        public const float SideInfluence = 32f;
-        private static float CarveSide(float terrainY, float distance, float roadY, float halfWidth)
+        // Tiefste Fahrbahnhöhe aller Proben, in deren Planum der Punkt liegt. Liegen zwei Abschnitte
+        // (Hin-/Rückweg, Ring-Anfang/-Ende) nah beieinander, darf das Gelände keine der beiden überragen.
+        private static float MinYWithinFlat(RoadField field, float x, float z, bool main)
         {
-            float flat = halfWidth + 5f;
-            float target = roadY - RoadInset;
-            if (distance <= flat) return target;
-            float bank = Mathf.Clamp(Mathf.Abs(terrainY - target) * 1.1f, 6f, 22f);
-            float t = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((distance - flat) / bank));
-            return Mathf.Lerp(target, terrainY, t);
+            var list = ScratchList;
+            float r = main ? FlatRadius : SideFlatMax;
+            field.Query(x - r, z - r, x + r, z + r, list);
+            float minY = float.MaxValue;
+            foreach (int k in list)
+            {
+                var sm = field.Samples[k];
+                float flat = main ? FlatRadius : SideFlat(sm.half);
+                float dx = sm.pos.x - x, dz = sm.pos.z - z;
+                if (dx * dx + dz * dz <= flat * flat && sm.pos.y < minY) minY = sm.pos.y;
+            }
+            return minY;
+        }
+        [System.ThreadStatic] private static List<int> scratchList;
+        private static List<int> ScratchList => scratchList ?? (scratchList = new List<int>());
+
+        // Quadrierte Abstände rein, fertige Höhe raus. Das Gelände überragt nie eine Fahrbahn, in
+        // deren Planum es liegt (Route und Querstraßen, auch wo mehrere Abschnitte zusammenkommen).
+        private float CarveAll(float demY, float mainD2, float mainY, float sideD2, float sideY, float sideHalf,
+                               float mainMinY, float sideMinY)
+        {
+            float h = demY;
+            if (mainD2 < InfluenceRadius * InfluenceRadius) h = Carve(demY, Mathf.Sqrt(mainD2), mainY);
+            if (sideD2 < SideInfluence * SideInfluence) h = CarveSide(h, Mathf.Sqrt(sideD2), sideY, sideHalf);
+            if (mainMinY < float.MaxValue) h = Mathf.Min(h, mainMinY - RoadInset);
+            if (sideMinY < float.MaxValue) h = Mathf.Min(h, sideMinY - RoadInset);
+            return h;
+        }
+
+        public const float SideFlatMax = 3.6f + 2.5f + 8.3f;       // breiteste Querstraße inkl. Trichter
+        private static float SideFlat(float half) => half + 8.3f;
+
+        // Querstraßen: schmaleres Planum (halbe Breite + Bankett + 1 Zellendiagonale), kürzere Böschung.
+        public const float SideInfluence = 32f;
+        private float CarveSide(float h, float dist, float roadY, float half)
+        {
+            float flat = SideFlat(half), target = roadY - RoadInset;
+            if (dist <= flat) return target;
+            float dh = h - target;
+            float bank = dh > 0f ? Mathf.Clamp(dh * 1.2f, 6f, 20f) : Mathf.Clamp(-dh * .9f, 5f, 15f);
+            float t = Mathf.Clamp01((dist - flat) / bank);
+            t = t * t * (3f - 2f * t);
+            return Mathf.Lerp(target, h, t);
+        }
+
+        private static void Brush(RoadField field, float R, float gx0, float gz0, int g, float cell, List<int> scratch,
+                                  float[] minD2, float[] roadY, float[] half, float[] flatMinY, bool main)
+        {
+            for (int k = 0; k < minD2.Length; k++) { minD2[k] = float.MaxValue; flatMinY[k] = float.MaxValue; }
+            field.Query(gx0 - R, gz0 - R, gx0 + (g - 1) * cell + R, gz0 + (g - 1) * cell + R, scratch);
+            foreach (int si in scratch)
+            {
+                var sm = field.Samples[si];
+                Vector3 p = sm.pos;
+                float fl = main ? FlatRadius : SideFlat(sm.half), flat2 = fl * fl;
+                int i0 = Mathf.Max(0, Mathf.FloorToInt((p.x - R - gx0) / cell)), i1 = Mathf.Min(g - 1, Mathf.CeilToInt((p.x + R - gx0) / cell));
+                int j0 = Mathf.Max(0, Mathf.FloorToInt((p.z - R - gz0) / cell)), j1 = Mathf.Min(g - 1, Mathf.CeilToInt((p.z + R - gz0) / cell));
+                for (int j = j0; j <= j1; j++)
+                {
+                    float dz = gz0 + j * cell - p.z;
+                    for (int i = i0; i <= i1; i++)
+                    {
+                        float dx = gx0 + i * cell - p.x;
+                        float d2 = dx * dx + dz * dz;
+                        int k = j * g + i;
+                        if (d2 < minD2[k]) { minD2[k] = d2; roadY[k] = p.y; half[k] = sm.half; }
+                        if (d2 <= flat2 && p.y < flatMinY[k]) flatMinY[k] = p.y;
+                    }
+                }
+            }
         }
 
         // Tiefste Geländehöhe unter einer (gedrehten) Rechteck-Grundfläche -> nichts schwebt.
@@ -167,49 +232,18 @@ namespace StoryCycling.WorldGen.Editor
 
             if (carve)
             {
-                var minDist = new float[g * g];
-                var roadY = new float[g * g];
-                for (int k = 0; k < minDist.Length; k++) minDist[k] = float.MaxValue;
-                float R = InfluenceRadius;
-                Road.Query(gx0 - R, gz0 - R, gx0 + (g - 1) * cell + R, gz0 + (g - 1) * cell + R, scratch);
-                foreach (int si in scratch)
-                {
-                    Vector3 p = Road.Samples[si].pos;
-                    int i0 = Mathf.Max(0, Mathf.FloorToInt((p.x - R - gx0) / cell)), i1 = Mathf.Min(g - 1, Mathf.CeilToInt((p.x + R - gx0) / cell));
-                    int j0 = Mathf.Max(0, Mathf.FloorToInt((p.z - R - gz0) / cell)), j1 = Mathf.Min(g - 1, Mathf.CeilToInt((p.z + R - gz0) / cell));
-                    for (int j = j0; j <= j1; j++)
-                    {
-                        float dz = gz0 + j * cell - p.z;
-                        for (int i = i0; i <= i1; i++)
-                        {
-                            float dx = gx0 + i * cell - p.x;
-                            float d2 = dx * dx + dz * dz;
-                            int k = j * g + i;
-                            if (d2 < minDist[k]) { minDist[k] = d2; roadY[k] = p.y; }
-                        }
-                    }
-                }
-                for (int k = 0; k < h.Length; k++)
-                {
-                    if (minDist[k] == float.MaxValue) continue;
-                    float d = Mathf.Sqrt(minDist[k]);
-                    if (d < R) h[k] = Carve(h[k], d, roadY[k]);
-                }
-                // Side streets share the same carved terrain frame. This direct pass is
-                // intentionally local to 5m chunks, where their detail is visible.
+                var mainD = new float[g * g]; var mainY = new float[g * g]; var mainH = new float[g * g]; var mainMin = new float[g * g];
+                Brush(Road, InfluenceRadius, gx0, gz0, g, cell, scratch, mainD, mainY, mainH, mainMin, true);
+                float[] sideD = null, sideY = null, sideH = null, sideMin = null;
                 if (Streets != null && Streets.Samples.Count > 0)
                 {
-                    for (int j = 0; j < g; j++)
-                    for (int i = 0; i < g; i++)
-                    {
-                        float x = gx0 + i * cell, z = gz0 + j * cell;
-                        if (Streets.Nearest(x, z, SideInfluence, out int si, out float d))
-                        {
-                            var s = Streets.Samples[si];
-                            h[j * g + i] = CarveSide(h[j * g + i], d, s.pos.y, s.half);
-                        }
-                    }
+                    sideD = new float[g * g]; sideY = new float[g * g]; sideH = new float[g * g]; sideMin = new float[g * g];
+                    Brush(Streets, SideInfluence, gx0, gz0, g, cell, scratch, sideD, sideY, sideH, sideMin, false);
                 }
+                for (int k = 0; k < h.Length; k++)
+                    h[k] = CarveAll(h[k], mainD[k], mainY[k], sideD != null ? sideD[k] : float.MaxValue,
+                                    sideD != null ? sideY[k] : 0f, sideD != null ? sideH[k] : 0f,
+                                    mainMin[k], sideMin != null ? sideMin[k] : float.MaxValue);
             }
 
             allUnderwater = true;
@@ -288,6 +322,9 @@ namespace StoryCycling.WorldGen.Editor
             };
             mesh.triangles = new[] { 0, 2, 1, 1, 2, 3 };
             mesh.normals = new[] { Vector3.up, Vector3.up, Vector3.up, Vector3.up };
+            // Welt-UVs (1 Einheit = 10 m), falls der Wasser-Shader UVs statt Weltposition nutzt.
+            mesh.uv = new[] { new Vector2(cx - s, cz - s) / 10f, new Vector2(cx + s, cz - s) / 10f,
+                              new Vector2(cx - s, cz + s) / 10f, new Vector2(cx + s, cz + s) / 10f };
             mesh.RecalculateBounds();
             mesh = save(mesh);
             var go = new GameObject("Ocean", typeof(MeshFilter), typeof(MeshRenderer));

@@ -17,7 +17,7 @@ namespace StoryCycling.WorldGen.Editor
         public static void BuildCatalog()
         {
             Directory.CreateDirectory(OutputRoot);
-            // Rebuild deterministically: stale entry assets otherwise accumulate as "Name 1".
+            // Alte Einträge entfernen (sonst entstehen bei jedem Lauf "Name 1.asset"-Duplikate).
             AssetDatabase.StartAssetEditing();
             try
             {
@@ -29,6 +29,7 @@ namespace StoryCycling.WorldGen.Editor
 
             Scan(PolygonCityRoot, entries, "");
             Scan(PolygonGenericRoot, entries, "");
+            // POLYGON Nature Biomes (z. B. Tropical Jungle): alle Biome unter dem Ordner, inkl. FX (Vögel).
             Scan(NatureBiomesRoot, entries, "PNB_");
 
             // Persist one AssetEntry asset per prefab, deterministically ordered by path.
@@ -58,9 +59,9 @@ namespace StoryCycling.WorldGen.Editor
                 string assetPath = path.Replace('\\', '/');
                 var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(assetPath);
                 if (prefab == null) continue;
+
                 string lowerPath = assetPath.ToLowerInvariant();
                 if (lowerPath.Contains("/scenes/") || lowerPath.Contains("/terrain/")) continue;
-
                 var entry = ScriptableObject.CreateInstance<AssetEntry>();
                 entry.name = prefix + Path.GetFileNameWithoutExtension(assetPath);
                 entry.prefab = prefab;
@@ -75,10 +76,11 @@ namespace StoryCycling.WorldGen.Editor
             string lower = path.ToLowerInvariant();
             if (lower.Contains("/polygonnaturebiomes/"))
             {
+                // Nature-Biomes: flache Ordnerstruktur -> nach Namenspräfix einordnen.
                 string file = Path.GetFileNameWithoutExtension(path);
-                entry.category = file.StartsWith("SM_Env_") && IsVegetation(path)
-                    ? AssetCategory.Vegetation
-                    : file.StartsWith("SM_Env_") ? AssetCategory.GroundCover : AssetCategory.Prop;
+                entry.category = file.StartsWith("SM_Env_") && IsVegetation(path) ? AssetCategory.Vegetation
+                               : file.StartsWith("SM_Env_") ? AssetCategory.GroundCover
+                               : AssetCategory.Prop;          // SM_Bld_ (Ruinen), SM_Prop_, FX_
                 return;
             }
             if (lower.Contains("/buildings/"))

@@ -70,6 +70,8 @@ namespace StoryCycling.WorldGen.Editor
                 var road = new RoadField(spline);
                 var terrain = new WorldTerrain(dem, road, (float)pts[0].Ele, osm);
                 RouteHeightField.Terrain = terrain.HeightAt;
+
+                // Querstraßen/Kreuzungen/Kreisverkehre VOR dem Gelände: sie schneiden sich mit ein.
                 Progress("Querstraßen & Kreisverkehre", .08f);
                 var streets = StreetNetwork.Build(osm, road, terrain);
                 terrain.Streets = streets.Field;
@@ -77,27 +79,29 @@ namespace StoryCycling.WorldGen.Editor
                 Progress("Gelände einfärben", .1f);
                 Texture2D terrainTex = SaveTexture(terrain.BuildColorTexture(), OutDir + "/TerrainColors.png", false, 4096);
                 Material terrainMat = Mat("GpxTerrain", Color.white, .06f, terrainTex);
-                Material ocean = OceanMaterial();
 
                 Progress("Gelände-Kacheln", .2f);
                 terrain.BuildChunks(Group("Terrain"), terrainMat, SaveMesh);
-                terrain.BuildWater(world, ocean, SaveMesh);
+                terrain.BuildWater(world, OceanMaterial(), SaveMesh);
 
                 Progress("Straßen", .4f);
                 Texture2D asphaltTex = SaveTexture(AsphaltTexture(), OutDir + "/Asphalt.png", true, 512);
-                Material asphalt = Mat("GpxAsphalt", Color.white, .18f, asphaltTex);
-                Material shoulder = Mat("GpxShoulder", new Color(.55f, .51f, .44f), .05f);
-                new RoadMeshBuilder(road, terrain).Build(Group("Road"), asphalt, shoulder,
-                    Mat("GpxLineYellow", new Color(.95f, .76f, .18f), .3f),
-                    Mat("GpxLineWhite", new Color(.95f, .95f, .92f), .3f),
-                    Mat("GpxGuardrail", new Color(.74f, .76f, .78f), .55f, null, .6f),
-                    SaveMesh);
+                var roadMats = new RoadMaterials
+                {
+                    Asphalt = Mat("GpxAsphalt", Color.white, .18f, asphaltTex),
+                    Shoulder = Mat("GpxShoulder", new Color(.55f, .51f, .44f), .05f),
+                    Yellow = Mat("GpxLineYellow", new Color(.95f, .76f, .18f), .3f),
+                    White = Mat("GpxLineWhite", new Color(.95f, .95f, .92f), .3f),
+                    Rail = Mat("GpxGuardrail", new Color(.74f, .76f, .78f), .55f, null, .6f),
+                    Sidewalk = Mat("GpxSidewalk", new Color(.72f, .71f, .68f), .08f),
+                    IslandGrass = Mat("GpxIslandGrass", new Color(.33f, .50f, .22f), .05f),
+                };
+                new RoadMeshBuilder(road, terrain).Build(Group("Road"), roadMats, streets, SaveMesh);
                 Transform streetGroup = Group("Streets");
-                StreetMeshBuilder.Build(streets, streetGroup, asphalt, shoulder,
-                    Mat("GpxIslandGrass", new Color(.33f, .50f, .22f), .05f), SaveMesh);
+                StreetMeshBuilder.Build(streets, terrain, road, streetGroup, roadMats, SaveMesh);
 
                 var occupied = new Occupancy();
-                foreach (var island in streets.Islands) occupied.Add(island.Center.x, island.Center.z, island.Radius + 1f);
+                foreach (var isl in streets.Islands) occupied.Add(isl.Center.x, isl.Center.z, isl.Radius + 1f);
                 Progress("Landmarks", .5f);
                 PlaceLandmarks(spline, terrain, occupied, Group("Landmarks"));
 
@@ -110,14 +114,15 @@ namespace StoryCycling.WorldGen.Editor
                     if (osm != null)
                     {
                         Progress("Gebäude (OSM)", .58f);
-                        OsmBuildingPlacer.Place(road, terrain, osm, catalog, occupied, Group("Buildings"));
+                        PlaceBuildings(osm, terrain, catalog, road, occupied, Group("Buildings"));
                         Progress("Details (OSM)", .66f);
-                        OsmDetailPlacer.Place(road, terrain, osm, catalog, occupied, Group("StreetDetails"));
+                        OsmDetailPlacer.Place(road, terrain, osm, catalog, assets, occupied, Group("StreetDetails"));
                     }
                     Progress("Vegetation & Küste", .74f);
-                    VegetationPlacer.Place(terrain, catalog, occupied, Group("Vegetation"));
-                    VegetationPlacer.PlaceCoastalAccents(terrain, assets, occupied, Group("Coastal Accents"));
-                    VegetationPlacer.PlaceClouds(terrain, catalog, Group("Clouds"));
+                    VegetationPlacer.Place(terrain, assets, occupied, Group("Vegetation"));
+                    VegetationPlacer.PlaceIslands(streets, road, assets, streetGroup);
+                    VegetationPlacer.PlaceBirds(terrain, assets, Group("Birds"));
+                    VegetationPlacer.PlaceClouds(terrain, assets, Group("Clouds"));
                 }
 
                 Progress("Licht, Himmel, Grading", .9f);
@@ -130,9 +135,10 @@ namespace StoryCycling.WorldGen.Editor
                 Camera cam = camGo.GetComponent<Camera>();
                 cam.fieldOfView = 58; cam.nearClipPlane = .3f; cam.farClipPlane = 7000; cam.allowHDR = false;
                 cam.clearFlags = CameraClearFlags.Skybox;
-                var cameraData = cam.GetUniversalAdditionalCameraData();
-                cameraData.renderPostProcessing = true;
-                cameraData.requiresDepthOption = CameraOverrideOption.On;
+                var camData = cam.GetUniversalAdditionalCameraData();
+                camData.renderPostProcessing = true;
+                // Wasser-Shader (Uferschaum, Tiefenfarbe) braucht die Depth-Texture — nur für diese Kamera.
+                camData.requiresDepthOption = CameraOverrideOption.On;
                 ColorGrade();
 
                 var director = new GameObject("Gpx Ride Director").AddComponent<GpxRideController>();
@@ -264,26 +270,77 @@ namespace StoryCycling.WorldGen.Editor
             volume.sharedProfile = profile;
         }
 
-        // Prefer the Nature Biomes water material when the pack is present; keep the
-        // URP-Lit fallback so the builder remains usable without that optional pack.
-        private static Material OceanMaterial()
+        // Gebäude-Modus:
+        //   Synty      = Häuser aus dem PolygonCity-Baukasten (Etagen/Ecken/Türen/Läden/Dach) nach OSM-Grundriss
+        //   Procedural = eigene verputzte Kap-Häuser aus den OSM-Grundrissen
+        //   Offices    = alte Variante mit fertigen Synty-Bürotürmen
+        private enum BuildingMode { Synty, Procedural, Offices }
+        private const BuildingMode Buildings = BuildingMode.Synty;
+
+        private static void PlaceBuildings(OsmContext osm, WorldTerrain terrain, AssetCatalog catalog, RoadField road,
+                                           Occupancy occupied, Transform parent)
         {
-            foreach (string guid in AssetDatabase.FindAssets("Water_Ocean_Day t:Material"))
+            if (Buildings == BuildingMode.Offices) { OsmBuildingPlacer.Place(road, terrain, osm, catalog, occupied, parent); return; }
+            if (Buildings == BuildingMode.Synty)
             {
-                var source = AssetDatabase.LoadAssetAtPath<Material>(AssetDatabase.GUIDToAssetPath(guid));
-                if (source == null) continue;
-                var ocean = new Material(source) { name = "GpxOceanCape" };
-                SetColorIfPresent(ocean, "_Very_Deep_Color", new Color(.03f, .25f, .38f));
-                SetColorIfPresent(ocean, "_Deep_Color", new Color(.10f, .42f, .48f));
-                return Save(ocean);
+                var kit = SyntyModularBuildings.LoadKit(catalog);
+                if (kit.Complete)
+                {
+                    SyntyModularBuildings.Build(osm, terrain, occupied, kit, Mat("HousePlinth", new Color(.60f, .58f, .54f), .05f),
+                                                Mat("HouseFar", new Color(.74f, .62f, .52f), .05f), parent, SaveMesh);
+                    return;
+                }
+                Debug.LogWarning("PolygonCity-Baukasten unvollständig im Katalog — prozedurale Häuser als Ersatz.");
             }
-            Debug.LogWarning("Water_Ocean_Day nicht gefunden — einfaches URP-Wasser wird verwendet.");
-            return Mat("GpxOcean", new Color(.05f, .33f, .45f), .82f);
+            ProceduralHouses.Build(osm, terrain, occupied, parent, HouseMaterials(), SaveMesh);
         }
 
-        private static void SetColorIfPresent(Material material, string property, Color color)
+        private static ProceduralHouses.Materials HouseMaterials()
         {
-            if (material.HasProperty(property)) material.SetColor(property, color);
+            Texture2D facade = SaveTexture(ProceduralHouses.FacadeTexture(), OutDir + "/Facade.png", true, 256);
+            return new ProceduralHouses.Materials
+            {
+                Walls = new[]
+                {
+                    Mat("HouseWhite", new Color(.96f, .95f, .92f), .08f, facade),
+                    Mat("HouseCream", new Color(.95f, .89f, .76f), .08f, facade),
+                    Mat("HouseGrey", new Color(.84f, .84f, .82f), .08f, facade),
+                    Mat("HouseSand", new Color(.90f, .82f, .68f), .08f, facade),
+                },
+                RoofTile = Mat("RoofTerracotta", new Color(.68f, .34f, .23f), .12f),
+                RoofDark = Mat("RoofCharcoal", new Color(.28f, .29f, .31f), .15f),
+                RoofFlat = Mat("RoofFlat", new Color(.66f, .66f, .64f), .05f),
+                Plinth = Mat("HousePlinth", new Color(.60f, .58f, .54f), .05f),
+            };
+        }
+
+        // ------------------------------------------------------------------ Meer
+        // Wasser-Shader aus POLYGON Nature Biomes (Wellen, Uferschaum, Tiefenfarbe); Farben ans
+        // kühlere Atlantikwasser am Kap angepasst. Ohne Pack: schlichtes URP-Lit-Wasser.
+        private static Material OceanMaterial()
+        {
+            Material source = null;
+            foreach (string guid in AssetDatabase.FindAssets("Water_Ocean_Day t:Material"))
+            {
+                source = AssetDatabase.LoadAssetAtPath<Material>(AssetDatabase.GUIDToAssetPath(guid));
+                if (source != null) break;
+            }
+            if (source == null)
+            {
+                Debug.LogWarning("Water_Ocean_Day (Nature Biomes) nicht gefunden — einfaches Wasser.");
+                return Mat("GpxOcean", new Color(.05f, .33f, .45f), .82f);
+            }
+            var mat = new Material(source) { name = "GpxOceanCape" };
+            SetColorIfPresent(mat, "_Very_Deep_Color", new Color(.03f, .25f, .38f));
+            SetColorIfPresent(mat, "_Water_Very_Deep_Color", new Color(.02f, .22f, .34f));
+            SetColorIfPresent(mat, "_Distant_Water_Color", new Color(.02f, .16f, .28f));
+            SetColorIfPresent(mat, "_Deep_Color", new Color(.10f, .42f, .48f));
+            return Save(mat);
+        }
+
+        private static void SetColorIfPresent(Material m, string prop, Color c)
+        {
+            if (m.HasProperty(prop)) m.SetColor(prop, c);
         }
 
         // ------------------------------------------------------------------ Assets

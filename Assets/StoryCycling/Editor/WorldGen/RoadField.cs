@@ -8,8 +8,7 @@ namespace StoryCycling.WorldGen.Editor
     // Ausrichtung von Gebäuden/Möbeln zur Straße und das Entdoppeln von Hin-/Rückweg.
     public sealed class RoadField
     {
-        // half is the half carriageway width. The GPX route keeps the 4m default;
-        // OSM side streets provide their own class-specific width.
+        // half = halbe Fahrbahnbreite (Hauptroute: RoadMeshBuilder.HalfWidth; Nebenstraßen je nach OSM-Klasse)
         public struct Sample { public Vector3 pos; public Vector3 tangent; public Vector3 side; public float distance; public float half; }
 
         public const float Step = 2f;
@@ -18,9 +17,10 @@ namespace StoryCycling.WorldGen.Editor
         public float MinX = float.MaxValue, MaxX = float.MinValue, MinZ = float.MaxValue, MaxZ = float.MinValue;
         private readonly Dictionary<long, List<int>> cells = new Dictionary<long, List<int>>();
 
+        // Beliebige Straßenstücke (Nebenstraßen): Proben werden unverändert übernommen.
         public RoadField(IEnumerable<Sample> samples)
         {
-            foreach (var sample in samples) Insert(sample);
+            foreach (var s in samples) Insert(s);
         }
 
         public RoadField(RouteSpline spline)
@@ -40,7 +40,6 @@ namespace StoryCycling.WorldGen.Editor
 
         private void Insert(Sample s)
         {
-            if (s.half <= 0f) s.half = 4f;
             Vector3 p = s.pos;
             int index = Samples.Count;
             Samples.Add(s);

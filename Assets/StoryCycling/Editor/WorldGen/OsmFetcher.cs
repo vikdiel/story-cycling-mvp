@@ -16,7 +16,7 @@ namespace StoryCycling.WorldGen.Editor
         private const string OutPath = "Assets/StreamingAssets/Osm/Nordhoek.osm.xml";
         private const string Endpoint = "https://overpass-api.de/api/interpreter";
         private const int MaxCoords = 300;
-        private const int StreetRadius = 160;
+        private const int StreetRadius = 160;   // Querstraßen/Kreuzungen/Kreisverkehre rund um die Route
 
         [MenuItem("Story Cycling/WorldGen/Fetch OSM for Nordhoek")]
         public static void Fetch()
