@@ -85,6 +85,7 @@ namespace StoryCycling.WorldGen.Editor
                 RoadField road;
                 // Straßennetz: Route + Querstraßen als ein Modell mit echten Kreuzungen (Fahrlinie liegt darauf)
                 RoadNet net = null;
+                List<Vector2[]> o2sAsphalt = null;
                 if (matched != null && cfg.useRoadNetwork)
                 {
                     Progress("Straßennetz & Kreuzungen", .05f);
@@ -93,6 +94,21 @@ namespace StoryCycling.WorldGen.Editor
                     var demFix = new DemCorrection(dem, ele0, matched.Points);
                     net = RoadNet.Build(osm, matched.Points, (x, z) => dem.Sample(x, z) - ele0 - demFix.At(x, z),
                                         new System.Text.RegularExpressions.Regex(cfg.wideShoulderRoads), centroids);
+                    // osm2streets-Fahrbahnflächen (optionales Zusatzwerkzeug, siehe Tools/osm2streets/README.md):
+                    // robuster für Doppelfahrbahnen, "Dog-Leg"-Kreuzungen, Kreisverkehre mit Bypass-Spuren als
+                    // unsere eigene Ecken-Konstruktion. Fehlt node/npm install, baut die Pipeline automatisch
+                    // ohne weiter — nie blockierend.
+                    if (cfg.useOsm2Streets)
+                    {
+                        string o2sOut = cfg.Osm2StreetsPath;
+                        if (Osm2StreetsGeometry.NeedsRefresh(cfg.gpxPath, cfg.osmPath, o2sOut) &&
+                            Osm2StreetsGeometry.TryRun(cfg.gpxPath, cfg.osmPath, o2sOut, out string o2sMsg))
+                            Debug.Log(o2sMsg);
+                        o2sAsphalt = Osm2StreetsGeometry.TryLoad(o2sOut);
+                        Debug.Log(o2sAsphalt != null
+                            ? $"osm2streets-Geometrie geladen: {o2sAsphalt.Count} Flächen aus {System.IO.Path.GetFileName(o2sOut)}."
+                            : "osm2streets-Geometrie nicht verfügbar — baue Fahrbahn/Kreuzungen mit der eigenen Flächenvereinigung.");
+                    }
                     var onNet = RoadNetRoute.Build(net, matched.Points);
                     Debug.Log($"Straßennetz: {net.Segs.Count} Abschnitte, {net.Junctions.Count} Kreuzungen; Fahrlinie {onNet.OnNetShare:P0} auf dem Netz.");
                     if (onNet.OnNetShare < .9f) { Debug.LogWarning("Fahrlinie liegt zu wenig auf dem Netz — alter Straßenbau."); net = null; }
@@ -157,7 +173,8 @@ namespace StoryCycling.WorldGen.Editor
                 {
                     // EIN Generator für Route, Querstraßen und Kreuzungen; Leitplanken weiterhin entlang der Route
                     RoadNetMesher.Build(net, Group("Road"), roadMats, SaveMesh,
-                        t => !Application.isBatchMode && EditorUtility.DisplayCancelableProgressBar("Nordhoek bauen", $"Straßenoberfläche {t:P0}", t));
+                        t => !Application.isBatchMode && EditorUtility.DisplayCancelableProgressBar("Nordhoek bauen", $"Straßenoberfläche {t:P0}", t),
+                        o2sAsphalt);
                     new RoadMeshBuilder(road, terrain).Build(Group("Guardrails"), roadMats, streets, SaveMesh, railsOnly: true);
                     // Kreisverkehr-Inseln ergeben sich aus der vereinigten Fläche (Loch im Asphalt) -> kein Extra-Mesh
                     if (!RoadNetMesher.UseSurfaceUnion) StreetMeshBuilder.BuildIslandsOnly(streets, road, streetGroup, roadMats, SaveMesh);

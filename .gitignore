@@ -33,3 +33,7 @@ xcuserdata/
 # Generierte Welt-Meshes (groß, werden lokal gebaut)
 /Assets/StoryCycling/Generated/*/WorldMeshes.asset
 /Assets/StoryCycling/Generated/*/WorldMeshes.asset.meta
+
+# Lokaler osm2streets-Cache; wird bei Bedarf aus GPX + OSM regeneriert
+/Assets/StreamingAssets/Osm/*.o2s.json
+/Assets/StreamingAssets/Osm/*.o2s.json.meta

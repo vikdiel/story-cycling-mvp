@@ -18,9 +18,9 @@ namespace StoryCycling.WorldGen.Editor
         public static bool UseSurfaceUnion = true;
 
         public static void Build(RoadNet net, Transform parent, RoadMaterials mats, System.Func<Mesh, Mesh> save,
-                                 System.Func<float, bool> progress = null)
+                                 System.Func<float, bool> progress = null, List<Vector2[]> externalAsphalt = null)
         {
-            if (UseSurfaceUnion) { RoadSurface.Build(net, parent, mats, save, progress); return; }
+            if (UseSurfaceUnion) { RoadSurface.Build(net, parent, mats, save, progress, externalAsphalt); return; }
             var buckets = new Dictionary<long, RoadProfile.Parts>();
             System.Func<Vector3, RoadProfile.Parts> PartsAt = p =>
             {

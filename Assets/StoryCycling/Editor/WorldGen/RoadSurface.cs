@@ -18,9 +18,13 @@ namespace StoryCycling.WorldGen.Editor
 
         private const float Tile = 200f;
 
+        // externalAsphalt: von osm2streets vorberechnete Fahrbahn-/Kreuzungsflächen (siehe Osm2StreetsGeometry),
+        // bereits in Weltkoordinaten. Robuster für Doppelfahrbahnen, "Dog-Leg"-Kreuzungen und Kreisverkehre mit
+        // Bypass-Spuren als unsere eigene Ecken-Konstruktion. Gehweg/Randstreifen (unsere Regeln, z. B. der breite
+        // Seitenstreifen auf der Victoria Road) bleiben unverändert unsere eigene Logik.
         // progress(Anteil) -> true = abbrechen
         public static void Build(RoadNet net, Transform parent, RoadMaterials mats, System.Func<Mesh, Mesh> save,
-                                 System.Func<float, bool> progress = null)
+                                 System.Func<float, bool> progress = null, List<Vector2[]> externalAsphalt = null)
         {
             var clock = System.Diagnostics.Stopwatch.StartNew();
             // Alle Flächenstücke in Weltkoordinaten (2D: x, z)
@@ -29,7 +33,31 @@ namespace StoryCycling.WorldGen.Editor
             foreach (var sg in net.Segs)
             {
                 for (int k = 0; k < sg.S.Count; k++) { samples.Add(sg.S[k]); urbanFlag.Add(sg.Urban[k]); }
-                Strips(sg, 0, sg.S.Count - 1, k => 0f, k => 0f, Vector2.zero, asphalt);
+                // Unsere eigenen Fahrbahnstreifen bauen wir IMMER mit (nicht nur ohne osm2streets): sie tragen
+                // die streckenspezifischen Breiten, allen voran den breiten Seitenstreifen auf der Victoria
+                // Road, der bei uns Teil der (dunklen) Asphaltfläche ist, nicht nur ein heller Randstreifen —
+                // das kennt osm2streets nicht. Mit osm2streets-Geometrie werden dessen Flächen einfach dazu-
+                // vereinigt: das liefert an Kreuzungen/Kreisverkehren/Doppelfahrbahnen die robustere Form.
+                // Dort ziehen wir unsere eigenen Streifen etwas zurück (bis knapp vor den Kreuzungsrand) und
+                // lassen die unmittelbare Kreuzungsfläche allein osm2streets — sonst können unsere geraden
+                // Streifenenden, die nicht der wahren (oft leicht auffächernden) Straßenform folgen, als
+                // kleine Zacken über die saubere Kreuzungsform hinausragen. Winzige interne Verbindungsstücke
+                // innerhalb eines Kreuzungs-Clusters (sg.Internal) lässt osm2streets ohnehin allein abdecken.
+                if (externalAsphalt != null)
+                {
+                    if (!sg.Internal)
+                    {
+                        float a0 = Mathf.Min(sg.TrimA * .5f, sg.TrimA), a1 = sg.Length - Mathf.Min(sg.TrimB * .5f, sg.TrimB);
+                        if (a1 - a0 >= 1f)
+                        {
+                            int k0 = RoadNet.SampleAt(sg, a0), k1 = RoadNet.SampleAt(sg, a1);
+                            if (k1 > k0) Strips(sg, k0, k1, k => 0f, k => 0f, Vector2.zero, asphalt);
+                        }
+                    }
+                }
+                else Strips(sg, 0, sg.S.Count - 1, k => 0f, k => 0f, Vector2.zero, asphalt);
+                // Außenstreifen (Gehweg/Randstreifen): immer unsere eigene, streckenspezifische Regel,
+                // unabhängig davon, woher die Asphaltfläche kommt.
                 for (int k0 = 0; k0 < sg.S.Count - 1;)
                 {
                     int k1 = k0; bool u = sg.Urban[k0];
@@ -39,7 +67,9 @@ namespace StoryCycling.WorldGen.Editor
                 }
             }
             int fillets = 0;
-            foreach (var j in net.Junctions) fillets += AddFillets(net, j, asphalt, Vector2.zero);
+            // Kreuzungen: osm2streets-Flächen dazuvereinigen (robust) statt unserer eigenen Ecken-Konstruktion.
+            if (externalAsphalt != null) asphalt.AddRange(externalAsphalt);
+            else foreach (var j in net.Junctions) fillets += AddFillets(net, j, asphalt, Vector2.zero);
             var near = new RoadField(samples);
 
             // Kacheln: welche Stücke berühren welche Kachel (über die Hüllrechtecke)
@@ -114,7 +144,8 @@ namespace StoryCycling.WorldGen.Editor
             }
             shared.Clear();
             string state = cancelled ? " ABGEBROCHEN" : failed > 0 ? $" ({failed} Kacheln übersprungen)" : "";
-            Debug.Log($"Straßenoberfläche{state}: {asphalt.Count} Fahrbahnstücke + {fillets} Bordsteinecken in {keys.Count} Kacheln, " +
+            string src = externalAsphalt != null ? $"+ {externalAsphalt.Count} osm2streets-Flächen" : $"+ {fillets} Bordsteinecken (eigene Vereinigung)";
+            Debug.Log($"Straßenoberfläche{state}: {asphalt.Count} Fahrbahnstücke {src} in {keys.Count} Kacheln, " +
                       $"{triCount} Dreiecke, {curbs} Bordsteinkanten, {meshes} Meshes, {clock.ElapsedMilliseconds} ms.");
         }
 

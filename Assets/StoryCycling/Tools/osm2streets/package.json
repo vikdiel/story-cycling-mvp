@@ -1,0 +1,9 @@
+{
+  "name": "story-cycling-osm2streets",
+  "private": true,
+  "type": "module",
+  "description": "Wandelt OSM-Straßendaten über osm2streets (a-b-street/osm2streets, Apache-2.0) in robuste Fahrbahn-/Kreuzungsflächen für die WorldGen-Pipeline um. Einmalig 'npm install', danach 'node convert.mjs <route.gpx> <strecke.osm.xml> <ausgabe.o2s.json>'.",
+  "dependencies": {
+    "osm2streets-js": "0.1.4"
+  }
+}

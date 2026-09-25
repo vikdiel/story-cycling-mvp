@@ -24,6 +24,12 @@ namespace StoryCycling.WorldGen.Editor
         public bool useOsmRoadNetwork = true;
         [Tooltip("Straßennetz-Modell: Route und Querstraßen aus einem Guss, echte Kreuzungsflächen (empfohlen).")]
         public bool useRoadNetwork = true;
+        [Tooltip("Fahrbahn-/Kreuzungsflächen von osm2streets statt unserer eigenen Vereinigung, wenn verfügbar " +
+                 "(siehe Tools/osm2streets/README.md). Fehlt node bzw. wurde npm install nicht ausgeführt, baut " +
+                 "die Pipeline automatisch ohne weiter.")]
+        public bool useOsm2Streets = true;
+
+        public string Osm2StreetsPath => Osm2StreetsGeometry.OutputPathFor(osmPath);
         [Tooltip("Regex auf OSM name/ref: diese Straßen bekommen breite Seitenstreifen mit gelber Linie an der Fahrstreifenkante.")]
         public string wideShoulderRoads = "Victoria Road|^M6$";
         [Tooltip("Breiter Stil nur innerhalb dieser Gebiete (Breite/Länge). Leer = überall, wo der Name passt.")]
@@ -68,6 +74,14 @@ namespace StoryCycling.WorldGen.Editor
 
         [MenuItem("Story Cycling/WorldGen/Fetch OSM for Selected Route")]
         private static void FetchOsm() { var c = Selected(); OsmFetcher.Fetch(c.gpxPath, c.osmPath); }
+
+        [MenuItem("Story Cycling/WorldGen/Build OSM2Streets Geometry for Selected Route")]
+        private static void FetchOsm2Streets()
+        {
+            var c = Selected();
+            if (Osm2StreetsGeometry.TryRun(c.gpxPath, c.osmPath, c.Osm2StreetsPath, out string msg)) Debug.Log(msg);
+            else Debug.LogWarning(msg);
+        }
 
         [MenuItem("Story Cycling/WorldGen/Build Selected Route World")]
         private static void Build() => GpxSceneBuilder.Build(Selected());
