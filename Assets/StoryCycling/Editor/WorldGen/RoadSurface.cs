@@ -16,45 +16,37 @@ namespace StoryCycling.WorldGen.Editor
     {
         private const float Bucket = 400f;
 
-        public static void Build(RoadNet net, Transform parent, RoadMaterials mats, System.Func<Mesh, Mesh> save)
-        {
-            // lokaler Ursprung für Rechengenauigkeit
-            Vector2 o = Vector2.zero; int cnt = 0;
-            foreach (var n in net.Nodes) { o += n.P; cnt++; }
-            if (cnt == 0) return;
-            o /= cnt;
+        private const float Tile = 200f;
 
+        // progress(Anteil) -> true = abbrechen
+        public static void Build(RoadNet net, Transform parent, RoadMaterials mats, System.Func<Mesh, Mesh> save,
+                                 System.Func<float, bool> progress = null)
+        {
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            // Alle Flächenstücke in Weltkoordinaten (2D: x, z)
             var asphalt = new List<Vector2[]>(); var outerU = new List<Vector2[]>(); var outerR = new List<Vector2[]>();
             var samples = new List<RoadField.Sample>(); var urbanFlag = new List<bool>();
             foreach (var sg in net.Segs)
             {
                 for (int k = 0; k < sg.S.Count; k++) { samples.Add(sg.S[k]); urbanFlag.Add(sg.Urban[k]); }
-                Strips(sg, 0, sg.S.Count - 1, k => 0f, k => 0f, o, asphalt);
-                // Außenstreifen getrennt nach innerorts/außerorts (Abschnitte gleicher Ortslage)
+                Strips(sg, 0, sg.S.Count - 1, k => 0f, k => 0f, Vector2.zero, asphalt);
                 for (int k0 = 0; k0 < sg.S.Count - 1;)
                 {
                     int k1 = k0; bool u = sg.Urban[k0];
                     while (k1 < sg.S.Count - 1 && sg.Urban[k1] == u) k1++;
-                    Strips(sg, k0, k1, k => OuterW(sg, k, true), k => OuterW(sg, k, false), o, u ? outerU : outerR);
+                    Strips(sg, k0, k1, k => OuterW(sg, k, true), k => OuterW(sg, k, false), Vector2.zero, u ? outerU : outerR);
                     k0 = k1;
                 }
             }
             int fillets = 0;
-            foreach (var j in net.Junctions) fillets += AddFillets(net, j, asphalt, o);
+            foreach (var j in net.Junctions) fillets += AddFillets(net, j, asphalt, Vector2.zero);
             var near = new RoadField(samples);
 
-            // Vereinigungen (Umrisse) und Differenzen
-            var ua = Contours(asphalt, WindingRule.NonZero);
-            var uu = Contours(outerU, WindingRule.NonZero);
-            var ur = Contours(outerR, WindingRule.NonZero);
-            var asphaltTris = Refine(Triangles(asphalt, null, WindingRule.NonZero), 15f);
-            var urbanTris = Refine(Triangles(uu, Reverse(ua), WindingRule.Positive), 15f);
-            var rev = Reverse(ua); rev.AddRange(Reverse(uu));
-            var ruralTris = Refine(Triangles(ur, rev, WindingRule.Positive), 15f);
-            var allOuter = new List<Vector2[]>(uu); allOuter.AddRange(ur);
-            var outline = Contours(allOuter, WindingRule.NonZero, false);
+            // Kacheln: welche Stücke berühren welche Kachel (über die Hüllrechtecke)
+            var tiles = new Dictionary<long, TileSet>();
+            Index(asphalt, 0, tiles); Index(outerU, 1, tiles); Index(outerR, 2, tiles);
+            var keys = new List<long>(tiles.Keys); keys.Sort();
 
-            // Meshes (400-m-Zellen, Submeshes wie RoadProfile: 0 Asphalt, 1 Randstreifen, 2 gelb, 3 weiß, 4 Gehweg)
             var buckets = new Dictionary<long, RoadProfile.Parts>();
             System.Func<Vector3, RoadProfile.Parts> PartsAt = p =>
             {
@@ -62,41 +54,27 @@ namespace StoryCycling.WorldGen.Editor
                 if (!buckets.TryGetValue(key, out var parts)) { parts = new RoadProfile.Parts(); buckets[key] = parts; }
                 return parts;
             };
-            System.Func<Vector2, float, float, Vector3> Lift = (p2, baseOff, outerOff) =>
+            shared.Clear();
+            int done = 0, failed = 0, curbs = 0; long triCount = 0; bool cancelled = false;
+            foreach (long key in keys)
             {
-                var w = new Vector3(p2.x + o.x, 0f, p2.y + o.y);
-                if (near.Nearest(w.x, w.z, 30f, out int i, out float d))
+                if (progress != null && progress(done / (float)keys.Count)) { cancelled = true; break; }
+                done++;
+                var ts = tiles[key];
+                if (ts.A.Count == 0) continue;
+                int tx = (int)(key >> 32), tz = (int)(uint)key;
+                Vector2 o = new Vector2((tx + .5f) * Tile, (tz + .5f) * Tile);      // Kachelmitte = lokaler Ursprung
+                try
                 {
-                    var s = near.Samples[i];
-                    float t = outerOff == baseOff ? 0f : Mathf.Clamp01((d - s.half) / 2f);
-                    w.y = s.pos.y + Mathf.Lerp(baseOff, outerOff, t);
+                    var a = Clip(asphalt, ts.A, o); var u = Clip(outerU, ts.U, o); var r = Clip(outerR, ts.R, o);
+                    triCount += ProcessTile(a, u, r, o, near, urbanFlag, PartsAt, ref curbs);
                 }
-                return w;
-            };
-            shared.Clear(); cellOrigin = o;
-            EmitTris(asphaltTris, 0, p => Lift(p, .02f, .02f), PartsAt);
-            EmitTris(urbanTris, 4, p => Lift(p, .16f, .16f), PartsAt);
-            EmitTris(ruralTris, 1, p => Lift(p, .015f, -.06f), PartsAt);
-
-            // Bordsteinkanten (innerorts) entlang des Asphaltrands, Schürzen am Außenrand
-            int curbs = 0;
-            foreach (var c in ua)
-                for (int i = 0; i < c.Length; i++)
+                catch (System.Exception ex)
                 {
-                    Vector2 a2 = c[i], b2 = c[(i + 1) % c.Length];
-                    Vector2 m2 = (a2 + b2) * .5f;
-                    var mw = new Vector3(m2.x + o.x, 0f, m2.y + o.y);
-                    if (!near.Nearest(mw.x, mw.z, 30f, out int si, out _) || !urbanFlag[si]) continue;
-                    Vector3 a = Lift(a2, .02f, .02f), b = Lift(b2, .02f, .02f);
-                    Wall(PartsAt(a), 4, a, b, .14f, 0f);          // Asphalt liegt links der Umrisskante -> Kante zeigt zur Fahrbahn
-                    curbs++;
+                    failed++;
+                    Debug.LogWarning($"Straßenoberfläche: Kachel {tx}/{tz} übersprungen ({ex.GetType().Name}: {ex.Message})");
                 }
-            foreach (var c in outline)
-                for (int i = 0; i < c.Length; i++)
-                {
-                    Vector3 a = Lift(c[i], .02f, .02f), b = Lift(c[(i + 1) % c.Length], .02f, .02f);
-                    Wall(PartsAt(a), 1, b - Vector3.up * .08f, a - Vector3.up * .08f, 0f, -1.4f);   // nach außen sichtbar
-                }
+            }
 
             // Markierungen: je Abschnitt bis zum Kreuzungsbeginn (Beschnitt), nie in Kreuzungen
             foreach (var sg in net.Segs)
@@ -134,8 +112,126 @@ namespace StoryCycling.WorldGen.Editor
                 mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
                 meshes++;
             }
-            Debug.Log($"Straßenoberfläche: {asphalt.Count} Fahrbahnstücke + {fillets} Bordsteinecken vereinigt -> " +
-                      $"{ua.Count} Asphaltflächen, {asphaltTris.Count / 3} + {urbanTris.Count / 3} + {ruralTris.Count / 3} Dreiecke, {curbs} Bordsteinkanten, {meshes} Meshes.");
+            shared.Clear();
+            string state = cancelled ? " ABGEBROCHEN" : failed > 0 ? $" ({failed} Kacheln übersprungen)" : "";
+            Debug.Log($"Straßenoberfläche{state}: {asphalt.Count} Fahrbahnstücke + {fillets} Bordsteinecken in {keys.Count} Kacheln, " +
+                      $"{triCount} Dreiecke, {curbs} Bordsteinkanten, {meshes} Meshes, {clock.ElapsedMilliseconds} ms.");
+        }
+
+        private sealed class TileSet { public readonly List<int> A = new List<int>(), U = new List<int>(), R = new List<int>(); }
+
+        private static void Index(List<Vector2[]> pieces, int kind, Dictionary<long, TileSet> tiles)
+        {
+            for (int i = 0; i < pieces.Count; i++)
+            {
+                var c = pieces[i];
+                float x0 = float.MaxValue, z0 = float.MaxValue, x1 = float.MinValue, z1 = float.MinValue;
+                foreach (var q in c) { x0 = Mathf.Min(x0, q.x); z0 = Mathf.Min(z0, q.y); x1 = Mathf.Max(x1, q.x); z1 = Mathf.Max(z1, q.y); }
+                for (int tx = Mathf.FloorToInt(x0 / Tile); tx <= Mathf.FloorToInt(x1 / Tile); tx++)
+                for (int tz = Mathf.FloorToInt(z0 / Tile); tz <= Mathf.FloorToInt(z1 / Tile); tz++)
+                {
+                    long key = ((long)tx << 32) | (uint)tz;
+                    if (!tiles.TryGetValue(key, out var ts)) { ts = new TileSet(); tiles[key] = ts; }
+                    (kind == 0 ? ts.A : kind == 1 ? ts.U : ts.R).Add(i);
+                }
+            }
+        }
+
+        // Stücke exakt auf die Kachel beschneiden (Sutherland-Hodgman, Kachel = Rechteck ±Tile/2 um o)
+        private static List<Vector2[]> Clip(List<Vector2[]> pieces, List<int> idx, Vector2 o)
+        {
+            var res = new List<Vector2[]>(idx.Count);
+            float h = Tile * .5f;
+            foreach (int i in idx)
+            {
+                var poly = new List<Vector2>(pieces[i].Length);
+                foreach (var q in pieces[i]) poly.Add(q - o);
+                poly = ClipEdge(poly, 0, -h); if (poly.Count < 3) continue;
+                poly = ClipEdge(poly, 1, h); if (poly.Count < 3) continue;
+                poly = ClipEdge(poly, 2, -h); if (poly.Count < 3) continue;
+                poly = ClipEdge(poly, 3, h); if (poly.Count < 3) continue;
+                res.Add(poly.ToArray());
+            }
+            return res;
+        }
+
+        // side 0: x >= v, 1: x <= v, 2: y >= v, 3: y <= v
+        private static List<Vector2> ClipEdge(List<Vector2> p, int side, float v)
+        {
+            var r = new List<Vector2>(p.Count + 4);
+            for (int i = 0; i < p.Count; i++)
+            {
+                Vector2 a = p[i], b = p[(i + 1) % p.Count];
+                bool ina = Inside(a, side, v), inb = Inside(b, side, v);
+                if (ina) r.Add(a);
+                if (ina != inb)
+                {
+                    float t = side < 2 ? (v - a.x) / (b.x - a.x) : (v - a.y) / (b.y - a.y);
+                    var q = a + (b - a) * t;
+                    if (side < 2) q.x = v; else q.y = v;                // exakt auf der Grenze (gleiche Punkte in beiden Kacheln)
+                    r.Add(q);
+                }
+            }
+            return r;
+        }
+        private static bool Inside(Vector2 q, int side, float v) => side == 0 ? q.x >= v : side == 1 ? q.x <= v : side == 2 ? q.y >= v : q.y <= v;
+
+        private static bool OnTileBorder(Vector2 a, Vector2 b)
+        {
+            float h = Tile * .5f, e = 1e-3f;
+            return (Mathf.Abs(a.x - h) < e && Mathf.Abs(b.x - h) < e) || (Mathf.Abs(a.x + h) < e && Mathf.Abs(b.x + h) < e) ||
+                   (Mathf.Abs(a.y - h) < e && Mathf.Abs(b.y - h) < e) || (Mathf.Abs(a.y + h) < e && Mathf.Abs(b.y + h) < e);
+        }
+
+        private static long ProcessTile(List<Vector2[]> asphalt, List<Vector2[]> outerU, List<Vector2[]> outerR, Vector2 o,
+                                        RoadField near, List<bool> urbanFlag, System.Func<Vector3, RoadProfile.Parts> PartsAt, ref int curbs)
+        {
+            var ua = Contours(asphalt, WindingRule.NonZero);
+            var uu = Contours(outerU, WindingRule.NonZero);
+            var ur = Contours(outerR, WindingRule.NonZero);
+            var asphaltTris = Refine(Triangles(asphalt, null, WindingRule.NonZero), 15f);
+            var urbanTris = Refine(Triangles(uu, Reverse(ua), WindingRule.Positive), 15f);
+            var rev = Reverse(ua); rev.AddRange(Reverse(uu));
+            var ruralTris = Refine(Triangles(ur, rev, WindingRule.Positive), 15f);
+            var allOuter = new List<Vector2[]>(uu); allOuter.AddRange(ur);
+            var outline = Contours(allOuter, WindingRule.NonZero, false);
+
+            System.Func<Vector2, float, float, Vector3> Lift = (p2, baseOff, outerOff) =>
+            {
+                var w = new Vector3(p2.x + o.x, 0f, p2.y + o.y);
+                if (near.Nearest(w.x, w.z, 20f, out int i, out float d))
+                {
+                    var s = near.Samples[i];
+                    float t = outerOff == baseOff ? 0f : Mathf.Clamp01((d - s.half) / 2f);
+                    w.y = s.pos.y + Mathf.Lerp(baseOff, outerOff, t);
+                }
+                return w;
+            };
+            cellOrigin = o;
+            EmitTris(asphaltTris, 0, p => Lift(p, .02f, .02f), PartsAt);
+            EmitTris(urbanTris, 4, p => Lift(p, .16f, .16f), PartsAt);
+            EmitTris(ruralTris, 1, p => Lift(p, .015f, -.06f), PartsAt);
+
+            // Bordsteinkanten (innerorts) entlang des Asphaltrands, Schürzen am Außenrand (nicht an Kachelgrenzen)
+            foreach (var c in ua)
+                for (int i = 0; i < c.Length; i++)
+                {
+                    Vector2 a2 = c[i], b2 = c[(i + 1) % c.Length];
+                    if (OnTileBorder(a2, b2)) continue;
+                    Vector2 m2 = (a2 + b2) * .5f;
+                    if (!near.Nearest(m2.x + o.x, m2.y + o.y, 20f, out int si, out _) || !urbanFlag[si]) continue;
+                    Vector3 a = Lift(a2, .02f, .02f), b = Lift(b2, .02f, .02f);
+                    Wall(PartsAt(a), 4, a, b, .14f, 0f);          // Asphalt liegt links der Umrisskante -> Kante zeigt zur Fahrbahn
+                    curbs++;
+                }
+            foreach (var c in outline)
+                for (int i = 0; i < c.Length; i++)
+                {
+                    if (OnTileBorder(c[i], c[(i + 1) % c.Length])) continue;
+                    Vector3 a = Lift(c[i], .02f, .02f), b = Lift(c[(i + 1) % c.Length], .02f, .02f);
+                    Wall(PartsAt(a), 1, b - Vector3.up * .08f, a - Vector3.up * .08f, 0f, -1.4f);   // nach außen sichtbar
+                }
+            return (asphaltTris.Count + urbanTris.Count + ruralTris.Count) / 3;
         }
 
         // ------------------------------------------------------------------ Geometrie-Bausteine
@@ -377,7 +473,7 @@ namespace StoryCycling.WorldGen.Editor
 
         private static int V(RoadProfile.Parts p, Dictionary<long, int> map, int sub, Vector2 q, System.Func<Vector2, Vector3> lift)
         {
-            long key = ((long)Mathf.RoundToInt(q.x * 100f) * 73856093L) ^ ((long)Mathf.RoundToInt(q.y * 100f) * 19349663L) ^ ((long)sub << 58);
+            long key = ((long)Mathf.RoundToInt((q.x + cellOrigin.x) * 100f) * 73856093L) ^ ((long)Mathf.RoundToInt((q.y + cellOrigin.y) * 100f) * 19349663L) ^ ((long)sub << 58);
             if (map.TryGetValue(key, out int i)) return i;
             var w = lift(q);
             i = p.V.Count; p.V.Add(w); p.N.Add(Vector3.up); p.UV.Add(new Vector2(w.x / 4f, w.z / 6f));

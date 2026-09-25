@@ -11,16 +11,16 @@ namespace StoryCycling.WorldGen.Editor
     {
         private const float Bucket = 400f;
 
-        // Die globale LibTess-Vereinigung wächst bei langen OSM-Korridoren mit vielen
-        // Querstraßen/Kreuzungen extrem schnell (mehrere komplette Tesselations-Pässe
-        // über alle 2-m-Proben) und blockiert dann den Unity-Hauptthread. Deshalb ist
-        // sie nur noch ein expliziter Opt-in für kleine Testnetze; der Standard baut
-        // die bewährten 400-m-Bänder plus Kreuzungsflächen.
-        public static bool UseSurfaceUnion = false;
+        // Standard: vereinigte Oberfläche (robust für alle Kreuzungsformen). Die Vereinigung läuft kachelweise
+        // (200 m, exakt beschnitten, mit Fortschrittsbalken/Abbruch) statt global über das ganze Netz — Nordhoek
+        // ~6 s statt ~40 s; eine fehlerhafte Kachel wird übersprungen statt den Build zu blockieren.
+        // false = alte Bänder + Kreuzungsflächen.
+        public static bool UseSurfaceUnion = true;
 
-        public static void Build(RoadNet net, Transform parent, RoadMaterials mats, System.Func<Mesh, Mesh> save)
+        public static void Build(RoadNet net, Transform parent, RoadMaterials mats, System.Func<Mesh, Mesh> save,
+                                 System.Func<float, bool> progress = null)
         {
-            if (UseSurfaceUnion) { RoadSurface.Build(net, parent, mats, save); return; }
+            if (UseSurfaceUnion) { RoadSurface.Build(net, parent, mats, save, progress); return; }
             var buckets = new Dictionary<long, RoadProfile.Parts>();
             System.Func<Vector3, RoadProfile.Parts> PartsAt = p =>
             {

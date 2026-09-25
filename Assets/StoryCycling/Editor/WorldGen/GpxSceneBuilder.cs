@@ -89,7 +89,9 @@ namespace StoryCycling.WorldGen.Editor
                 {
                     Progress("Straßennetz & Kreuzungen", .05f);
                     var centroids = new List<Vector2>(); foreach (var b in osm.Buildings) centroids.Add(b.centroid);
-                    net = RoadNet.Build(osm, matched.Points, (x, z) => dem.Sample(x, z) - ele0,
+                    // Querstraßen auf das an die Route angepasste Höhenmodell setzen (wie das Gelände)
+                    var demFix = new DemCorrection(dem, ele0, matched.Points);
+                    net = RoadNet.Build(osm, matched.Points, (x, z) => dem.Sample(x, z) - ele0 - demFix.At(x, z),
                                         new System.Text.RegularExpressions.Regex(cfg.wideShoulderRoads), centroids);
                     var onNet = RoadNetRoute.Build(net, matched.Points);
                     Debug.Log($"Straßennetz: {net.Segs.Count} Abschnitte, {net.Junctions.Count} Kreuzungen; Fahrlinie {onNet.OnNetShare:P0} auf dem Netz.");
@@ -154,7 +156,8 @@ namespace StoryCycling.WorldGen.Editor
                 if (net != null)
                 {
                     // EIN Generator für Route, Querstraßen und Kreuzungen; Leitplanken weiterhin entlang der Route
-                    RoadNetMesher.Build(net, Group("Road"), roadMats, SaveMesh);
+                    RoadNetMesher.Build(net, Group("Road"), roadMats, SaveMesh,
+                        t => !Application.isBatchMode && EditorUtility.DisplayCancelableProgressBar("Nordhoek bauen", $"Straßenoberfläche {t:P0}", t));
                     new RoadMeshBuilder(road, terrain).Build(Group("Guardrails"), roadMats, streets, SaveMesh, railsOnly: true);
                     // Kreisverkehr-Inseln ergeben sich aus der vereinigten Fläche (Loch im Asphalt) -> kein Extra-Mesh
                     if (!RoadNetMesher.UseSurfaceUnion) StreetMeshBuilder.BuildIslandsOnly(streets, road, streetGroup, roadMats, SaveMesh);

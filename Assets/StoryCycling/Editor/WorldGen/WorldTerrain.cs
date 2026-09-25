@@ -23,7 +23,7 @@ namespace StoryCycling.WorldGen.Editor
 
         // Straßen-Einschnitt
         public const float FlatRadius = 14.2f;   // Fahrbahn (5,5) + Randstreifen (1,6) + 1 Zellendiagonale (7,1)
-        public const float InfluenceRadius = FlatRadius + 50f;
+        public const float InfluenceRadius = PlanumMax + 40f;   // Planum + längste Böschung (18 m) + Reserve
         private const float RoadInset = 0.3f;    // Gelände knapp unter der Fahrbahn
 
         // Kacheln
@@ -44,33 +44,74 @@ namespace StoryCycling.WorldGen.Editor
             rh = Mathf.CeilToInt((dem.MaxZ - dem.MinZ) / RasterCell) + 1;
             biomes = new Biome[rw * rh];
             if (osm != null) RasterizeBiomes(osm);
+            BuildDemCorrection();
         }
+
+        // Höhenmodell an die Straße angepasst (siehe DemCorrection) -> keine Canyons an Klippenstraßen
+        private DemCorrection corrField;
+        private void BuildDemCorrection()
+        {
+            var pts = new List<Vector3>(Road.Samples.Count);
+            foreach (var sm in Road.Samples) pts.Add(sm.pos);
+            corrField = new DemCorrection(Dem, Ele0, pts);
+        }
+        private float Correction(float x, float z) => corrField != null ? corrField.At(x, z) : 0f;
 
         // ---------------------------------------------------------------- Abfragen
-        public float DemY(float x, float z) => Dem.Sample(x, z) - Ele0;
+        public float DemY(float x, float z) => Dem.Sample(x, z) - Ele0 - Correction(x, z);
 
-        public float Carve(float demY, float dist, float roadY)
+        // ---------------------------------------------------------------- Böschungen (Einschnitt / Damm)
+        // Wie im Straßenbau: Planum = Fahrbahn + Randstreifen/Gehweg + 5 m Bankett (1 Gitterzelle, damit das
+        // 5-m-Geländenetz nie über den Rand ragt). Dahinter eine Böschung mit realistischer Neigung, bis sie das
+        // natürliche Gelände trifft (Durchstoßlinie) — dahinter bleibt das Gelände unverändert.
+        //   Einschnitt (Hang höher):  Erde 1:1,5 (34°), im steilen Hang Fels bis 1:0,5 (63°), max. ~18 m breit
+        //   Damm (Hang tiefer):       1:1,5 (34°), im steilen Hang 1:1 (45°), max. ~14 m breit (sonst stützmauerartig)
+        public const float PlanumMargin = 5f;
+        public static float Planum(float half) => half + 2f + PlanumMargin;
+        public const float PlanumMax = 16f;
+
+        public float CarveProfile(float demY, float dist, float roadY, float half, float natSlope)
         {
-            if (dist <= FlatRadius) return roadY - RoadInset;
-            float target = roadY - RoadInset, dh = demY - target;
-            // Einschnitt (Hang höher) flacher auslaufen lassen, Aufschüttung (Hang tiefer) steiler,
-            // damit an Klippenstraßen kein künstlicher Damm ins Meer wächst.
-            float bank = dh > 0f ? Mathf.Clamp(dh * 1.2f, 8f, 50f) : Mathf.Clamp(-dh * 0.9f, 6f, 35f);
-            float t = Mathf.Clamp01((dist - FlatRadius) / bank);
-            t = t * t * (3f - 2f * t);
-            return Mathf.Lerp(target, demY, t);
+            float target = roadY - RoadInset, edge = Planum(half);
+            if (dist <= edge) return target;
+            float d = dist - edge;
+            float cut = Mathf.Clamp(natSlope * 1.6f, .67f, 2f);
+            cut = Mathf.Max(cut, (demY - target) / 18f);
+            float fill = natSlope > .6f ? 1f : .67f;
+            fill = Mathf.Max(fill, (target - demY) / 14f);
+            float lo = target - d * fill, hi = target + d * cut;
+            return SMin(SMax(demY, lo, 1.5f), hi, 1.5f);      // weich ausgerundete Durchstoßlinie
         }
+
+        // natürliche Hangneigung (tan) aus dem Höhenmodell, ±8 m
+        public float NatSlope(float x, float z)
+        {
+            const float e = 8f;
+            float dx = DemY(x + e, z) - DemY(x - e, z), dz = DemY(x, z + e) - DemY(x, z - e);
+            return Mathf.Sqrt(dx * dx + dz * dz) / (2f * e);
+        }
+
+        private static float SMin(float a, float b, float k)
+        {
+            float h = Mathf.Max(k - Mathf.Abs(a - b), 0f) / k;
+            return Mathf.Min(a, b) - h * h * k * .25f;
+        }
+        private static float SMax(float a, float b, float k) => -SMin(-a, -b, k);
+
+        // alt: Carve(demY, dist, roadY) — Kompatibilität (Hauptstraße mit Standardbreite)
+        public float Carve(float demY, float dist, float roadY) => CarveProfile(demY, dist, roadY, 5.5f, .3f);
 
         // Endgültige Geländehöhe inkl. Einschnitt für Route UND Querstraßen (für alle Platzierer).
         public float HeightAt(float x, float z)
         {
-            float mainD = float.MaxValue, mainY = 0f, sideD = float.MaxValue, sideY = 0f, sideH = 0f;
-            if (Road.Nearest(x, z, InfluenceRadius, out int i, out float d)) { mainD = d * d; mainY = Road.Samples[i].pos.y; }
+            float mainD = float.MaxValue, mainY = 0f, mainH = 5.5f, sideD = float.MaxValue, sideY = 0f, sideH = 0f;
+            if (Road.Nearest(x, z, InfluenceRadius, out int i, out float d)) { mainD = d * d; mainY = Road.Samples[i].pos.y; mainH = Road.Samples[i].half; }
             if (Streets != null && Streets.Nearest(x, z, SideInfluence, out int j, out float ds))
             { sideD = ds * ds; sideY = Streets.Samples[j].pos.y; sideH = Streets.Samples[j].half; }
-            float mainMin = mainD <= FlatRadius * FlatRadius ? MinYWithinFlat(Road, x, z, true) : float.MaxValue;
-            float sideMin = Streets != null && sideD <= SideFlatMax * SideFlatMax ? MinYWithinFlat(Streets, x, z, false) : float.MaxValue;
-            return CarveAll(DemY(x, z), mainD, mainY, sideD, sideY, sideH, mainMin, sideMin);
+            float mainMin = mainD <= PlanumMax * PlanumMax ? MinYWithinFlat(Road, x, z, true) : float.MaxValue;
+            float sideMin = Streets != null && sideD <= PlanumMax * PlanumMax ? MinYWithinFlat(Streets, x, z, false) : float.MaxValue;
+            bool near = mainD < InfluenceRadius * InfluenceRadius || sideD < SideInfluence * SideInfluence;
+            return CarveAll(DemY(x, z), mainD, mainY, mainH, sideD, sideY, sideH, mainMin, sideMin, near ? NatSlope(x, z) : 0f);
         }
 
         // Tiefste Fahrbahnhöhe aller Proben, in deren Planum der Punkt liegt. Liegen zwei Abschnitte
@@ -78,13 +119,13 @@ namespace StoryCycling.WorldGen.Editor
         private static float MinYWithinFlat(RoadField field, float x, float z, bool main)
         {
             var list = ScratchList;
-            float r = main ? FlatRadius : SideFlatMax;
+            float r = PlanumMax;
             field.Query(x - r, z - r, x + r, z + r, list);
             float minY = float.MaxValue;
             foreach (int k in list)
             {
                 var sm = field.Samples[k];
-                float flat = main ? FlatRadius : SideFlat(sm.half);
+                float flat = Planum(sm.half);
                 float dx = sm.pos.x - x, dz = sm.pos.z - z;
                 if (dx * dx + dz * dz <= flat * flat && sm.pos.y < minY) minY = sm.pos.y;
             }
@@ -95,32 +136,22 @@ namespace StoryCycling.WorldGen.Editor
 
         // Quadrierte Abstände rein, fertige Höhe raus. Das Gelände überragt nie eine Fahrbahn, in
         // deren Planum es liegt (Route und Querstraßen, auch wo mehrere Abschnitte zusammenkommen).
-        private float CarveAll(float demY, float mainD2, float mainY, float sideD2, float sideY, float sideHalf,
-                               float mainMinY, float sideMinY)
+        private float CarveAll(float demY, float mainD2, float mainY, float mainHalf, float sideD2, float sideY, float sideHalf,
+                               float mainMinY, float sideMinY, float natSlope)
         {
             float h = demY;
-            if (mainD2 < InfluenceRadius * InfluenceRadius) h = Carve(demY, Mathf.Sqrt(mainD2), mainY);
-            if (sideD2 < SideInfluence * SideInfluence) h = CarveSide(h, Mathf.Sqrt(sideD2), sideY, sideHalf);
+            if (mainD2 < InfluenceRadius * InfluenceRadius) h = CarveProfile(demY, Mathf.Sqrt(mainD2), mainY, mainHalf, natSlope);
+            if (sideD2 < SideInfluence * SideInfluence) h = CarveProfile(h, Mathf.Sqrt(sideD2), sideY, sideHalf, natSlope);
             if (mainMinY < float.MaxValue) h = Mathf.Min(h, mainMinY - RoadInset);
             if (sideMinY < float.MaxValue) h = Mathf.Min(h, sideMinY - RoadInset);
             return h;
         }
 
-        public const float SideFlatMax = 3.6f + 2.5f + 8.3f;       // breiteste Querstraße inkl. Trichter
-        private static float SideFlat(float half) => half + 8.3f;
+        public const float SideFlatMax = PlanumMax;
+        private static float SideFlat(float half) => Planum(half);
 
-        // Querstraßen: schmaleres Planum (halbe Breite + Bankett + 1 Zellendiagonale), kürzere Böschung.
-        public const float SideInfluence = 32f;
-        private float CarveSide(float h, float dist, float roadY, float half)
-        {
-            float flat = SideFlat(half), target = roadY - RoadInset;
-            if (dist <= flat) return target;
-            float dh = h - target;
-            float bank = dh > 0f ? Mathf.Clamp(dh * 1.2f, 6f, 20f) : Mathf.Clamp(-dh * .9f, 5f, 15f);
-            float t = Mathf.Clamp01((dist - flat) / bank);
-            t = t * t * (3f - 2f * t);
-            return Mathf.Lerp(target, h, t);
-        }
+        // Querstraßen: dieselben Böschungsregeln wie die Route (eigene Breite)
+        public const float SideInfluence = 40f;
 
         private static void Brush(RoadField field, float R, float gx0, float gz0, int g, float cell, List<int> scratch,
                                   float[] minD2, float[] roadY, float[] half, float[] flatMinY, bool main)
@@ -131,7 +162,7 @@ namespace StoryCycling.WorldGen.Editor
             {
                 var sm = field.Samples[si];
                 Vector3 p = sm.pos;
-                float fl = main ? FlatRadius : SideFlat(sm.half), flat2 = fl * fl;
+                float fl = Planum(sm.half), flat2 = fl * fl;
                 int i0 = Mathf.Max(0, Mathf.FloorToInt((p.x - R - gx0) / cell)), i1 = Mathf.Min(g - 1, Mathf.CeilToInt((p.x + R - gx0) / cell));
                 int j0 = Mathf.Max(0, Mathf.FloorToInt((p.z - R - gz0) / cell)), j1 = Mathf.Min(g - 1, Mathf.CeilToInt((p.z + R - gz0) / cell));
                 for (int j = j0; j <= j1; j++)
@@ -241,9 +272,14 @@ namespace StoryCycling.WorldGen.Editor
                     Brush(Streets, SideInfluence, gx0, gz0, g, cell, scratch, sideD, sideY, sideH, sideMin, false);
                 }
                 for (int k = 0; k < h.Length; k++)
-                    h[k] = CarveAll(h[k], mainD[k], mainY[k], sideD != null ? sideD[k] : float.MaxValue,
+                {
+                    float sd2 = sideD != null ? sideD[k] : float.MaxValue;
+                    bool near = mainD[k] < InfluenceRadius * InfluenceRadius || sd2 < SideInfluence * SideInfluence;
+                    float slope = near ? NatSlope(gx0 + (k % g) * cell, gz0 + (k / g) * cell) : 0f;
+                    h[k] = CarveAll(h[k], mainD[k], mainY[k], mainH[k], sd2,
                                     sideD != null ? sideY[k] : 0f, sideD != null ? sideH[k] : 0f,
-                                    mainMin[k], sideMin != null ? sideMin[k] : float.MaxValue);
+                                    mainMin[k], sideMin != null ? sideMin[k] : float.MaxValue, slope);
+                }
             }
 
             allUnderwater = true;
