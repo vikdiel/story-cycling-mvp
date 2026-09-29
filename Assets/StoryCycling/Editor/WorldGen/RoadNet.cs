@@ -31,7 +31,21 @@ namespace StoryCycling.WorldGen.Editor
             public bool Internal;                    // liegt komplett in einer Kreuzung (z. B. über den Mittelstreifen)
             public bool Oneway;
             public readonly List<byte> LeftKind = new List<byte>(), RightKind = new List<byte>();   // 0 normal, 2 Mittelstreifen
+            public readonly List<float> LeftGap = new List<float>(), RightGap = new List<float>();   // Mittelstreifenbreite (m), sonst 0
+            public readonly List<LaneInfo> Lanes = new List<LaneInfo>();                  // Spuraufteilung je Probe
+            public readonly List<bool> Covered = new List<bool>();                         // unter einer Galerie
+            public bool Roundabout;                  // Kreisfahrbahn
+            public bool Fallback;                    // Ersatzfahrbahn entlang der Fahrlinie (kein OSM-Weg im Netz)
             public float Length => S.Count > 0 ? S[S.Count - 1].distance : 0f;
+        }
+
+        // Querschnitt einer Probe in Fahrtrichtung des Abschnitts (A -> B), Linksverkehr:
+        //   |Sh| L Spuren (Verkehr A->B) | R Spuren (Verkehr B->A) |Sh|
+        // Einbahn: alle Spuren in L (Dir +1, Verkehr A->B) bzw. R (Dir -1). W = Spurbreite, Sh = asphaltierter Rand.
+        public struct LaneInfo
+        {
+            public byte L, R; public sbyte Dir; public float W, Sh; public bool Center, Tagged;
+            public int N => L + R;
         }
 
         public sealed class End { public int Seg; public bool AtA; public int NodeIdx; public Vector2 Dir; public float Half, Outer, Trim; public bool Urban; }
@@ -55,9 +69,10 @@ namespace StoryCycling.WorldGen.Editor
 
         // ------------------------------------------------------------------ Aufbau
         public static RoadNet Build(OsmContext osm, List<Vector3> route, System.Func<float, float, float> demY,
-                                    Regex wideShoulder, List<Vector2> buildings)
+                                    Regex wideShoulder, List<Vector2> buildings,
+                                    RoadRules rules = null, System.Func<Vector2, bool> wideZone = null)
         {
-            var net = new RoadNet();
+            var net = new RoadNet { rules = rules ?? new RoadRules(), wideZone = wideZone };
             var routeHash = new PointHash(route, 10f);
 
             // 1) Knotengrad aus allen befahrbaren Wegen
@@ -66,7 +81,8 @@ namespace StoryCycling.WorldGen.Editor
             var ways = new List<OsmContext.Street>();
             foreach (var st in osm.Streets)
             {
-                if (st.tunnel || st.nodes == null || st.nodes.Count != st.pts.Count || st.pts.Count < 2) continue;
+                // Tunnel/Galerien gehören zum Netz (Chapman's Peak: tunnel=avalanche_protector) — sonst fehlt dort die Straße
+                if (st.nodes == null || st.nodes.Count != st.pts.Count || st.pts.Count < 2) continue;
                 ways.Add(st);
                 for (int k = 0; k < st.pts.Count; k++)
                 {
@@ -197,6 +213,9 @@ namespace StoryCycling.WorldGen.Editor
         private sealed class Link { public long Other; public OsmContext.Street Way; }
         private sealed class Chain { public readonly List<long> Ids = new List<long>(); public readonly List<OsmContext.Street> Ways = new List<OsmContext.Street>(); }
 
+        private RoadRules rules = new RoadRules();
+        public RoadRules Rules => rules;
+        private System.Func<Vector2, bool> wideZone;
         private readonly List<List<Vector2>> pendingPoly = new List<List<Vector2>>();
         private readonly List<List<OsmContext.Street>> pendingWay = new List<List<OsmContext.Street>>();
 
@@ -224,7 +243,8 @@ namespace StoryCycling.WorldGen.Editor
                 routeY[i] = ri >= 0 ? route[ri].y : float.NaN;
             }
             sg.OnRoute = near >= .7f * n;
-            foreach (var w in pw) if (w != null && w.oneway) { sg.Oneway = true; break; }
+            // Kreisfahrbahnen zählen hier nicht (gegenüberliegende Ringstücke sähen wie eine Doppelfahrbahn aus)
+            foreach (var w in pw) if (w != null && w.oneway && !w.roundabout) { sg.Oneway = true; break; }
 
             // Höhen: Route -> Routenprofil; sonst Gelände geglättet, in Steigungskegeln beider Enden
             var y = new float[n];
@@ -283,20 +303,30 @@ namespace StoryCycling.WorldGen.Editor
             }
             RemoveShortRuns(urban, 60); Invert(urban); RemoveShortRuns(urban, 60); Invert(urban);
 
-            // Querschnitt je Probe
-            var half = new float[n]; var inset = new float[n]; var rank = new int[n];
+            // Querschnitt je Probe aus den OSM-Tags (Spuren, Richtung, Breite, Lage) + Streckenregeln
+            var half = new float[n]; var inset = new float[n]; var rank = new int[n]; var shift = new float[n];
+            var lanes = new LaneInfo[n]; var covered = new bool[n];
             for (int i = 0; i < n; i++)
             {
                 var st = pw[i];
                 rank[i] = Rank(st?.highway);
-                float lanesHalf = st != null && st.lanes >= 3 ? st.lanes * 3.2f * .5f : rank[i] <= 3 ? 3.3f : 2.8f;
+                Vector2 tg = (p[Mathf.Min(n - 1, i + 1)] - p[Mathf.Max(0, i - 1)]);
+                bool fwd = st == null || WayForward(st, p[i], tg);
                 string label = st == null ? "" : st.name + " " + st.refTag;
-                if (urban[i]) { half[i] = lanesHalf + .2f; inset[i] = -1f; }
-                else if (wide != null && wide.IsMatch(label)) { half[i] = lanesHalf + 2f; inset[i] = 2f; }
-                else if (rank[i] <= 3) { half[i] = lanesHalf + .4f; inset[i] = .25f; }
-                else { half[i] = lanesHalf; inset[i] = -1f; }
+                bool wideRoad = wide != null && wide.IsMatch(label) && (wideZone == null || wideZone(p[i]));
+                lanes[i] = LanesFor(st, fwd, rank[i], urban[i], wideRoad, rules, out half[i], out inset[i], out shift[i]);
+                covered[i] = st != null && st.tunnelKind == "avalanche_protector";
+                if (st != null && st.roundabout) sg.Roundabout = true;
             }
             half = Smooth(half, 6);
+            shift = Smooth(shift, 6);
+            // Lage-Tags (placement): OSM-Linie liegt nicht in der Fahrbahnmitte -> Proben auf die Mitte schieben
+            for (int i = 0; i < n; i++)
+            {
+                if (Mathf.Abs(shift[i]) < .01f) continue;
+                Vector2 tg = (p[Mathf.Min(n - 1, i + 1)] - p[Mathf.Max(0, i - 1)]).normalized;
+                p[i] += new Vector2(tg.y, -tg.x) * shift[i];              // rechts = (t.z, -t.x)
+            }
 
             for (int i = 0; i < n; i++)
             {
@@ -311,9 +341,155 @@ namespace StoryCycling.WorldGen.Editor
                     side = Vector3.Cross(Vector3.up, t).normalized,
                     distance = arc[i], half = half[i], inset = inset[i]
                 });
-                sg.Urban.Add(urban[i]); sg.Rank.Add(rank[i]);
-                sg.LeftKind.Add(KindNormal); sg.RightKind.Add(KindNormal);
+                sg.Urban.Add(urban[i]); sg.Rank.Add(rank[i]); sg.Lanes.Add(lanes[i]); sg.Covered.Add(covered[i]);
+                sg.LeftKind.Add(KindNormal); sg.RightKind.Add(KindNormal); sg.LeftGap.Add(0f); sg.RightGap.Add(0f);
             }
+        }
+
+        // ------------------------------------------------------------------ Spurmodell
+        // Läuft der Abschnitt an dieser Stelle in OSM-Wegrichtung? (Tangente gegen das nächste Wegstück)
+        private static bool WayForward(OsmContext.Street st, Vector2 q, Vector2 tangent)
+        {
+            float best = float.MaxValue; Vector2 dir = Vector2.zero;
+            for (int k = 0; k + 1 < st.pts.Count; k++)
+            {
+                Vector2 a = st.pts[k], ab = st.pts[k + 1] - a;
+                float l2 = ab.sqrMagnitude; if (l2 < 1e-6f) continue;
+                float t = Mathf.Clamp01(Vector2.Dot(q - a, ab) / l2);
+                float d = (a + ab * t - q).sqrMagnitude;
+                if (d < best) { best = d; dir = ab; }
+            }
+            return Vector2.Dot(dir, tangent) >= 0f;
+        }
+
+        public static float LaneWidthFor(OsmContext.Street st, RoadRules rules)
+        {
+            if (st == null) return rules.laneWidthMajor;
+            if (st.roundabout) return rules.roundaboutLaneWidth;
+            string hw = st.highway ?? "";
+            if (hw.EndsWith("_link")) return rules.linkLaneWidth;
+            switch (hw)
+            {
+                case "motorway": case "trunk": case "primary": case "secondary": return rules.laneWidthMajor;
+                case "tertiary": return rules.laneWidthMinor;
+                default: return rules.laneWidthLocal;
+            }
+        }
+
+        // Spuraufteilung, halbe Asphaltbreite, Randlinien-Einzug (-1 = keine gelbe Randlinie) und Querverschiebung
+        // der Fahrbahnmitte gegenüber der OSM-Linie (placement-Tags), alles im Rahmen des Abschnitts (A -> B).
+        public static LaneInfo LanesFor(OsmContext.Street st, bool fwd, int rank, bool urban, bool wideRoad, RoadRules rules,
+                                        out float half, out float inset, out float shift)
+        {
+            var li = new LaneInfo(); shift = 0f;
+            bool one = st != null && (st.oneway || st.roundabout);
+            int n = st == null ? 2 : st.lanes > 0 ? st.lanes
+                  : st.lanesForward + st.lanesBackward > 0 ? st.lanesForward + st.lanesBackward : one ? 1 : 2;
+            n = Mathf.Clamp(n, 1, 8);
+            int f, b;
+            if (one) { bool rev = st.onewayReverse; f = rev ? 0 : n; b = rev ? n : 0; }
+            else if (n == 1) { f = 1; b = 0; }                                        // einspurig, Begegnungsverkehr
+            else
+            {
+                f = st != null && st.lanesForward > 0 ? Mathf.Min(st.lanesForward, n)
+                  : st != null && st.lanesBackward > 0 ? Mathf.Max(0, n - st.lanesBackward) : (n + 1) / 2;
+                b = n - f;
+            }
+            float lw = LaneWidthFor(st, rules);
+            if (rules.useWidthTag && st != null && st.width > 0f)
+            {
+                float per = st.width / n;
+                if (per >= 2.5f && per <= 5.5f) lw = per;                              // width = Fahrbahnbreite ohne Ränder
+            }
+            float sh;
+            if (urban) { sh = rules.urbanGutter; inset = -1f; }
+            else if (wideRoad) { sh = rules.wideShoulder; inset = Mathf.Max(0f, sh - .12f); }
+            else if (rank <= 3) { sh = rules.ruralShoulder; inset = Mathf.Max(0f, sh - .12f); }
+            else { sh = 0f; inset = -1f; }
+            half = sh + n * lw * .5f;
+
+            li.W = lw; li.Sh = sh; li.Tagged = st != null && (st.lanes > 0 || st.lanesForward > 0 || st.lanesBackward > 0);
+            li.L = (byte)(fwd ? f : b); li.R = (byte)(fwd ? b : f);
+            li.Dir = (sbyte)(!one ? 0 : ((fwd == !st.onewayReverse) ? 1 : -1));
+            li.Center = !one && f > 0 && b > 0 && (rank <= 3 || li.Tagged || rules.markUntaggedLocalRoads);
+
+            // placement: Lage der OSM-Linie, Spuren je Richtung von links gezählt (Wegrichtung)
+            if (st != null)
+            {
+                float wl = n * lw; float pos = -1f;
+                string pf = !string.IsNullOrEmpty(st.placementForward) ? st.placementForward : st.placement;
+                if (!string.IsNullOrEmpty(pf)) pos = PlacementPos(pf, lw);
+                else if (!string.IsNullOrEmpty(st.placementBackward)) { float pb = PlacementPos(st.placementBackward, lw); if (pb >= 0f) pos = wl - pb; }
+                if (pos >= 0f)
+                {
+                    float sft = Mathf.Clamp(wl * .5f - pos, -wl * .5f, wl * .5f);    // Wegrichtung, nach rechts positiv
+                    shift = fwd ? sft : -sft;
+                }
+            }
+            return li;
+        }
+
+        // "left_of:2" -> Abstand der Linie vom linken Fahrbahnrand (ohne Randstreifen); -1 = unbekannt
+        private static float PlacementPos(string v, float lw)
+        {
+            int c = v.IndexOf(':'); if (c < 0) return -1f;
+            if (!int.TryParse(v.Substring(c + 1), out int j) || j < 1) return -1f;
+            string k = v.Substring(0, c);
+            float frac = k == "left_of" ? 0f : k == "middle_of" ? .5f : k == "right_of" ? 1f : -1f;
+            return frac < 0f ? -1f : (j - 1 + frac) * lw;
+        }
+
+        // Fahrlinien-Abschnitte ohne Netz (GPX abseits jeder OSM-Straße) als Ersatzfahrbahn ins Netz aufnehmen,
+        // damit die Route NIE ohne Straße ist. Überlappt 3 Punkte ins Netz (Vereinigung schließt nahtlos an).
+        // Zusätzlich dort, wo die Fahrlinie zwar im Netz ist, aber neben allen Fahrbahnstreifen liegt (Bogen quer
+        // durch eine Kreuzung): die Kurve des Radfahrers ist immer befahrbare Fläche.
+        public int AddRouteFallback(List<Vector3> pts, List<float> half, List<float> inset, List<bool> off)
+        {
+            var all = new List<RoadField.Sample>(); var allUrban = new List<bool>();
+            foreach (var g in Segs) for (int k = 0; k < g.S.Count; k++) { all.Add(g.S[k]); allUrban.Add(g.Urban[k]); }
+            var field = new RoadField(all);
+            var need = new bool[pts.Count];
+            for (int i = 0; i < pts.Count; i++)
+            {
+                need[i] = off[i];
+                if (need[i]) continue;
+                if (!field.Nearest(pts[i].x, pts[i].z, 15f, out int si, out _)) { need[i] = true; continue; }
+                var s = field.Samples[si]; Vector3 d = pts[i] - s.pos;
+                Vector3 tf = new Vector3(s.tangent.x, 0f, s.tangent.z).normalized;
+                need[i] = Mathf.Abs(Vector3.Dot(d, s.side)) > s.half - .3f || Mathf.Abs(Vector3.Dot(d, tf)) > 1.6f;
+            }
+            int added = 0;
+            for (int i = 0; i < pts.Count;)
+            {
+                if (!need[i]) { i++; continue; }
+                int e = i; while (e < pts.Count && need[e]) e++;
+                int a0 = Mathf.Max(0, i - 3), a1 = Mathf.Min(pts.Count - 1, e + 2);
+                if (a1 - a0 >= 1)
+                {
+                    var sg = new Segment { OnRoute = true, Fallback = true };
+                    float dist = 0f;
+                    for (int k = a0; k <= a1; k++)
+                    {
+                        if (k > a0) dist += Vector3.Distance(pts[k - 1], pts[k]);
+                        Vector3 t = pts[Mathf.Min(a1, k + 1)] - pts[Mathf.Max(a0, k - 1)];
+                        Vector3 tf = new Vector3(t.x, 0f, t.z).normalized; if (tf.sqrMagnitude < 1e-6f) tf = Vector3.forward;
+                        float h = half[k] > .5f ? half[k] : 3.5f;
+                        sg.S.Add(new RoadField.Sample { pos = pts[k], tangent = t.sqrMagnitude > 1e-6f ? t.normalized : tf,
+                                                        side = Vector3.Cross(Vector3.up, tf).normalized, distance = dist, half = h, inset = inset[k] });
+                        bool urb = field.Nearest(pts[k].x, pts[k].z, 30f, out int ui, out _) && allUrban[ui];
+                        sg.Urban.Add(urb); sg.Rank.Add(1); sg.Covered.Add(false);
+                        sg.Lanes.Add(new LaneInfo { L = 1, R = 1, W = h, Sh = 0f });
+                        sg.LeftKind.Add(KindNormal); sg.RightKind.Add(KindNormal); sg.LeftGap.Add(0f); sg.RightGap.Add(0f);
+                    }
+                    Nodes.Add(new Node { Id = -900000 - added * 2, P = new Vector2(pts[a0].x, pts[a0].z), Y = pts[a0].y, Fixed = true });
+                    Nodes.Add(new Node { Id = -900001 - added * 2, P = new Vector2(pts[a1].x, pts[a1].z), Y = pts[a1].y, Fixed = true });
+                    sg.A = Nodes.Count - 2; sg.B = Nodes.Count - 1;
+                    Segs.Add(sg); Nodes[sg.A].Segs.Add(Segs.Count - 1); Nodes[sg.B].Segs.Add(Segs.Count - 1);
+                    added++;
+                }
+                i = e;
+            }
+            return added;
         }
 
         // ------------------------------------------------------------------ Mittelstreifen
@@ -333,19 +509,33 @@ namespace StoryCycling.WorldGen.Editor
                 for (int k = 0; k < sg.S.Count; k++)
                 {
                     var sm = sg.S[k]; var q = new Vector2(sm.pos.x, sm.pos.z);
+                    // Partner: andere Einbahn-Fahrbahn, entgegengesetzt, seitlich versetzt — der mit dem kleinsten
+                    // Längsversatz (quer gegenüber), sonst wird die Mittelstreifenbreite dort überschätzt, wo die
+                    // Fahrbahnen zusammenlaufen (Palmen/Aussparung landen dann auf der Gegenfahrbahn)
+                    int best = -1; float bestAlong = float.MaxValue;
                     foreach (int oi in hash.WithinIdx(q, 25f))
                     {
-                        // Partner: andere Einbahn-Fahrbahn, entgegengesetzt, seitlich versetzt
                         if (who[oi] == si) continue;
+                        var cand = Segs[who[oi]].S[idx[oi]];
+                        if (Vector3.Dot(cand.tangent, sm.tangent) > -.8f) continue;
+                        float la = Vector3.Dot(cand.pos - sm.pos, sm.side);
+                        if (Mathf.Abs(la) > sm.half + cand.half + 12f || Mathf.Abs(la) < sm.half) continue;
+                        float along = Mathf.Abs(Vector3.Dot(cand.pos - sm.pos, sm.tangent));
+                        if (along < bestAlong) { bestAlong = along; best = oi; }
+                    }
+                    if (best >= 0)
+                    {
+                        int oi = best;
                         var os = Segs[who[oi]].S[idx[oi]];
-                        if (Vector3.Dot(os.tangent, sm.tangent) > -.8f) continue;
                         float lat = Vector3.Dot(os.pos - sm.pos, sm.side);
-                        if (Mathf.Abs(lat) > sm.half + os.half + 12f || Mathf.Abs(lat) < sm.half) continue;
-                        if (lat > 0f) sg.RightKind[k] = KindMedian; else sg.LeftKind[k] = KindMedian;
+                        // Breite nur, wenn der Partner wirklich quer gegenüber liegt (Probenabstand 2 m je Fahrbahn,
+                        // jede 2. Probe im Index -> bis ~2 m Längsversatz); sonst Mittelstreifen ohne Breitenangabe
+                        float gap = bestAlong <= 2.5f ? Mathf.Abs(lat) - sm.half - os.half : 0f;
+                        if (lat > 0f) { sg.RightKind[k] = KindMedian; sg.RightGap[k] = gap; }
+                        else { sg.LeftKind[k] = KindMedian; sg.LeftGap[k] = gap; }
                         marked++;
                         // Palme mittig im Mittelstreifen: nur von einer der beiden Fahrbahnen aus (kleinerer Index),
                         // wenn die Lücke > 1 m ist, alle 20 m, nicht in Kreuzungsnähe
-                        float gap = Mathf.Abs(lat) - sm.half - os.half;
                         if (si < who[oi] && gap > 1f && Mathf.Floor(sm.distance / 20f) != Mathf.Floor((sm.distance - SampleStep) / 20f) &&
                             sm.distance > 25f && sm.distance < sg.Length - 25f)
                         {
@@ -353,7 +543,6 @@ namespace StoryCycling.WorldGen.Editor
                             mid.y = (sm.pos.y + os.pos.y) * .5f;
                             MedianPalmSpots.Add(mid);
                         }
-                        break;
                     }
                 }
             }
@@ -370,7 +559,9 @@ namespace StoryCycling.WorldGen.Editor
             Find = x => parent[x] == x ? x : (parent[x] = Find(parent[x]));
             System.Func<int, bool> IsJ = x => Nodes[x].Segs.Count >= 3;
             foreach (var sg in Segs)
-                if (sg.A != sg.B && IsJ(sg.A) && IsJ(sg.B) && sg.Length <= 25f)
+                // Kreisfahrbahn-Stücke nie zusammenfassen: sonst wird der ganze Kreisverkehr EINE Kreuzung und die
+                // Fahrlinie schneidet quer über die Insel
+                if (sg.A != sg.B && IsJ(sg.A) && IsJ(sg.B) && sg.Length <= 25f && !sg.Roundabout)
                 { parent[Find(sg.A)] = Find(sg.B); sg.Internal = true; }
 
             var groups = new Dictionary<int, List<int>>();

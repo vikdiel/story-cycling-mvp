@@ -28,6 +28,10 @@ namespace StoryCycling.WorldGen
             public List<Vector2> pts; public List<long> nodes;   // nodes: OSM-Knoten-IDs parallel zu pts (Graph)
             public string highway, name, refTag; public int lanes; public float width;
             public bool bridge, tunnel, roundabout, oneway;
+            public bool onewayReverse;                    // oneway=-1: Einbahn gegen die Wegrichtung
+            public int lanesForward, lanesBackward;       // lanes:forward / lanes:backward (0 = nicht getaggt)
+            public string tunnelKind = "";                // tunnel=* Wert (z. B. avalanche_protector = Galerie)
+            public string placement = "", placementForward = "", placementBackward = "";
         }
 
         public readonly List<Building> Buildings = new List<Building>();
@@ -77,7 +81,13 @@ namespace StoryCycling.WorldGen
                         bridge = tags.ContainsKey("bridge") && tags["bridge"] != "no",
                         tunnel = tags.ContainsKey("tunnel") && tags["tunnel"] != "no",
                         roundabout = jn == "roundabout" || jn == "circular",
-                        oneway = tags.ContainsKey("oneway") && tags["oneway"] == "yes"
+                        oneway = tags.ContainsKey("oneway") && (tags["oneway"] == "yes" || tags["oneway"] == "1" || tags["oneway"] == "-1"),
+                        onewayReverse = tags.ContainsKey("oneway") && tags["oneway"] == "-1",
+                        lanesForward = IntTag(tags, "lanes:forward"), lanesBackward = IntTag(tags, "lanes:backward"),
+                        tunnelKind = tags.TryGetValue("tunnel", out string tk) && tk != "no" ? tk : "",
+                        placement = tags.TryGetValue("placement", out string pl) ? pl : "",
+                        placementForward = tags.TryGetValue("placement:forward", out string plf) ? plf : "",
+                        placementBackward = tags.TryGetValue("placement:backward", out string plb) ? plb : ""
                     });
                 }
                 else if (tags.ContainsKey("building") && ring.Count >= 3)
@@ -144,6 +154,9 @@ namespace StoryCycling.WorldGen
                 switch (na) { case "tree": return "tree"; case "stone": case "rock": return "rock"; }
             return null;
         }
+
+        private static int IntTag(Dictionary<string, string> t, string k) =>
+            t.TryGetValue(k, out string v) && int.TryParse(v, out int n) ? n : 0;
 
         private static string AreaKind(Dictionary<string, string> t)
         {

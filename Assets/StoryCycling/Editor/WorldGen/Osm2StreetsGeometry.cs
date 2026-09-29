@@ -14,6 +14,7 @@ namespace StoryCycling.WorldGen.Editor
     public static class Osm2StreetsGeometry
     {
         private const string ToolRelPath = "Assets/StoryCycling/Tools/osm2streets";
+        private const int FormatVersion = 2;
 
         public static string OutputPathFor(string osmPath) =>
             osmPath.EndsWith(".osm.xml") ? osmPath.Substring(0, osmPath.Length - ".osm.xml".Length) + ".o2s.json" : osmPath + ".o2s.json";
@@ -21,6 +22,7 @@ namespace StoryCycling.WorldGen.Editor
         public static bool NeedsRefresh(string gpxPath, string osmPath, string outPath)
         {
             if (!File.Exists(outPath)) return true;
+            if (!HasCurrentVersion(outPath)) return true;     // ältere Ausgabe (ohne Flächenart) neu erzeugen
             var outTime = File.GetLastWriteTimeUtc(outPath);
             return (File.Exists(osmPath) && File.GetLastWriteTimeUtc(osmPath) > outTime) ||
                    (File.Exists(gpxPath) && File.GetLastWriteTimeUtc(gpxPath) > outTime);
@@ -85,6 +87,19 @@ namespace StoryCycling.WorldGen.Editor
             }
         }
 
+        private static bool HasCurrentVersion(string path)
+        {
+            try
+            {
+                using (var r = new StreamReader(path, Encoding.UTF8))
+                {
+                    var buf = new char[64]; int n = r.Read(buf, 0, buf.Length);
+                    return new string(buf, 0, n).Replace(" ", "").Contains($"\"version\":{FormatVersion}");
+                }
+            }
+            catch { return false; }
+        }
+
         private static string LastLine(string primary, string fallback)
         {
             string s = string.IsNullOrWhiteSpace(primary) ? fallback : primary;
@@ -93,19 +108,24 @@ namespace StoryCycling.WorldGen.Editor
             return "(keine Ausgabe)";
         }
 
-        // Lädt die geschriebene JSON-Datei (Schema: {"polygons":[[[x,z],[x,z],...],...]}), bereits in denselben
-        // lokalen Metern wie der Rest der Pipeline. Gibt null zurück (statt zu werfen), wenn Datei fehlt/kaputt ist.
+        // Lädt die KREUZUNGSFLÄCHEN aus der geschriebenen JSON-Datei (Schema v2: {"version":2,"kinds":[...],
+        // "polygons":[[[x,z],...],...]}), bereits in denselben lokalen Metern wie der Rest der Pipeline.
+        // Die Straßenflächen von osm2streets werden bewusst NICHT verwendet: deren Breiten weichen von unseren
+        // streckenspezifischen ab (die Fahrlinie liegt auf unseren) — zwei Breitenmodelle vereinigt ergeben Treppen.
+        // Gibt null zurück (statt zu werfen), wenn Datei fehlt, veraltet oder kaputt ist.
         public static List<Vector2[]> TryLoad(string path)
         {
-            if (!File.Exists(path)) return null;
+            if (!File.Exists(path) || !HasCurrentVersion(path)) return null;
             try
             {
                 var json = Json.Parse(File.ReadAllText(path, Encoding.UTF8));
-                var polysNode = json["polygons"];
-                if (polysNode == null) return null;
-                var res = new List<Vector2[]>(polysNode.Count);
-                foreach (var ring in polysNode.Items)
+                var polysNode = json["polygons"]; var kindsNode = json["kinds"];
+                if (polysNode == null || kindsNode == null || kindsNode.Count != polysNode.Count) return null;
+                var res = new List<Vector2[]>();
+                for (int p = 0; p < polysNode.Count; p++)
                 {
+                    if (kindsNode[p].Text != "intersection") continue;
+                    var ring = polysNode[p];
                     var pts = new Vector2[ring.Count];
                     for (int i = 0; i < ring.Count; i++) pts[i] = new Vector2((float)ring[i][0].Number, (float)ring[i][1].Number);
                     if (pts.Length >= 3) res.Add(pts);
@@ -123,7 +143,7 @@ namespace StoryCycling.WorldGen.Editor
     // Minimaler JSON-Reader (nur was hier gebraucht wird: Objekte, Arrays, Zahlen) — kein Paket-Abhängigkeit nötig.
     internal sealed class Json
     {
-        public double Number; public List<Json> Items; private Dictionary<string, Json> obj;
+        public double Number; public string Text; public List<Json> Items; private Dictionary<string, Json> obj;
         public int Count => Items?.Count ?? 0;
         public Json this[int i] => Items[i];
         public Json this[string key] => obj != null && obj.TryGetValue(key, out var v) ? v : null;
@@ -136,7 +156,7 @@ namespace StoryCycling.WorldGen.Editor
             char c = s[i];
             if (c == '{') return ParseObject(s, ref i);
             if (c == '[') return ParseArray(s, ref i);
-            if (c == '"') { SkipString(s, ref i); return new Json(); }
+            if (c == '"') { int st = i + 1; SkipString(s, ref i); return new Json { Text = s.Substring(st, i - st - 1) }; }
             if (c == 't' || c == 'f') { i += c == 't' ? 4 : 5; return new Json(); }
             if (c == 'n') { i += 4; return new Json(); }
             return ParseNumber(s, ref i);

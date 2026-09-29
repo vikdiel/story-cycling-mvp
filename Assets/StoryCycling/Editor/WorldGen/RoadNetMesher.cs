@@ -17,10 +17,10 @@ namespace StoryCycling.WorldGen.Editor
         // false = alte Bänder + Kreuzungsflächen.
         public static bool UseSurfaceUnion = true;
 
-        public static void Build(RoadNet net, Transform parent, RoadMaterials mats, System.Func<Mesh, Mesh> save,
-                                 System.Func<float, bool> progress = null, List<Vector2[]> externalAsphalt = null)
+        public static RoadSurface.Result Build(RoadNet net, Transform parent, RoadMaterials mats, System.Func<Mesh, Mesh> save,
+                                 System.Func<float, bool> progress = null, List<Vector2[]> externalJunctions = null)
         {
-            if (UseSurfaceUnion) { RoadSurface.Build(net, parent, mats, save, progress, externalAsphalt); return; }
+            if (UseSurfaceUnion) return RoadSurface.Build(net, parent, mats, save, progress, externalJunctions);
             var buckets = new Dictionary<long, RoadProfile.Parts>();
             System.Func<Vector3, RoadProfile.Parts> PartsAt = p =>
             {
@@ -69,6 +69,7 @@ namespace StoryCycling.WorldGen.Editor
                 count++;
             }
             Debug.Log($"Straßennetz: {segs} Abschnitte, {net.Junctions.Count} Kreuzungsflächen in {count} Meshes.");
+            return null;
         }
 
         // Kreuzungsfläche (Asphalt) + Ecken (Gehweg bzw. Randstreifen) + Schürze, alles aus denselben Randpunkten.

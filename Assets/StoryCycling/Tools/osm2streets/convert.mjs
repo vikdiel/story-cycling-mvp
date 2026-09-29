@@ -3,9 +3,9 @@
 // teils als eigene <node>) über die Bibliothek osm2streets (https://github.com/a-b-street/osm2streets,
 // Apache-2.0) in robuste Straßen- und Kreuzungsflächen um. osm2streets löst genau die Fälle, an denen
 // unser eigener Algorithmus zuverlässig scheitert: Doppelfahrbahnen, versetzte "Dog-Leg"-Kreuzungen,
-// Kreisverkehre mit Bypass-Spuren. Ausgabe: eine JSON-Datei mit den Umrissen der reinen Fahrbahn
-// (ohne Gehweg/Randstreifen — die bleiben unsere eigene, streckenspezifische Logik) in denselben
-// lokalen Metern wie der Rest der Pipeline (Ursprung = erster GPX-Punkt, wie GpxParser.cs).
+// Kreisverkehre mit Bypass-Spuren. Ausgabe: eine JSON-Datei mit den Umrissen der Straßen- und
+// Kreuzungsflächen (je Polygon die Art in "kinds"), in denselben lokalen Metern wie der Rest der
+// Pipeline (Ursprung = erster GPX-Punkt, wie GpxParser.cs). Unity verwendet davon die Kreuzungsflächen.
 //
 // Aufruf:  node convert.mjs <route.gpx> <strecke.osm.xml> <ausgabe.o2s.json> [corridorMeter=170]
 //
@@ -111,7 +111,7 @@ function ring(geom) {
                : null;
   return coords ? coords.map(([lon, lat]) => toLocal(lat, lon)) : null;
 }
-const polys = [];
+const polys = [], kinds = [];
 let kept = 0, dropped = 0, degenerate = 0;
 for (const f of plain.features) {
   const t = f.properties.type;
@@ -122,9 +122,12 @@ for (const f of plain.features) {
   const cz = pts.reduce((s, p) => s + p[1], 0) / pts.length;
   if (distToRoute(cx, cz) > corridor) { dropped++; continue; }
   polys.push(pts.map(([x, z]) => [Math.round(x * 100) / 100, Math.round(z * 100) / 100]));
+  kinds.push(t);
   kept++;
 }
 if (kept === 0) fail("Nach dem Korridor-Zuschnitt sind keine Straßenflächen übrig — GPX/OSM passen nicht zusammen?");
 
-fs.writeFileSync(outPath, JSON.stringify({ origin: { lat: lat0, lon: lon0 }, corridor, polygons: polys }));
+// version 2: "kinds" je Polygon ("road" | "intersection"). Unity nutzt nur die Kreuzungsflächen; die Straßen-
+// flächen baut es selbst mit den streckenspezifischen Breiten (auf denen auch die Fahrlinie liegt).
+fs.writeFileSync(outPath, JSON.stringify({ version: 2, origin: { lat: lat0, lon: lon0 }, corridor, kinds, polygons: polys }));
 console.log(`osm2streets: ${plain.features.length} Objekte (${kept} im Korridor, ${dropped} außerhalb, ${degenerate} entartet) -> ${outPath}`);
