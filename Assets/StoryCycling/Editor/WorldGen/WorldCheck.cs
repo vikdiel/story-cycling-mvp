@@ -15,6 +15,8 @@ namespace StoryCycling.WorldGen.Editor
             public int Roundabouts, IslandsFilled;
             public float KmOneLanePerDir, KmTwoPlusPerDir, KmOneway;
             public readonly List<string> Warnings = new List<string>();
+            public readonly List<RoadChecks.Finding> Findings = new List<RoadChecks.Finding>();   // Verstöße mit Weltkoordinaten
+            public readonly Dictionary<string, string> Metrics = new Dictionary<string, string>(); // Messumfang je Prüfung
             public bool Ok => Warnings.Count == 0;
         }
 
@@ -41,7 +43,7 @@ namespace StoryCycling.WorldGen.Editor
                         runStart = -1f;
                     }
                 }
-                if (r.LongestGapM > 3f) r.Warnings.Add($"Fahrlinie ohne Asphalt: {r.DriveOff} Punkte, längstes Stück {r.LongestGapM:0} m bei km {r.LongestGapKm:0.00}.");
+                if (r.DriveOff > 0) r.Warnings.Add($"Fahrlinie ohne Asphalt: {r.DriveOff} von {r.DrivePoints} Punkten, längstes Stück {r.LongestGapM:0.0} m bei km {r.LongestGapKm:0.00}.");
             }
 
             // 2) Fahrbahnproben (Mitte, ±80 % der halben Breite) liegen auf Asphalt; Spurstatistik
@@ -64,9 +66,11 @@ namespace StoryCycling.WorldGen.Editor
                 r.Warnings.Add($"Fahrbahn ohne Asphalt: {r.RoadOff} von {r.RoadProbes} Proben ({(float)r.RoadOff / r.RoadProbes:P1}).");
 
             // 3) Gehweg/Randstreifen liegt nie auf der Fahrbahn
-            r.BandTris = surf.Band.Count; r.BandOnAsphalt = surf.Band.CentroidsInside(asp);
-            if (r.BandOnAsphalt > r.BandTris * .001f)
-                r.Warnings.Add($"Gehweg/Randstreifen auf Asphalt: {r.BandOnAsphalt} von {r.BandTris} Dreiecken.");
+            var onAsp = new List<Vector2>();
+            r.BandTris = surf.Band.Count; r.BandOnAsphalt = surf.Band.CentroidsInside(asp, onAsp);
+            if (r.BandOnAsphalt > 0)
+                r.Warnings.Add($"Gehweg/Randstreifen auf Asphalt: {r.BandOnAsphalt} von {r.BandTris} Dreiecken, z. B. " +
+                               string.Join(" ", onAsp.Take(4).Select(c => $"({c.x:0}, {c.y:0})")) + ".");
 
             // 4) Kreisverkehrsinseln bleiben frei
             if (osm != null)
@@ -101,6 +105,9 @@ namespace StoryCycling.WorldGen.Editor
                     }
                 }
             }
+
+            // 5) Geometrie-Prüfungen der gebauten Fläche (Schenkel, Umrisstreue, Band, Übergänge, Markierungen, Löcher)
+            RoadChecks.Run(net, surf, r);
 
             // Zusammenfassung
             Debug.Log($"Prüfbericht Straßenwelt: Fahrlinie {(r.DrivePoints > 0 ? 1f - (float)r.DriveOff / r.DrivePoints : 1f):P1} auf Asphalt; " +

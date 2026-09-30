@@ -336,7 +336,11 @@ namespace StoryCycling.WorldGen.Editor
                 }
                 var sg = net.Segs[seg[i]];
                 float s = arcS[i];
-                int jHere = sg.Internal ? net.JunctionOf(sg.A)
+                // Kreisfahrbahn: die Fahrlinie folgt immer der Proben-Mittellinie des Rings (sein Streifen ist unbeschnitten). Die Ein-/
+                // Ausfahrtsknoten liegen nur wenige Meter auseinander, ihre Beschnittzonen überlappen sich -- ein Bezier von Zone zu Zone
+                // würde als Gerade quer über die Insel laufen.
+                int jHere = sg.Roundabout && !sg.Internal ? -1
+                          : sg.Internal ? net.JunctionOf(sg.A)
                           : s < sg.TrimA ? net.JunctionOf(sg.A) : s > sg.Length - sg.TrimB ? net.JunctionOf(sg.B) : -1;
                 if (jHere >= 0)
                 {

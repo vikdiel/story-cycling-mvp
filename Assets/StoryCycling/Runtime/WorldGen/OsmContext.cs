@@ -32,6 +32,8 @@ namespace StoryCycling.WorldGen
             public int lanesForward, lanesBackward;       // lanes:forward / lanes:backward (0 = nicht getaggt)
             public string tunnelKind = "";                // tunnel=* Wert (z. B. avalanche_protector = Galerie)
             public string placement = "", placementForward = "", placementBackward = "";
+            // Kopie mit anderem Verlauf (gleiche Tags): für das Einfügen von Knoten / Verlängern von Sackgassen im Straßennetz
+            public Street WithPath(List<Vector2> p, List<long> n) { var c = (Street)MemberwiseClone(); c.pts = p; c.nodes = n; return c; }
         }
 
         public readonly List<Building> Buildings = new List<Building>();
@@ -39,6 +41,8 @@ namespace StoryCycling.WorldGen
         public readonly List<Point> Points = new List<Point>();
         public readonly List<Line> Lines = new List<Line>();
         public readonly List<Street> Streets = new List<Street>();
+        // OSM-Knoten, an denen eine Straße absichtlich endet (barrier=*, noexit=yes, Wendekreis): dort wird keine Lücke geschlossen
+        public readonly HashSet<long> DeadEndNodes = new HashSet<long>();
 
         private const double R = 6371000.0; // must match GpxParser.ProjectToLocalMeters
 
@@ -105,6 +109,10 @@ namespace StoryCycling.WorldGen
             foreach (XmlNode node in doc.SelectNodes("//*[local-name()='node']"))
             {
                 var tags = ReadTags(node);
+                if (tags.Count > 0 && long.TryParse(node.Attributes?["id"]?.Value ?? "", out long nodeId) &&
+                    (tags.ContainsKey("barrier") || (tags.TryGetValue("noexit", out string ne) && ne == "yes") ||
+                     (tags.TryGetValue("highway", out string nh) && (nh == "turning_circle" || nh == "turning_loop" || nh == "turning_point"))))
+                    ctx.DeadEndNodes.Add(nodeId);
                 string kind = PointKind(tags);
                 if (kind == null) continue;
                 ctx.Points.Add(new Point { pos = Project(Attr(node, "lat"), Attr(node, "lon")), kind = kind });
