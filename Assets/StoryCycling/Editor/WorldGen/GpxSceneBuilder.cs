@@ -22,10 +22,7 @@ namespace StoryCycling.WorldGen.Editor
         private static int assetId;
         private static Mesh meshStore;
 
-        // Licht-Stimmung: später Nachmittag, Sonne im Nordwesten über dem Atlantik.
-        private const float SunAzimuth = 300f, SunElevation = 36f;
-        private static readonly Color Zenith = new Color(.24f, .52f, .80f);
-        private static readonly Color Horizon = new Color(.87f, .86f, .80f);
+        // Licht-Stimmung: alle Werte stehen je Stimmung (Morning / Afternoon / EveningSun) in RouteWorldConfig.lighting.
 
         [MenuItem("Story Cycling/WorldGen/Build Nordhoek GPX Ride")]
         public static void BuildNordhoek() => Build(RouteWorldConfig.LoadOrCreateDefault());
@@ -47,6 +44,7 @@ namespace StoryCycling.WorldGen.Editor
             AssetDatabase.Refresh();
             assetId = 0;
             meshStore = null;
+            OsmDetailPlacer.LastParked.Clear();
             AssetDatabase.DeleteAsset(MeshStorePath);
             AssetDatabase.DeleteAsset("Assets/StoryCycling/GeneratedGpx/NordhoekWorldMeshes.asset");   // Altlast (mehrere GB Text)
 
@@ -175,6 +173,7 @@ namespace StoryCycling.WorldGen.Editor
                     IslandGrass = Mat("GpxIslandGrass", new Color(.33f, .50f, .22f), .05f),
                 };
                 Transform streetGroup = Group("Streets");
+                RoadSurface.Result roadSurface = null;
                 if (net != null)
                 {
                     // EIN Generator für Route, Querstraßen und Kreuzungen; Leitplanken weiterhin entlang der Route
@@ -182,6 +181,7 @@ namespace StoryCycling.WorldGen.Editor
                         t => !Application.isBatchMode && EditorUtility.DisplayCancelableProgressBar("Nordhoek bauen", $"Straßenoberfläche {t:P0}", t),
                         o2sJunctions);
                     if (cfg.buildGalleries) GalleryBuilder.Build(net, (x, z) => dem.Sample(x, z) - ele0, Group("Galleries"), roadMats, SaveMesh);
+                    roadSurface = surf;
                     WorldCheck.Run(net, driveLine, surf, osm);
                     new RoadMeshBuilder(road, terrain).Build(Group("Guardrails"), roadMats, streets, SaveMesh, railsOnly: true);
                     // Kreisverkehr-Inseln ergeben sich aus der vereinigten Fläche (Loch im Asphalt) -> kein Extra-Mesh
@@ -198,18 +198,22 @@ namespace StoryCycling.WorldGen.Editor
                 Progress("Landmarks", .5f);
                 PlaceLandmarks(spline, terrain, occupied, Group("Landmarks"));
 
+                CarPaintSet carPaint = null;
                 var catalog = AssetDatabase.LoadAssetAtPath<AssetCatalog>(AssetCatalogBuilder.CatalogPath);
                 if (catalog == null) Debug.LogWarning("WorldGen-Katalog fehlt — erst 'Build Catalog from Synty'. Keine Gebäude/Vegetation.");
                 else
                 {
                     var assets = WorldAssets.From(catalog);
                     assets.Log();
+                    // Autolack: Varianten des Atlas (nur Karosserie umgefärbt) für parkende UND fahrende Autos
+                    carPaint = CarPaint.Build(OsmDetailPlacer.CarPrefabs(catalog),
+                        (tex, name) => SaveTexture(tex, OutDir + "/" + name + ".png", false, 1024), m => Save(m));
                     if (osm != null)
                     {
                         Progress("Gebäude (OSM)", .58f);
                         PlaceBuildings(osm, terrain, catalog, road, occupied, Group("Buildings"));
                         Progress("Details (OSM)", .66f);
-                        OsmDetailPlacer.Place(road, terrain, osm, catalog, assets, occupied, Group("StreetDetails"), net);
+                        OsmDetailPlacer.Place(road, terrain, osm, catalog, assets, occupied, Group("StreetDetails"), net, carPaint: carPaint);
                         RoadSigns.Place(road, terrain, streets, catalog, occupied, Group("RoadSigns"));
                     }
                     Progress("Vegetation & Küste", .74f);
@@ -223,10 +227,14 @@ namespace StoryCycling.WorldGen.Editor
                 }
 
                 Progress("Licht, Himmel, Grading", .9f);
-                Lighting();
+                var look = cfg.ActiveLighting;
+                Debug.Log($"Licht: Stimmung '{look.name}' (Sonne {look.sunElevation:0}° hoch, Azimut {look.sunAzimuth:0}°, {look.sunTemperature:0} K).");
+                Lighting(look);
 
                 StoryCycling.Editor.CapeCrownSceneBuilder.Generated = OutDir;
                 Transform rider = StoryCycling.Editor.CapeCrownSceneBuilder.AnimatedCyclist(out Transform[] wheels, out CapeCrownCyclistAnimation animation);
+                Progress("Verkehr", .93f);
+                TrafficSceneBuilder.Build(cfg, net, roadSurface, catalog, carPaint, rider);
                 GameObject camGo = new GameObject("Ride Camera", typeof(Camera), typeof(AudioListener));
                 camGo.tag = "MainCamera";
                 Camera cam = camGo.GetComponent<Camera>();
@@ -236,7 +244,7 @@ namespace StoryCycling.WorldGen.Editor
                 camData.renderPostProcessing = true;
                 // Wasser-Shader (Uferschaum, Tiefenfarbe) braucht die Depth-Texture — nur für diese Kamera.
                 camData.requiresDepthOption = CameraOverrideOption.On;
-                ColorGrade();
+                ColorGrade(look);
 
                 var director = new GameObject("Gpx Ride Director").AddComponent<GpxRideController>();
                 SerializedObject data = new SerializedObject(director);
@@ -323,14 +331,18 @@ namespace StoryCycling.WorldGen.Editor
         }
 
         // ------------------------------------------------------------------ Licht & Stimmung
-        private static void Lighting()
+        // Sonne, Himmel, Umgebungslicht und Dunst aus einer Stimmung (öffentlich für den Headless-Test).
+        public static void Lighting(LightingSettings s)
         {
-            float az = SunAzimuth * Mathf.Deg2Rad, el = SunElevation * Mathf.Deg2Rad;
-            Vector3 toSun = new Vector3(Mathf.Sin(az) * Mathf.Cos(el), Mathf.Sin(el), Mathf.Cos(az) * Mathf.Cos(el)).normalized;
+            Vector3 toSun = s.ToSun();
 
             var sun = new GameObject("Sun").AddComponent<Light>();
-            sun.type = LightType.Directional; sun.color = new Color(1f, .91f, .77f); sun.intensity = 1.35f;
-            sun.shadows = LightShadows.Soft; sun.shadowStrength = .8f;
+            sun.type = LightType.Directional;
+            // Sonnenfarbe über die Farbtemperatur (URP nutzt sie, GraphicsSettings.lightsUseColorTemperature); 'color' ist nur ein
+            // zusätzlicher Filter (Weiß = keiner) - nicht doppelt einfärben.
+            sun.useColorTemperature = true; sun.colorTemperature = s.sunTemperature; sun.color = s.sunFilter;
+            sun.intensity = s.sunIntensity;
+            sun.shadows = LightShadows.Soft; sun.shadowStrength = s.shadowStrength;
             sun.transform.rotation = Quaternion.LookRotation(-toSun, Vector3.up);
             RenderSettings.sun = sun;
 
@@ -338,39 +350,55 @@ namespace StoryCycling.WorldGen.Editor
             if (skyShader != null)
             {
                 var sky = new Material(skyShader) { name = "GpxSky" };
-                sky.SetColor("_Zenith", Zenith);
-                sky.SetColor("_Horizon", Horizon);
-                sky.SetVector("_SunDirection", new Vector4(toSun.x, toSun.y, toSun.z, 0f));
+                sky.SetColor("_Zenith", s.skyZenith);
+                sky.SetColor("_Horizon", s.skyHorizon);
+                sky.SetColor("_SunGlow", s.sunGlow);
+                sky.SetFloat("_SunGlowStrength", s.sunGlowStrength);
+                sky.SetVector("_SunDirection", new Vector4(toSun.x, toSun.y, toSun.z, 0f));   // dieselbe Richtung wie das Directional Light
                 RenderSettings.skybox = Save(sky);
             }
             else Debug.LogWarning("CoastalSky-Shader fehlt — Standard-Skybox.");
 
             RenderSettings.ambientMode = AmbientMode.Trilight;
-            RenderSettings.ambientSkyColor = new Color(.56f, .68f, .84f);
-            RenderSettings.ambientEquatorColor = new Color(.74f, .72f, .66f);
-            RenderSettings.ambientGroundColor = new Color(.36f, .34f, .29f);
+            RenderSettings.ambientSkyColor = s.ambientSky;
+            RenderSettings.ambientEquatorColor = s.ambientEquator;
+            RenderSettings.ambientGroundColor = s.ambientGround;
 
-            // Nebel = Horizontfarbe -> Ferne verschmilzt mit dem Himmel statt harter Kante.
+            // Warmer Dunst: Nebel = Horizontfarbe -> Ferne verschmilzt mit dem Himmel statt harter Kante.
             RenderSettings.fog = true; RenderSettings.fogMode = FogMode.Linear;
-            RenderSettings.fogStartDistance = 350; RenderSettings.fogEndDistance = 6500;
-            RenderSettings.fogColor = Horizon;
+            RenderSettings.fogStartDistance = s.fogStart; RenderSettings.fogEndDistance = s.fogEnd;
+            RenderSettings.fogColor = s.fogColor;
         }
 
-        private static void ColorGrade()
+        // Post-Processing: ACES, Belichtung, wärmerer Weißabgleich, warme Lichter / kühle Schatten, Sättigung, Bloom, Vignette.
+        // Alle Overrides werden als Unter-Assets im Profil gespeichert (sonst sind sie nach dem Szenen-Reload leer).
+        public static void ColorGrade(LightingSettings s)
         {
             var volume = new GameObject("Colour grade").AddComponent<Volume>();
             volume.isGlobal = true;
             var profile = ScriptableObject.CreateInstance<VolumeProfile>();
             profile.name = "GpxGrade";
+
+            var tone = profile.Add<Tonemapping>(true);
+            tone.mode.Override(TonemappingMode.ACES);
+            var balance = profile.Add<WhiteBalance>(true);
+            balance.temperature.Override(s.whiteBalanceTemperature); balance.tint.Override(s.whiteBalanceTint);
+            var split = profile.Add<SplitToning>(true);
+            split.shadows.Override(s.shadowTint); split.highlights.Override(s.highlightTint); split.balance.Override(s.splitBalance);
             var grade = profile.Add<ColorAdjustments>(true);
-            grade.postExposure.Override(.15f); grade.contrast.Override(12f); grade.saturation.Override(4f);
+            grade.postExposure.Override(s.postExposure); grade.contrast.Override(s.contrast); grade.saturation.Override(s.saturation);
             var bloom = profile.Add<Bloom>(true);
-            bloom.intensity.Override(.3f); bloom.threshold.Override(.95f);
+            bloom.intensity.Override(s.bloomIntensity); bloom.threshold.Override(s.bloomThreshold);
+            bloom.scatter.Override(s.bloomScatter); bloom.tint.Override(s.bloomTint);
             var vignette = profile.Add<Vignette>(true);
-            vignette.intensity.Override(.22f); vignette.smoothness.Override(.4f);
+            vignette.intensity.Override(s.vignetteIntensity); vignette.smoothness.Override(s.vignetteSmoothness);
+
             string profilePath = OutDir + "/GpxGrade.asset";
             AssetDatabase.DeleteAsset(profilePath);
             AssetDatabase.CreateAsset(profile, profilePath);
+            AssetDatabase.AddObjectToAsset(tone, profile);
+            AssetDatabase.AddObjectToAsset(balance, profile);
+            AssetDatabase.AddObjectToAsset(split, profile);
             AssetDatabase.AddObjectToAsset(grade, profile);
             AssetDatabase.AddObjectToAsset(bloom, profile);
             AssetDatabase.AddObjectToAsset(vignette, profile);

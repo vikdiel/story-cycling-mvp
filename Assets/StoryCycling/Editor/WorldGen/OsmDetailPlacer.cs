@@ -17,14 +17,17 @@ namespace StoryCycling.WorldGen.Editor
 
         private sealed class Palette
         {
-            public GameObject pole, arm, lamp, busStop, busSign, stop, giveWay, hydrant, meter, mailbox, bench, bin;
-            public List<GameObject> heads, trees, rocks, bushes, cars;
+            public GameObject lamp, busStop, busSign, stop, giveWay, hydrant, meter, mailbox, bench, bin;
+            public SignalAssembly.Kit signal;
+            public List<GameObject> trees, rocks, bushes, cars;
         }
 
         public static int Place(RoadField road, WorldTerrain terrain, OsmContext ctx, AssetCatalog catalog,
-                                WorldAssets assets, Occupancy occupied, Transform parent, RoadNet net = null, int seed = 777)
+                                WorldAssets assets, Occupancy occupied, Transform parent, RoadNet net = null, int seed = 777,
+                                CarPaintSet carPaint = null)
         {
             var pal = Load(catalog);
+            SignalAssembly.ResetStats();
             RoadRef = road;
             TerrainRef = terrain;
             var rng = new System.Random(seed);
@@ -118,7 +121,8 @@ namespace StoryCycling.WorldGen.Editor
             }
 
             placed += PlaceHedges(road, terrain, ctx, pal, occupied, parent, rng);
-            placed += PlaceParking(road, terrain, ctx, pal, occupied, parent, rng);
+            placed += PlaceParking(road, terrain, ctx, pal, occupied, parent, rng, carPaint, new System.Random(seed + 101));
+            SignalAssembly.LogSummary();
             Debug.Log($"OSM-Details: {placed} Objekte (Nebenstraßen-Objekte weggelassen: {skippedSideStreet}).");
             return placed;
         }
@@ -132,11 +136,14 @@ namespace StoryCycling.WorldGen.Editor
             foreach (int ji in signals)
             {
                 var j = net.Junctions[ji];
-                if (pal.pole == null || pal.arm == null || pal.heads.Count == 0) break;
+                if (pal.signal == null || !pal.signal.Usable) break;
                 foreach (var e in j.Ends)
                 {
                     var sg = net.Segs[e.Seg];
                     if (sg.Length - e.Trim < 8f) continue;                                  // Stummel ohne Zufahrt
+                    // Nur Enden, an denen Verkehr ZUR Kreuzung fährt (Einbahnstraße, die wegführt, bekommt keinen Mast)
+                    var endLane = sg.Lanes[e.AtA ? 0 : sg.Lanes.Count - 1];
+                    if ((e.AtA ? endLane.R : endLane.L) == 0) continue;
                     var at = RoadNet.At(sg, e.AtA ? e.Trim + 1.5f : sg.Length - e.Trim - 1.5f);
                     Vector3 dir = new Vector3(e.Dir.x, 0f, e.Dir.y);                        // vom Knoten weg
                     Vector3 travel = -dir;                                                  // Verkehr fährt zur Kreuzung
@@ -144,14 +151,8 @@ namespace StoryCycling.WorldGen.Editor
                     Vector3 foot = at.pos + left * (at.half + 1.1f);
                     foot.y = at.pos.y - .05f;
                     Quaternion rot = Quaternion.LookRotation(-left, Vector3.up);             // Ausleger über die Fahrbahn
-                    var mast = new GameObject("TrafficSignal").transform;
-                    mast.SetParent(parent, false);
-                    mast.SetPositionAndRotation(foot, rot);
-                    Part(pal.pole, mast, Vector3.zero, Quaternion.identity);
-                    Part(pal.arm, mast, Vector3.zero, Quaternion.identity);
-                    Vector3 facing = SignalFrontIsPositiveZ ? dir : -dir;                   // Leuchtseite zum ankommenden Verkehr
-                    Quaternion headRot = Quaternion.Inverse(rot) * Quaternion.LookRotation(facing, Vector3.up);
-                    Part(WorldPlacement.Pick(pal.heads, rng), mast, new Vector3(0f, 4.12f, Mathf.Min(5.6f, at.half + .5f)), headRot);
+                    // Lokal +z = zur Fahrbahn, +x = -travel: die Leuchtseite der Köpfe (+x) blickt dem Verkehr entgegen.
+                    SignalAssembly.Build(pal.signal, parent, foot, rot);
                     occupied.Add(foot.x, foot.z, .6f);
                     placed++;
                 }
@@ -194,19 +195,13 @@ namespace StoryCycling.WorldGen.Editor
             {
                 case "traffic_signals":
                 {
-                    if (pal.pole == null || pal.arm == null || pal.heads.Count == 0) return 0;
+                    if (pal.signal == null || !pal.signal.Usable) return 0;
                     // An Kreuzungen steht der Mast neben der Einmündung, nicht in der Querstraße.
                     if (!KerbSpot(rs, sideSign, RoadMeshBuilder.HalfWidth + 1.0f, trafficDir, out Vector3 foot)) return 0;
                     foot.y = y;
+                    // +z zur Fahrbahn; +x = cross(up, toRoad) = -trafficDir -> Leuchtseite zum ankommenden Verkehr.
                     Quaternion rot = Quaternion.LookRotation(toRoad, Vector3.up);
-                    var mast = new GameObject("TrafficSignal").transform;
-                    mast.SetParent(parent, false);
-                    mast.SetPositionAndRotation(foot, rot);
-                    Part(pal.pole, mast, Vector3.zero, Quaternion.identity);
-                    Part(pal.arm, mast, Vector3.zero, Quaternion.identity);
-                    Quaternion headRot = Quaternion.Inverse(rot) * Quaternion.LookRotation(facing, Vector3.up);
-                    Part(WorldPlacement.Pick(pal.heads, rng), mast, new Vector3(0f, 4.12f, 3.2f), headRot);
-                    Part(WorldPlacement.Pick(pal.heads, rng), mast, new Vector3(0f, 4.12f, 5.6f), headRot);
+                    SignalAssembly.Build(pal.signal, parent, foot, rot);
                     occupied.Add(foot.x, foot.z, .6f);
                     return 1;
                 }
@@ -252,15 +247,6 @@ namespace StoryCycling.WorldGen.Editor
         private static bool ClearOfAsphalt(Vector3 p) =>
             RoadRef.Distance(p.x, p.z, 10f) >= RoadMeshBuilder.HalfWidth + .8f && !VegetationPlacer.OnStreet(TerrainRef, p.x, p.z, -2.3f);
 
-        private static void Part(GameObject prefab, Transform mast, Vector3 localPos, Quaternion localRot)
-        {
-            var go = (GameObject)PrefabUtility.InstantiatePrefab(prefab, mast);
-            go.transform.localPosition = localPos;
-            go.transform.localRotation = localRot;
-            go.transform.localScale = Vector3.one;
-            foreach (var c in go.GetComponentsInChildren<Collider>()) c.enabled = false;
-        }
-
         private static bool FirstWithin(Dictionary<string, List<Vector2>> seen, string kind, Vector3 p, float radius)
         {
             if (!seen.TryGetValue(kind, out List<Vector2> list)) { list = new List<Vector2>(); seen[kind] = list; }
@@ -299,9 +285,18 @@ namespace StoryCycling.WorldGen.Editor
             return placed;
         }
 
+        // Auto-Prefabs (ohne Polizei/Taxi/Krankenwagen) — auch für den Lack (CarPaint) und den Verkehr.
+        public static List<GameObject> CarPrefabs(AssetCatalog catalog) =>
+            WorldPlacement.Pool(catalog, @"^SM_Veh_Car_\w+_\d+$", "Police|Taxi|Ambo|Steering");
+
+        // Position (x, z) und Gierwinkel (rad) der zuletzt platzierten parkenden Autos: der Verkehr spawnt nicht auf ihnen (TrafficSceneBuilder).
+        public static readonly List<Vector3> LastParked = new List<Vector3>();
+
         private static int PlaceParking(RoadField road, WorldTerrain terrain, OsmContext ctx, Palette pal,
-                                        Occupancy occupied, Transform parent, System.Random rng)
+                                        Occupancy occupied, Transform parent, System.Random rng,
+                                        CarPaintSet carPaint, System.Random paintRng)
         {
+            LastParked.Clear();
             if (pal.cars.Count == 0) return 0;
             const float stallW = 2.9f, rowPitch = 7.5f, occupancy = .45f;
             const int perLot = 35, total = 800;
@@ -351,7 +346,10 @@ namespace StoryCycling.WorldGen.Editor
                     var car = WorldPlacement.Spawn(WorldPlacement.Pick(pal.cars, rng), parent, new Vector3(c.x, y, c.y),
                         Quaternion.LookRotation(fwd, Vector3.up), 1f, y, .02f);
                     WorldPlacement.CullWhenSmall(car, .012f, true);
+                    if (carPaint != null && carPaint.Usable)       // eigener Zufallsstrom: die Stellplatz-Belegung bleibt unverändert
+                        carPaint.Apply(car.GetComponentsInChildren<Renderer>(), carPaint.Pick((float)paintRng.NextDouble()));
                     occupied.Add(c.x, c.y, 1.2f);
+                    LastParked.Add(new Vector3(c.x, c.y, Mathf.Atan2(fwd.x, fwd.z)));
                     inLot++; placed++;
                 }
                 if (inLot > 0) lots++;
@@ -370,10 +368,8 @@ namespace StoryCycling.WorldGen.Editor
             };
             return new Palette
             {
-                pole = One(@"^SM_Prop_LightPole_Base_02$"),
-                arm = One(@"^SM_Prop_LightPole_Arm_01$"),
+                signal = SignalAssembly.Load(One),
                 lamp = One(@"^SM_Prop_LightPole_Base_01$"),
-                heads = WorldPlacement.Pool(catalog, @"^SM_Prop_TrafficLight_\d+$"),
                 busStop = One(@"^SM_Prop_BusStop_\d+$"),
                 busSign = One(@"^SM_Prop_Sign_Bustop_\d+$"),
                 stop = One(@"^SM_Prop_Sign_Stop_\d+$"),
@@ -386,7 +382,7 @@ namespace StoryCycling.WorldGen.Editor
                 trees = WorldPlacement.Pool(catalog, @"Env_Tree_(Pine_)?\d+$", "Dead"),
                 rocks = WorldPlacement.Pool(catalog, @"Env_Rock_\d+$"),
                 bushes = WorldPlacement.Pool(catalog, @"Env_(Bush|Bush_Large|Shrub)_\d+$"),
-                cars = WorldPlacement.Pool(catalog, @"^SM_Veh_Car_\w+_\d+$", "Police|Taxi|Ambo|Steering")
+                cars = CarPrefabs(catalog)
             };
         }
     }

@@ -31,6 +31,7 @@ namespace StoryCycling.WorldGen
             public bool onewayReverse;                    // oneway=-1: Einbahn gegen die Wegrichtung
             public int lanesForward, lanesBackward;       // lanes:forward / lanes:backward (0 = nicht getaggt)
             public string tunnelKind = "";                // tunnel=* Wert (z. B. avalanche_protector = Galerie)
+            public float maxspeedKmh;                     // maxspeed=* in km/h (0 = nicht getaggt); mph wird umgerechnet
             public string placement = "", placementForward = "", placementBackward = "";
             // Kopie mit anderem Verlauf (gleiche Tags): für das Einfügen von Knoten / Verlängern von Sackgassen im Straßennetz
             public Street WithPath(List<Vector2> p, List<long> n) { var c = (Street)MemberwiseClone(); c.pts = p; c.nodes = n; return c; }
@@ -88,6 +89,7 @@ namespace StoryCycling.WorldGen
                         oneway = tags.ContainsKey("oneway") && (tags["oneway"] == "yes" || tags["oneway"] == "1" || tags["oneway"] == "-1"),
                         onewayReverse = tags.ContainsKey("oneway") && tags["oneway"] == "-1",
                         lanesForward = IntTag(tags, "lanes:forward"), lanesBackward = IntTag(tags, "lanes:backward"),
+                        maxspeedKmh = ParseMaxspeed(tags.TryGetValue("maxspeed", out string ms) ? ms : ""),
                         tunnelKind = tags.TryGetValue("tunnel", out string tk) && tk != "no" ? tk : "",
                         placement = tags.TryGetValue("placement", out string pl) ? pl : "",
                         placementForward = tags.TryGetValue("placement:forward", out string plf) ? plf : "",
@@ -161,6 +163,18 @@ namespace StoryCycling.WorldGen
             if (t.TryGetValue("natural", out string na))
                 switch (na) { case "tree": return "tree"; case "stone": case "rock": return "rock"; }
             return null;
+        }
+
+
+        // "60", "60 km/h", "40 mph" -> km/h; "none"/"signals"/"walk" u. Ä. -> 0 (unbekannt)
+        public static float ParseMaxspeed(string v)
+        {
+            if (string.IsNullOrEmpty(v)) return 0f;
+            v = v.Trim().ToLowerInvariant();
+            int n = 0; while (n < v.Length && (char.IsDigit(v[n]) || v[n] == '.')) n++;
+            if (n == 0 || !float.TryParse(v.Substring(0, n), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float val)) return 0f;
+            if (v.Contains("mph")) val *= 1.609f;
+            return val >= 5f && val <= 160f ? val : 0f;
         }
 
         private static int IntTag(Dictionary<string, string> t, string k) =>

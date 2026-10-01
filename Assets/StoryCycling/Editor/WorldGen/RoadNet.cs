@@ -37,6 +37,7 @@ namespace StoryCycling.WorldGen.Editor
             public readonly List<float> LeftGap = new List<float>(), RightGap = new List<float>();   // Mittelstreifenbreite (m), sonst 0
             public readonly List<LaneInfo> Lanes = new List<LaneInfo>();                  // Spuraufteilung je Probe
             public readonly List<bool> Covered = new List<bool>();                         // unter einer Galerie
+            public readonly List<float> MaxSpeed = new List<float>();                      // OSM-maxspeed je Probe in km/h (0 = nicht getaggt)
             public bool Roundabout;                  // Kreisfahrbahn
             public bool Fallback;                    // Ersatzfahrbahn entlang der Fahrlinie (kein OSM-Weg im Netz)
             public float Length => S.Count > 0 ? S[S.Count - 1].distance : 0f;
@@ -590,6 +591,7 @@ namespace StoryCycling.WorldGen.Editor
                     distance = arc[i], half = half[i], inset = inset[i]
                 });
                 sg.Urban.Add(urban[i]); sg.Rank.Add(rank[i]); sg.Lanes.Add(lanes[i]); sg.Covered.Add(covered[i]);
+                sg.MaxSpeed.Add(pw[i] != null ? pw[i].maxspeedKmh : 0f);
                 sg.LeftKind.Add(KindNormal); sg.RightKind.Add(KindNormal); sg.LeftGap.Add(0f); sg.RightGap.Add(0f);
             }
         }
@@ -744,7 +746,7 @@ namespace StoryCycling.WorldGen.Editor
                         sg.S.Add(new RoadField.Sample { pos = pts[k], tangent = t.sqrMagnitude > 1e-6f ? t.normalized : tf,
                                                         side = Vector3.Cross(Vector3.up, tf).normalized, distance = dist, half = h, inset = inset[k] });
                         bool urb = field.Nearest(pts[k].x, pts[k].z, 30f, out int ui, out _) && allUrban[ui];
-                        sg.Urban.Add(urb); sg.Rank.Add(1); sg.Covered.Add(false);
+                        sg.Urban.Add(urb); sg.Rank.Add(1); sg.Covered.Add(false); sg.MaxSpeed.Add(0f);
                         sg.Lanes.Add(new LaneInfo { L = 1, R = 1, W = h, Sh = 0f });
                         sg.LeftKind.Add(KindNormal); sg.RightKind.Add(KindNormal); sg.LeftGap.Add(0f); sg.RightGap.Add(0f);
                     }
@@ -871,7 +873,7 @@ namespace StoryCycling.WorldGen.Editor
             foreach (var sg in Segs)
             {
                 sg.S.Clear(); sg.Urban.Clear(); sg.Rank.Clear(); sg.LeftKind.Clear(); sg.RightKind.Clear(); sg.LeftGap.Clear(); sg.RightGap.Clear();
-                sg.Lanes.Clear(); sg.Covered.Clear();
+                sg.Lanes.Clear(); sg.Covered.Clear(); sg.MaxSpeed.Clear();
                 sg.TrimA = sg.TrimB = 0f; sg.Internal = false; sg.Oneway = false; sg.Roundabout = false; sg.OnRoute = false;
             }
             Junctions.Clear(); MedianPalmSpots.Clear(); junctionOfNode = null;
