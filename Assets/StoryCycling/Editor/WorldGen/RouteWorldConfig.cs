@@ -5,7 +5,7 @@ using UnityEngine;
 namespace StoryCycling.WorldGen.Editor
 {
     // Eine Strecke = ein Config-Asset. Neue Strecke: Rechtsklick > Create > Story Cycling > Route World,
-    // GPX eintragen, dann im Menü "Fetch DEM/OSM for Selected Route" und "Build Selected Route World".
+    // GPX eintragen, dann im Menü "Fetch DEM/OSM/Land Cover for Selected Route" und "Build Selected Route World".
     [System.Serializable]
     public struct GeoBox { public string name; public double minLat, maxLat, minLon, maxLon; }
 
@@ -111,6 +111,9 @@ namespace StoryCycling.WorldGen.Editor
         public string gpxPath = "Assets/StreamingAssets/Routes/Nordhoek.gpx";
         public string osmPath = "Assets/StreamingAssets/Osm/Nordhoek.osm.xml";
         public string demPath = "Assets/StoryCycling/WorldGenData/Nordhoek.dem.bytes";
+        [Tooltip("Landbedeckung (ESA WorldCover 10 m, CC BY 4.0), erzeugt von 'Fetch Land Cover'. Leer = neben dem DEM (…landcover.bytes). " +
+                 "Fehlt die Datei, baut die Welt mit OSM + Gelände-Heuristik weiter.")]
+        public string landCoverPath = "";
         public string scenePath = "Assets/StoryCycling/Scenes/NordhoekGpxTest.unity";
 
         [Header("Straße")]
@@ -123,6 +126,19 @@ namespace StoryCycling.WorldGen.Editor
         public bool useOsm2StreetsJunctions = false;
 
         public string Osm2StreetsPath => Osm2StreetsGeometry.OutputPathFor(osmPath);
+
+        // Landbedeckungsdatei dieser Strecke (explizit oder abgeleitet aus dem DEM-Pfad).
+        public string LandCoverFile
+        {
+            get
+            {
+                if (!string.IsNullOrEmpty(landCoverPath)) return landCoverPath;
+                string dir = Path.GetDirectoryName(demPath) ?? "", stem = Path.GetFileName(demPath);
+                int dot = stem.IndexOf(".dem.", System.StringComparison.OrdinalIgnoreCase);
+                if (dot > 0) stem = stem.Substring(0, dot); else stem = Path.GetFileNameWithoutExtension(stem);
+                return (dir.Length > 0 ? dir + "/" : "") + stem + ".landcover.bytes";
+            }
+        }
         [Tooltip("Regex auf OSM name/ref: diese Straßen bekommen breite Seitenstreifen mit gelber Linie an der Fahrstreifenkante.")]
         public string wideShoulderRoads = "Victoria Road|^M6$";
         [Tooltip("Breiter Stil nur innerhalb dieser Gebiete (Breite/Länge). Leer = überall, wo der Name passt.")]
@@ -158,8 +174,16 @@ namespace StoryCycling.WorldGen.Editor
         public bool backgroundFill = true;
 
         [Header("Vegetation")]
-        [Tooltip("Instanzierte Hangvegetation bis zu dieser Entfernung von der Straße (Berge nicht kahl).")]
-        public float slopeVegetationDistance = 700f;
+        [Tooltip("Nahband (m von der Route): dichte Pflanzengruppen, volle Modelle.")]
+        public float vegetationNearDistance = 150f;
+        [Tooltip("Mittelband (m): größere Gruppen, gröbste LOD. Darüber nur Gelände-Textur (+ Baumsilhouetten, wo die Landbedeckung Bäume sagt).")]
+        public float vegetationMidDistance = 800f;
+        [Tooltip("Baumsilhouetten (Forst, Wald) bis zu dieser Entfernung (m); 0 = aus.")]
+        public float farTreeDistance = 3400f;
+        [Tooltip("Obergrenze der Baumsilhouetten in der Ferne (Szenengröße).")]
+        public int farTreeMax = 14000;
+        [Tooltip("Gesamtdichte der Pflanzengruppen (1 = Standard).")]
+        [Range(.3f, 2f)] public float vegetationDensity = 1f;
 
         // Liegt ein lokaler Punkt (m, Ursprung = erster GPX-Punkt) in einer der wideShoulderZones? Keine Zonen = überall.
         public System.Func<Vector2, bool> WideShoulderZone(double lat0, double lon0)
@@ -252,6 +276,9 @@ namespace StoryCycling.WorldGen.Editor
 
         [MenuItem("Story Cycling/WorldGen/Fetch DEM for Selected Route")]
         private static void FetchDem() { var c = Selected(); DemFetcher.Fetch(c.gpxPath, c.demPath); }
+
+        [MenuItem("Story Cycling/WorldGen/Fetch Land Cover for Selected Route")]
+        private static void FetchLandCover() { var c = Selected(); LandCoverFetcher.Fetch(c.gpxPath, c.LandCoverFile); }
 
         [MenuItem("Story Cycling/WorldGen/Fetch OSM for Selected Route")]
         private static void FetchOsm() { var c = Selected(); OsmFetcher.Fetch(c.gpxPath, c.osmPath); }

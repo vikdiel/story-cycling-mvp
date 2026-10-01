@@ -15,6 +15,9 @@ namespace StoryCycling.WorldGen.Editor
         public List<GameObject> Bushes, LushBushes, PalmBushes, Ferns, Grass, Flowers;
         public List<GameObject> Rocks, Boulders, RockPiles, FlatRocks, Driftwood, Seaweed;
         public List<GameObject> Birds, Clouds;
+        // Rollen für die Kap-Vegetation (VegetationBuilder): Name -> Prefabs. "Gen*" = die günstigen Low-Poly-Modelle aus PolygonGeneric
+        // (150-600 Vertices, Material-Tönung per _BaseColor möglich), sonst Nature-Biomes-Modelle (Wind-Shader, 2-30k Vertices).
+        public Dictionary<string, List<GameObject>> Roles;
 
         public static WorldAssets From(AssetCatalog c)
         {
@@ -40,11 +43,44 @@ namespace StoryCycling.WorldGen.Editor
                 Birds        = WorldPlacement.Pool(c, @"^FX_Birds_01$"),
                 Clouds       = WorldPlacement.Pool(c, @"^SM_(Gen_)?Env_Cloud_\d+$"),
             };
+            a.Roles = new Dictionary<string, List<GameObject>>
+            {
+                { "GenPine", WorldPlacement.Pool(c, @"^SM_Gen_Env_Tree_Pine_\d+$") },
+                { "Pine", a.Pines },
+                { "GenTree", WorldPlacement.Pool(c, @"^SM_Gen_Env_Tree_\d+$") },
+                { "BroadTree", a.BroadTrees },
+                { "Coastal", a.CoastalTrees },
+                { "Forest", a.ForestTrees },
+                { "Palm", a.Palms },
+                { "GenBush", WorldPlacement.Pool(c, @"^SM_Gen_Env_Bush_\d+$") },
+                { "GenBushLarge", WorldPlacement.Pool(c, @"^SM_Gen_Env_Bush_Large_\d+$") },
+                { "GenBushPart", WorldPlacement.Pool(c, @"^SM_Gen_Env_Bush_Part_\d+$") },
+                { "Bush", a.Bushes },
+                { "GenShrub", WorldPlacement.Pool(c, @"^SM_Gen_Env_Shrub_\d+$") },
+                { "GenTallGrass", WorldPlacement.Pool(c, @"^SM_Gen_Env_Grass_Tall_\d+$") },
+                { "GenGrass", WorldPlacement.Pool(c, @"^SM_Gen_Env_Grass_0[1-5]$") },
+                { "Grass", a.Grass },
+                { "GenFlowers", WorldPlacement.Pool(c, @"^SM_Gen_Env_Flowers_\d+$") },
+                { "Flowers", a.Flowers },
+                { "GenFern", WorldPlacement.Pool(c, @"^SM_Gen_Env_Fern_\d+$") },
+                { "Fern", a.Ferns },
+                { "LushBush", a.LushBushes },
+                { "GenRock", WorldPlacement.Pool(c, @"^SM_Gen_Env_Rock_\d+$") },
+                { "Rock", a.Rocks },
+                { "Cliff", WorldPlacement.Pool(c, @"^SM_Gen_Env_Cliff_0[1-4]$") },
+                { "RockCliff", WorldPlacement.Pool(c, @"^SM_Env_Rock_Cliff_0[1-3]$") },
+                { "DirtCliff", WorldPlacement.Pool(c, @"^SM_Gen_Env_Dirt_Cliff_\d+$") },
+                { "Boulder", a.Boulders },
+                { "Pebbles", WorldPlacement.Pool(c, @"Rock_Pebbles_\d+$") },
+                { "Driftwood", a.Driftwood },
+                { "Seaweed", a.Seaweed },
+            };
             // Fallbacks, damit ohne Nature-Pack nichts leer bleibt.
             if (a.Boulders.Count == 0) a.Boulders = a.Rocks;
             if (a.CoastalTrees.Count == 0) a.CoastalTrees = a.BroadTrees;
             if (a.ForestTrees.Count == 0) a.ForestTrees = a.Pines;
             if (a.LushBushes.Count == 0) a.LushBushes = a.Bushes;
+            a.Roles["Coastal"] = a.CoastalTrees; a.Roles["Forest"] = a.ForestTrees; a.Roles["Boulder"] = a.Boulders; a.Roles["LushBush"] = a.LushBushes;
             return a;
         }
 

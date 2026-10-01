@@ -19,10 +19,13 @@ namespace StoryCycling.WorldGen
             public int submesh;
             public Material material;
             public Bounds bounds;
+            public float maxDistance;          // 0 = drawDistance des Feldes; kleiner: kleine Pflanzen früher ausblenden
+            public bool noShadows;             // wirft keinen Schatten, auch wenn das Feld Schatten wirft
             public Matrix4x4[] matrices;
             // Kompakt (Hangvegetation): xyz + Drehung (Grad) und Skalierung; Matrizen entstehen beim Laden
             public Vector4[] packed;
             public float[] scales;
+            public Vector2[] lean;             // optional: Neigung zum Hang (x/z der Zielnormalen), z. B. Felsen — spart volle Matrizen
             [NonSerialized] public Matrix4x4[] expanded;
 
             public Matrix4x4[] Instances
@@ -34,9 +37,16 @@ namespace StoryCycling.WorldGen
                     {
                         expanded = new Matrix4x4[packed.Length];
                         for (int i = 0; i < packed.Length; i++)
-                            expanded[i] = Matrix4x4.TRS(new Vector3(packed[i].x, packed[i].y, packed[i].z),
-                                                        Quaternion.Euler(0f, packed[i].w, 0f),
+                        {
+                            Quaternion rot = Quaternion.Euler(0f, packed[i].w, 0f);
+                            if (lean != null && i < lean.Length && (lean[i].x != 0f || lean[i].y != 0f))
+                            {
+                                float ly = Mathf.Sqrt(Mathf.Max(.05f, 1f - lean[i].x * lean[i].x - lean[i].y * lean[i].y));
+                                rot = Quaternion.FromToRotation(Vector3.up, new Vector3(lean[i].x, ly, lean[i].y)) * rot;
+                            }
+                            expanded[i] = Matrix4x4.TRS(new Vector3(packed[i].x, packed[i].y, packed[i].z), rot,
                                                         Vector3.one * (scales != null && i < scales.Length ? scales[i] : 1f));
+                        }
                     }
                     return expanded;
                 }
@@ -60,16 +70,16 @@ namespace StoryCycling.WorldGen
             GeometryUtility.CalculateFrustumPlanes(cam, planes);
             Vector3 cp = cam.transform.position;
             float far = Mathf.Min(drawDistance, cam.farClipPlane);
-            float d2 = far * far;
             foreach (var b in batches)
             {
                 if (b == null || b.mesh == null || b.material == null) continue;
-                if (b.bounds.SqrDistance(cp) > d2 || !GeometryUtility.TestPlanesAABB(planes, b.bounds)) continue;
+                float lim = b.maxDistance > 0f ? Mathf.Min(b.maxDistance, far) : far;
+                if (b.bounds.SqrDistance(cp) > lim * lim || !GeometryUtility.TestPlanesAABB(planes, b.bounds)) continue;
                 var rp = new RenderParams(b.material)
                 {
                     camera = cam,
                     worldBounds = b.bounds,
-                    shadowCastingMode = shadows,
+                    shadowCastingMode = b.noShadows ? ShadowCastingMode.Off : shadows,
                     receiveShadows = true,
                     layer = gameObject.layer
                 };

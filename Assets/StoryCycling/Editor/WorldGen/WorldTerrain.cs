@@ -33,6 +33,8 @@ namespace StoryCycling.WorldGen.Editor
         // Farb-/Biomraster
         public const float RasterCell = 10f;
         private int rw, rh;
+        // Ausdehnung der Farbtextur in Metern (die UVs laufen 0..1 über das ganze Gelände) — für die Kachelung der Detailtextur
+        public Vector2 ColorTextureExtent => new Vector2(rw * RasterCell, rh * RasterCell);
         private float rMinX, rMinZ;
         private Biome[] biomes;
 
@@ -373,8 +375,10 @@ namespace StoryCycling.WorldGen.Editor
         }
 
         // ---------------------------------------------------------------- Farbtextur
-        public Texture2D BuildColorTexture()
+        // eco != null: Farbe aus Ökotopen (TerrainPaint); sonst die alte OSM-Biom-Färbung (Fallback).
+        public Texture2D BuildColorTexture(EcotopeMap eco = null)
         {
+            if (eco != null) return TerrainPaint.Build(eco);
             var px = new Color32[rw * rh];
             Color sandDry = new Color(.87f, .80f, .62f), sandWet = new Color(.70f, .64f, .50f);
             // Palette nach Referenzfoto (Victoria Road / Zwölf Apostel): olivgrüner Fynbos, graue Sandsteinwände

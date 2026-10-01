@@ -152,9 +152,23 @@ namespace StoryCycling.WorldGen.Editor
                 var streets = net != null ? StreetNetwork.FromNet(net, osm, terrain) : StreetNetwork.Build(osm, road, terrain);
                 terrain.Streets = streets.Field;
 
+                // Landbedeckung (ESA WorldCover) + OSM + Gelände -> Ökotope; Geländefarbe und Vegetation lesen dieselbe Karte.
+                Progress("Landbedeckung & Ökotope", .09f);
+                LandCoverGrid landCover = LoadLandCover(cfg, pts[0]);
+                EcotopeMap eco = EcotopeMap.Build(terrain, osm, landCover);
+                Debug.Log("Ökotope (Streifen 800 m um die Route): " + eco.CoverageText(800f) + (landCover == null ? " [ohne Landbedeckung: OSM + Gelände-Heuristik]" : " [mit ESA WorldCover]"));
+
                 Progress("Gelände einfärben", .1f);
-                Texture2D terrainTex = SaveTexture(terrain.BuildColorTexture(), OutDir + "/TerrainColors.png", false, 4096);
+                Texture2D terrainTex = SaveTexture(terrain.BuildColorTexture(eco), OutDir + "/TerrainColors.png", false, 4096);
                 Material terrainMat = Mat("GpxTerrain", Color.white, .06f, terrainTex);
+                // Detailtextur (Bodenkorn, 6-m-Kachel) multipliziert über die 10-m-Farbtextur: im Nahbereich keine glatte Fläche mehr
+                Texture2D detailTex = SaveTexture(TerrainPaint.BuildDetail(256), OutDir + "/TerrainDetail.png", true, 256);
+                Vector2 ext = terrain.ColorTextureExtent;
+                terrainMat.EnableKeyword("_DETAIL_MULX2");
+                terrainMat.SetTexture("_DetailAlbedoMap", detailTex);
+                terrainMat.SetTextureScale("_DetailAlbedoMap", new Vector2(ext.x / 6f, ext.y / 6f));
+                terrainMat.SetFloat("_DetailAlbedoMapScale", 1f);
+                EditorUtility.SetDirty(terrainMat);
 
                 Progress("Gelände-Kacheln", .2f);
                 terrain.BuildChunks(Group("Terrain"), terrainMat, SaveMesh);
@@ -217,11 +231,18 @@ namespace StoryCycling.WorldGen.Editor
                         RoadSigns.Place(road, terrain, streets, catalog, occupied, Group("RoadSigns"));
                     }
                     Progress("Vegetation & Küste", .74f);
-                    VegetationPlacer.Place(terrain, assets, occupied, Group("Vegetation"));
+                    VegetationPlacer.PlaceAvenue(terrain, assets, occupied, Group("PalmAvenue"));
                     VegetationPlacer.PlaceIslands(streets, road, assets, streetGroup);
                     if (net != null) VegetationPlacer.PlaceMedianPalms(net, assets, occupied, Group("MedianPalms"));
-                    Progress("Hangvegetation", .82f);
-                    SlopeVegetation.Place(terrain, assets, occupied, Group("SlopeVegetation"), Cfg.slopeVegetationDistance);
+                    Progress("Pflanzengruppen (Ökotope)", .82f);
+                    var scatterCfg = new ScatterSettings
+                    {
+                        nearEnd = Cfg.vegetationNearDistance, midEnd = Cfg.vegetationMidDistance, farEnd = Cfg.farTreeDistance,
+                        farSilhouettes = Cfg.farTreeDistance > Cfg.vegetationMidDistance, maxFar = Cfg.farTreeMax, density = Cfg.vegetationDensity,
+                    };
+                    var scatter = VegetationScatter.Run(terrain, eco, occupied, scatterCfg);
+                    Debug.Log(scatter.Summary());
+                    VegetationBuilder.Build(scatter, assets, Group("Vegetation"), scatterCfg, SaveMesh, m => Save(m));
                     VegetationPlacer.PlaceBirds(terrain, assets, Group("Birds"));
                     VegetationPlacer.PlaceClouds(terrain, assets, Group("Clouds"));
                 }
@@ -272,6 +293,33 @@ namespace StoryCycling.WorldGen.Editor
             {
                 RouteHeightField.Terrain = null;
                 EditorUtility.ClearProgressBar();
+            }
+        }
+
+        // Landbedeckung der Strecke; fehlt/passt sie nicht, baut die Welt mit OSM + Gelände-Heuristik weiter.
+        private static LandCoverGrid LoadLandCover(RouteWorldConfig cfg, GeoPoint origin)
+        {
+            string path = cfg.LandCoverFile;
+            if (!File.Exists(path))
+            {
+                Debug.LogWarning($"Landbedeckung fehlt ({path}) — erst 'Story Cycling/WorldGen/Fetch Land Cover for Selected Route' ausführen. Bis dahin: OSM + Gelände-Heuristik (weniger genau).");
+                return null;
+            }
+            try
+            {
+                var g = LandCoverGrid.Load(path);
+                if (!g.MatchesOrigin(origin))
+                {
+                    Debug.LogWarning("Landbedeckung wurde für einen anderen GPX-Start erzeugt — bitte 'Fetch Land Cover' neu ausführen. Nutze OSM + Gelände-Heuristik.");
+                    return null;
+                }
+                Debug.Log($"Landbedeckung geladen: {g.Width}×{g.Height} @ {g.Cell} m (ESA WorldCover 10 m 2021, CC BY 4.0).");
+                return g;
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning("Landbedeckung nicht lesbar (" + e.Message + ") — nutze OSM + Gelände-Heuristik.");
+                return null;
             }
         }
 
