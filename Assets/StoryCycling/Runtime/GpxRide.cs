@@ -53,6 +53,14 @@ namespace StoryCycling
             return Mathf.Lerp(laneAt[lo], laneAt[hi], t);
         }
 
+        // Fahrzustand (vom GpxRideController gemeldet): Streckenlänge und Tempo des Fahrers. Der Hintergrundverkehr berechnet daraus die Fahrlinie voraus
+        // (Route + LaneOffsetAt), statt aus der Geschwindigkeit zu extrapolieren.
+        public static bool RideActive { get; private set; }
+        public static float RideDistance { get; private set; }
+        public static float RideSpeed { get; private set; }
+        public static void ReportRide(float distance, float speedMps) { RideActive = true; RideDistance = distance; RideSpeed = speedMps; }
+        public static void ClearRide() { RideActive = false; }
+
         public static void Sample(float d, out Vector3 point, out Vector3 forward)
         {
             point = Spline.SamplePosition(d);

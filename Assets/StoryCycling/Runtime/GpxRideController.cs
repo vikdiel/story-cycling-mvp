@@ -41,7 +41,7 @@ namespace StoryCycling
             UpdateCamera(true);
         }
 
-        private void OnDestroy() => CapeCrownCyclistAnimation.ForwardOverride = null;
+        private void OnDestroy() { CapeCrownCyclistAnimation.ForwardOverride = null; GpxRide.ClearRide(); }
 
         private Vector3 GpxRideForward(float d) { GpxRide.Sample(d, out _, out Vector3 f); return f; }
 
@@ -51,6 +51,7 @@ namespace StoryCycling
             float metres = speedKph / 3.6f * Time.deltaTime;
             totalMetres += metres;
             routeDistance = Mathf.Repeat(routeDistance + metres, GpxRide.Length);
+            GpxRide.ReportRide(routeDistance, speedKph / 3.6f);
             PlaceRider();
             if (cyclistAnimation != null)
             {
