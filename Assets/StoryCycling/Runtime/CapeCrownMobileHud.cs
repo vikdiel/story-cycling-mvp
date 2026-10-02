@@ -14,7 +14,7 @@ namespace StoryCycling
         private RectTransform safe;
         private GameObject home, hud, settings, pause, routes;
         private Transform list;
-        private Text distance,connection,startLabel,trainerLabel,heartLabel,pauseLabel,muteLabel,statusLine,demoLabel,titleLabel,routeDescription,routeError,demoSpeedValue;
+        private Text connection,startLabel,trainerLabel,heartLabel,pauseLabel,muteLabel,demoLabel,titleLabel,routeDescription,routeError,demoSpeedValue;
         private Button start,resume;
         private Slider demoSpeedSlider;
         private GameObject demoSpeedPanel;
@@ -56,10 +56,7 @@ namespace StoryCycling
         {
             hud=new GameObject("Ride metrics",typeof(RectTransform));hud.transform.SetParent(safe,false);
             var r=hud.GetComponent<RectTransform>();r.anchorMin=Vector2.zero;r.anchorMax=Vector2.one;r.offsetMin=r.offsetMax=Vector2.zero;
-            BikeComputerView.Create(hud.transform,()=>S,devices);   // Tempo, Leistung, Puls, Höhenprofil nächster km
-            var info=Panel("Ride status",hud.transform,new Vector2(0,1),new Vector2(28,-28),new Vector2(526,82),ink);
-            distance=Label(info.transform,"",22,new Vector2(17,-10),new Vector2(495,30),paper);
-            statusLine=Label(info.transform,"",17,new Vector2(17,-45),new Vector2(495,30),paper);
+            BikeComputerView.Create(hud.transform,()=>S,devices);   // Strecke/Runde/Status, Tempo, Leistung, Puls, Höhenprofil nächster km
             var actions=Rect("Ride actions",hud.transform,new Vector2(1,1),new Vector2(-28,-28),new Vector2(262,130),new Vector2(1,1));
             Button(actions,"Geräte",Vector2.zero,new Vector2(262,54),ink,()=>ShowSettings());
             Button(actions,"Pause",new Vector2(0,-66),new Vector2(262,54),ink,()=>S.Pause());
@@ -133,8 +130,6 @@ namespace StoryCycling
             home.SetActive(!S.Started&&!settingsOpen&&!routesOpen);hud.SetActive(S.Started&&!settingsOpen&&!routesOpen);pause.SetActive(S.Started&&S.IsPaused&&!settingsOpen&&!routesOpen);settings.SetActive(settingsOpen&&!routesOpen);routes.SetActive(routesOpen);
             start.interactable=true;startLabel.text=S.CanStart?"Runde starten":"KICKR verbinden";resume.interactable=S.CanStart;
             connection.text=S.IsDemo?"DEMO-FAHRT · simuliert · kein Fortschritt":S.CanStart?"KICKR bereit · Steig aufs Rad":devices.TrainerConnected?"Verbunden · kurz treten für Live-Daten":devices.TrainerState+" · Geräte öffnen";
-            distance.text=$"{S.TotalMetres/1000:0.00} km    /    Runde {S.CompletedLaps+1}    /    {S.CurrentGrade*100:+0.0;-0.0;0.0}%";
-            statusLine.text=devices.IsTestFeed?"DEMO · KEIN FORTSCHRITT":!devices.FreshSpeed?"Warte auf Trainerdaten":!devices.FreshHeart?"Brustgurt optional · noch kein Puls":"KICKR + PULS  ·  LIVE";
             pauseLabel.text=S.PauseReason+$"\n{S.TotalMetres/1000:0.00} km in dieser Fahrt";
             trainerLabel.text=devices.TrainerName+"\n"+devices.TrainerState;heartLabel.text=devices.HeartName+"\n"+devices.HeartState;
             muteLabel.text=music!=null&&music.Muted?"Musik einschalten":"Musik stummschalten";
