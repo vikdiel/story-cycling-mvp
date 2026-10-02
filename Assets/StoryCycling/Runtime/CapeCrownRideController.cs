@@ -4,7 +4,7 @@ using UnityEngine.UI;
 
 namespace StoryCycling
 {
-    public sealed class CapeCrownRideController : MonoBehaviour
+    public sealed class CapeCrownRideController : MonoBehaviour, IRideSession
     {
         [SerializeField] private Transform rider;
         [SerializeField] private Transform rideCamera;
@@ -41,6 +41,11 @@ namespace StoryCycling
         public float TrainerSpeedKph => trainerSpeedKph;
         public bool CanStart => devices != null && devices.FreshSpeed;
         public bool IsDemo => devices != null && devices.IsTestFeed;
+        public string RouteDescription => CapeCrownRoutes.Current.scenery + $"\n{CapeCrownRoute.Length / 1000:0.00} km · Cape Town Collection";
+        public bool HasRouteList => true;
+        public float RouteLength => CapeCrownRoute.Length;
+        public float CurrentGrade => CapeCrownRoute.Grade(routeDistance, hillHeight);
+        public float HeightAhead(float metres) => CapeCrownRoute.IsDefined ? CapeCrownRoute.Position(Mathf.Repeat(routeDistance + metres, CapeCrownRoute.Length), 0f, 0f, hillHeight).y : 0f;
         public bool TryStart()
         {
             if(!CanStart)return false;

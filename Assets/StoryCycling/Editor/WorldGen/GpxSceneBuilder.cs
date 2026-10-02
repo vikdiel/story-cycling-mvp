@@ -271,6 +271,8 @@ namespace StoryCycling.WorldGen.Editor
                 SerializedObject data = new SerializedObject(director);
                 var gpxProp = data.FindProperty("gpxRelPath");
                 if (gpxProp != null) gpxProp.stringValue = GpxPath.Replace("Assets/StreamingAssets/", "");
+                var labelProp = data.FindProperty("routeLabel");
+                if (labelProp != null) labelProp.stringValue = Path.GetFileNameWithoutExtension(GpxPath).ToUpperInvariant();
                 data.FindProperty("rider").objectReferenceValue = rider;
                 data.FindProperty("rideCamera").objectReferenceValue = cam.transform;
                 data.FindProperty("cyclistAnimation").objectReferenceValue = animation;
@@ -279,9 +281,12 @@ namespace StoryCycling.WorldGen.Editor
                 for (int i = 0; i < wheels.Length; i++) array.GetArrayElementAtIndex(i).objectReferenceValue = wheels[i];
                 data.ApplyModifiedPropertiesWithoutUndo();
 
-                var hud = director.gameObject.AddComponent<GpxTestHud>();
+                // Originalmenü (Geräte verbinden, Start/Pause, Demo) + Radcomputer-Anzeige; Tempo kommt vom Trainer bzw. der Demo-Fahrt
+                new GameObject("Cape Crown Devices").AddComponent<CapeCrownDevices>();
+                director.gameObject.AddComponent<CapeCrownMusic>();
+                var hud = director.gameObject.AddComponent<CapeCrownMobileHud>();
                 var hudData = new SerializedObject(hud);
-                hudData.FindProperty("ride").objectReferenceValue = director;
+                hudData.FindProperty("gpxRide").objectReferenceValue = director;
                 hudData.ApplyModifiedPropertiesWithoutUndo();
 
                 AssetDatabase.SaveAssets();
