@@ -7,7 +7,12 @@ namespace StoryCycling
     public static class CapeCrownRoutes
     {
         public struct Entry { public string label; public string sceneName; public string scenery; }
+        // Strecken im Menü "Routen" (Szene muss im Build sein: File > Build Profiles > Scene List; der GPX-Weltbau trägt seine Szene selbst ein)
         public static readonly Entry[] All = {
+            new Entry { label = "Nordhoek • Chapman's Peak", sceneName = "NordhoekGpxTest", scenery = "Noordhoek · Chapman's Peak · Hout Bay" }
+        };
+        // Frühere Kapstadt-Abschnitte (Cape Crown Collection) — bei Bedarf wieder in All aufnehmen und die Szenen in den Build legen
+        public static readonly Entry[] Archived = {
             new Entry { label = "Cape Crown Promenade", sceneName = "CampsBayTrainerRide", scenery = "Palmenpromenade · Cafés · Twelve Apostles" },
             new Entry { label = "Cape Town City Center", sceneName = "CapeTownCityCenter", scenery = "Downtown · Bürotürme · Kreuzungen" },
             new Entry { label = "Clifton Cove", sceneName = "CliftonCove", scenery = "Granitbuchten · Strandtreppen · Küstenvillen" },
@@ -24,7 +29,15 @@ namespace StoryCycling
         public static bool IsLoading { get; private set; }
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void Reset() { LastError = null; IsLoading = false; }
-        public static Entry Current => System.Array.Find(All, e => e.sceneName == SceneManager.GetActiveScene().name);
+        public static Entry Current
+        {
+            get
+            {
+                string scene = SceneManager.GetActiveScene().name;
+                var e = System.Array.Find(All, x => x.sceneName == scene);
+                return e.sceneName != null ? e : System.Array.Find(Archived, x => x.sceneName == scene);
+            }
+        }
         public static void Load(string sceneName)
         {
             if (IsLoading) return;

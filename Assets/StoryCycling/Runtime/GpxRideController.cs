@@ -43,7 +43,7 @@ namespace StoryCycling
         public bool IsDemo => devices != null && devices.IsTestFeed;
         public string RouteLabel => routeLabel;
         public string RouteDescription => $"GPX-Welt · {Length / 1000f:0.0} km" + (laps > 0 ? $"\nZiel erreicht · {laps}× gefahren" : "");
-        public bool HasRouteList => false;                  // die GPX-Szene ist allein im Build
+        public bool HasRouteList => true;                   // Routenwahl: CapeCrownRoutes.All (derzeit nur Nordhoek)
         public float RouteDistance => routeDistance;
         public float RouteLength => Length;
         public int CompletedLaps => laps;

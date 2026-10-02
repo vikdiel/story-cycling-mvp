@@ -53,7 +53,7 @@ namespace StoryCycling.Editor
             {
                 Require(EditorApplication.timeSinceStartup<deadline,"Collection timeout");
                 double elapsed=EditorApplication.timeSinceStartup-since;
-                var entry=CapeCrownRoutes.All[index];
+                var entry=CapeCrownRoutes.Archived[index];
                 var ride=Ride;if(ride==null)return;
                 var ui=UnityEngine.Object.FindAnyObjectByType<CapeCrownMobileHud>();
                 var root=GameObject.Find("Cape Crown Interface");if(root==null||(stage!=1&&elapsed<.6))return;
@@ -104,17 +104,17 @@ namespace StoryCycling.Editor
                 {
                     Require(!ride.Started,"Ride not ended");
                     if(index==0)Capture(Folder+"/route-selector.png");
-                    foreach(var route in CapeCrownRoutes.All)Require(Application.CanStreamedLevelBeLoaded(route.sceneName),"Scene omitted from build: "+route.sceneName);
+                    foreach(var route in CapeCrownRoutes.Archived)Require(Application.CanStreamedLevelBeLoaded(route.sceneName),"Scene omitted from build: "+route.sceneName);
                     File.AppendAllText(Folder+"/result.txt",$"PASS {entry.sceneName}: {CapeCrownRoute.Length:0}m, runtime scene restore, menu title, demo full lap, pause/resume, 0 training metres, {shot} ride captures, life serialization.\n");
                     index++;
-                    if(index>=CapeCrownRoutes.All.Length)
+                    if(index>=CapeCrownRoutes.Archived.Length)
                     {
-                        File.AppendAllText(Folder+"/result.txt","PASS ALL "+CapeCrownRoutes.All.Length+" ROUTES. Mobile URP in Editor. Not physical iPad performance or BLE.\n");
+                        File.AppendAllText(Folder+"/result.txt","PASS ALL "+CapeCrownRoutes.Archived.Length+" ROUTES. Mobile URP in Editor. Not physical iPad performance or BLE.\n");
                         running=false;Time.timeScale=1;EditorApplication.isPlaying=false;
                         if(Application.isBatchMode)EditorApplication.Exit(0);
                         return;
                     }
-                    Click(CapeCrownRoutes.All[index].label);stage=0;since=EditorApplication.timeSinceStartup;
+                    Click(CapeCrownRoutes.Archived[index].label);stage=0;since=EditorApplication.timeSinceStartup;
                 }
             }
             catch(Exception e)
