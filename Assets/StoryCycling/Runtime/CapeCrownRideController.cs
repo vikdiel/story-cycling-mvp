@@ -39,6 +39,7 @@ namespace StoryCycling
         public bool IsPaused => paused;
         public bool IsSimulation => devices != null && devices.IsTestFeed;
         public float TrainerSpeedKph => trainerSpeedKph;
+        public float SpeedKph => trainerSpeedKph;
         public bool CanStart => devices != null && devices.FreshSpeed;
         public bool IsDemo => devices != null && devices.IsTestFeed;
         public string RouteDescription => CapeCrownRoutes.Current.scenery + $"\n{CapeCrownRoute.Length / 1000:0.00} km · Cape Town Collection";

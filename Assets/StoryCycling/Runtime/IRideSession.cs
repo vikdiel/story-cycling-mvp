@@ -13,6 +13,7 @@ namespace StoryCycling
         string RouteDescription { get; }
         bool HasRouteList { get; }           // Routenwahl (Cape-Crown-Szenen) anbieten
         float TotalMetres { get; }
+        float SpeedKph { get; }              // Tempo im Spiel (Fahrphysik aus Leistung bzw. Trainer-/Demo-Tempo)
         float RouteDistance { get; }
         float RouteLength { get; }
         int CompletedLaps { get; }

@@ -88,7 +88,7 @@ namespace StoryCycling
             if (now - pwT >= .1f) { pwT = now; if (fp) { pw[pwI] = devices.Watts; pwI = (pwI + 1) % pw.Length; pwN = Mathf.Min(pwN + 1, pw.Length); } else pwN = 0; }
             float avg = 0f; for (int i = 0; i < pwN; i++) avg += pw[i]; if (pwN > 0) avg /= pwN;
             power.text = fp && pwN > 0 ? Mathf.RoundToInt(avg).ToString() : "—";
-            speed.text = hasDev && devices.FreshSpeed ? devices.Speed.ToString("0.0") : "—";
+            speed.text = s != null && s.Started ? s.SpeedKph.ToString("0.0") : hasDev && devices.FreshSpeed ? devices.Speed.ToString("0.0") : "—";   // Spieltempo (Fahrphysik)
             heart.text = hasDev && devices.FreshHeart ? Mathf.RoundToInt(devices.Heart).ToString() : "—";
 
             // LED-Leiste: Leistungszone (Coggan, bezogen auf FTP)

@@ -14,10 +14,16 @@ namespace StoryCycling
         private RectTransform safe;
         private GameObject home, hud, settings, pause, routes;
         private Transform list;
-        private Text connection,startLabel,trainerLabel,heartLabel,pauseLabel,muteLabel,demoLabel,titleLabel,routeDescription,routeError,demoSpeedValue;
+        private Text connection,startLabel,trainerLabel,heartLabel,clickLabel,pauseLabel,muteLabel,demoLabel,titleLabel,routeDescription,routeError,demoSpeedValue;
         private Button start,resume;
         private Slider demoSpeedSlider;
         private GameObject demoSpeedPanel;
+        // Widerstand / Fahrmodus (nur wenn eine TrainerControl in der Szene ist, z. B. GPX-Welt)
+        private TrainerControl trainer;
+        private GameObject modePanel, simGroup, gearGroup, ergGroup;
+        private RectTransform modeRect;
+        private Image[] modeButtons;
+        private Text simInfo, gearInfo, ergInfo, diffLabel, controlInfo;
         private int revision=-1;
         private bool settingsOpen, routesOpen;
         private Color ink=new Color(.035f,.095f,.125f,.94f),teal=new Color(.15f,.66f,.62f),paper=new Color(.96f,.94f,.86f);
@@ -61,6 +67,45 @@ namespace StoryCycling
             Button(actions,"Geräte",Vector2.zero,new Vector2(262,54),ink,()=>ShowSettings());
             Button(actions,"Pause",new Vector2(0,-66),new Vector2(262,54),ink,()=>S.Pause());
             BuildDemoSpeed();
+            BuildTrainerPanel();
+        }
+        private void BuildTrainerPanel()
+        {
+            trainer=FindAnyObjectByType<TrainerControl>(); if(trainer==null)return;
+            var dark=new Color(.16f,.25f,.28f);
+            modePanel=Panel("Trainer mode",hud.transform,new Vector2(0,0),new Vector2(28,28),new Vector2(430,132),ink);modeRect=modePanel.GetComponent<RectTransform>();
+            Label(modePanel.transform,"WIDERSTAND",16,new Vector2(18,-10),new Vector2(140,26),teal);
+            controlInfo=Label(modePanel.transform,"",15,new Vector2(150,-11),new Vector2(262,26),new Color(.72f,.82f,.82f));controlInfo.alignment=TextAnchor.UpperRight;
+            string[] names={"SIM","GÄNGE","ERG"};modeButtons=new Image[3];
+            for(int i=0;i<3;i++){int m=i;modeButtons[i]=Button(modePanel.transform,names[i],new Vector2(18+i*132,-38),new Vector2(124,40),dark,()=>trainer.SetMode((TrainerMode)m)).GetComponent<Image>();}
+            simGroup=Group("Simulation");
+            simInfo=Label(simGroup.transform,"",22,new Vector2(18,-88),new Vector2(250,32),paper);
+            Button(simGroup.transform,"",new Vector2(282,-86),new Vector2(130,38),dark,()=>trainer.CycleDifficulty());
+            diffLabel=simGroup.transform.GetChild(simGroup.transform.childCount-1).GetComponentInChildren<Text>();
+            gearGroup=Group("Gaenge");
+            Button(gearGroup.transform,"–",new Vector2(18,-86),new Vector2(70,38),dark,()=>trainer.ShiftDown());
+            gearInfo=Label(gearGroup.transform,"",21,new Vector2(96,-90),new Vector2(238,32),paper);gearInfo.alignment=TextAnchor.UpperCenter;
+            Button(gearGroup.transform,"+",new Vector2(342,-86),new Vector2(70,38),dark,()=>trainer.ShiftUp());
+            ergGroup=Group("ERG");
+            Button(ergGroup.transform,"–10 W",new Vector2(18,-86),new Vector2(96,38),dark,()=>trainer.AddErg(-10));
+            ergInfo=Label(ergGroup.transform,"",26,new Vector2(122,-88),new Vector2(186,34),paper);ergInfo.alignment=TextAnchor.UpperCenter;
+            Button(ergGroup.transform,"+10 W",new Vector2(316,-86),new Vector2(96,38),dark,()=>trainer.AddErg(10));
+        }
+        private GameObject Group(string name)
+        {
+            var r=Rect(name,modePanel.transform,new Vector2(0,1),Vector2.zero,new Vector2(430,132),new Vector2(0,1));return r.gameObject;
+        }
+        private void UpdateTrainerPanel()
+        {
+            if(modePanel==null||trainer==null)return;
+            modeRect.anchoredPosition=new Vector2(28,S.IsDemo?172:28);
+            for(int i=0;i<3;i++)modeButtons[i].color=(int)trainer.Mode==i?teal:new Color(.16f,.25f,.28f);
+            simGroup.SetActive(trainer.Mode==TrainerMode.Simulation);gearGroup.SetActive(trainer.Mode==TrainerMode.VirtualGears);ergGroup.SetActive(trainer.Mode==TrainerMode.Erg);
+            string g=trainer.TrainerGrade.ToString("+0.0;-0.0;0.0")+" %";
+            simInfo.text="Trainer "+g;diffLabel.text="Gefühl "+Mathf.RoundToInt(trainer.Difficulty*100)+" %";
+            gearInfo.text="GANG "+trainer.Gear+"/"+TrainerControl.Gears+"  ·  "+g;
+            ergInfo.text=trainer.ErgWatts+" W";
+            controlInfo.text=devices==null?"":devices.IsTestFeed?"Demo · ohne Trainer":!devices.TrainerConnected?"Trainer nicht verbunden":devices.ControlState;
         }
         private void BuildDemoSpeed()
         {
@@ -85,7 +130,9 @@ namespace StoryCycling
             Button(settings.transform,"Puls suchen",new Vector2(620,-178),new Vector2(176,52),teal,()=>devices.Scan("heart"));
             Button(settings.transform,"Trennen",new Vector2(807,-178),new Vector2(115,52),new Color(.16f,.25f,.28f),()=>devices.Disconnect("heart"));
             list=Rect("Gefundene Geräte",settings.transform,new Vector2(0,1),new Vector2(28,-262),new Vector2(894,155),new Vector2(0,1));
-            Label(settings.transform,"Zwift Click · Anbindung noch in Arbeit",21,new Vector2(28,-425),new Vector2(850,34),new Color(.70f,.76f,.76f));
+            clickLabel=Label(settings.transform,"",21,new Vector2(28,-420),new Vector2(570,50),paper);
+            Button(settings.transform,"Click suchen",new Vector2(620,-420),new Vector2(176,46),teal,()=>devices.Scan("click"));
+            Button(settings.transform,"Trennen",new Vector2(807,-420),new Vector2(115,46),new Color(.16f,.25f,.28f),()=>devices.Disconnect("click"));
             Label(settings.transform,"ABEND AN DER KÜSTE",20,new Vector2(28,-478),new Vector2(600,30),teal);
             var mute=Button(settings.transform,"",new Vector2(28,-520),new Vector2(218,52),new Color(.16f,.25f,.28f),()=>{if(music!=null)music.ToggleMute();});muteLabel=mute.GetComponentInChildren<Text>();
             var slider=CreateSlider(settings.transform,new Vector2(277,-530),new Vector2(642,36));slider.value=music!=null?music.Volume:0f;slider.onValueChanged.AddListener(v=>{if(music!=null)music.SetVolume(v);});
@@ -132,8 +179,10 @@ namespace StoryCycling
             connection.text=S.IsDemo?"DEMO-FAHRT · simuliert · kein Fortschritt":S.CanStart?"KICKR bereit · Steig aufs Rad":devices.TrainerConnected?"Verbunden · kurz treten für Live-Daten":devices.TrainerState+" · Geräte öffnen";
             pauseLabel.text=S.PauseReason+$"\n{S.TotalMetres/1000:0.00} km in dieser Fahrt";
             trainerLabel.text=devices.TrainerName+"\n"+devices.TrainerState;heartLabel.text=devices.HeartName+"\n"+devices.HeartState;
+            clickLabel.text=devices.ClickName+" · "+devices.ClickState+(devices.ClickConnected?"  ·  + schwerer / – leichter":"");
             muteLabel.text=music!=null&&music.Muted?"Musik einschalten":"Musik stummschalten";
             if(demoSpeedPanel!=null)demoSpeedPanel.SetActive(S.IsDemo);
+            UpdateTrainerPanel();
             if(demoLabel!=null)demoLabel.text=S.IsDemo?"Demo beenden":"Demo-Fahrt (ohne KICKR)";
             if(titleLabel!=null)titleLabel.text=TitleFromLabel(S.RouteLabel);
             if(routeDescription!=null)routeDescription.text=S.RouteDescription;

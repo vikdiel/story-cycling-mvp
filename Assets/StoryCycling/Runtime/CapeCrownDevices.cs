@@ -18,6 +18,13 @@ namespace StoryCycling
         public string HeartName { get; private set; } = "Bluetooth-Brustgurt";
         public bool TrainerConnected { get; private set; }
         public bool HeartConnected { get; private set; }
+        // Zwift Click (zwei Tasten): Shift(true) = schwerer / Plus, Shift(false) = leichter / Minus
+        public string ClickState { get; private set; } = "Nicht verbunden";
+        public string ClickName { get; private set; } = "Zwift Click";
+        public bool ClickConnected { get; private set; }
+        public event Action<bool> Shift;
+        private bool clickPlus, clickMinus;
+        public const string ClickAsyncUuid = "00000002-19CA-4651-86E5-FA29DCDD09D1";
         private float speed, watts, cadence, heart, speedAt = -100, powerAt = -100, cadenceAt = -100, heartAt = -100;
         public bool FreshSpeed => TrainerConnected && Time.realtimeSinceStartup - speedAt < 3;
         public bool FreshPower => TrainerConnected && Time.realtimeSinceStartup - powerAt < 3;
@@ -28,6 +35,10 @@ namespace StoryCycling
         public float Cadence => cadence;
         public float Heart => heart;
         public int Revision { get; private set; }
+        // FTMS-Steuerung (Widerstand): verfügbar, sobald der Trainer 'Request Control' bestätigt hat
+        public bool ControlReady { get; private set; }
+        public string ControlState { get; private set; } = "—";
+        public string LastCommand { get; private set; } = "";
         public bool IsTestFeed { get; private set; }
 #if UNITY_IOS && !UNITY_EDITOR
         [DllImport("__Internal")] private static extern void CCDevicesInit(string target);
@@ -35,11 +46,12 @@ namespace StoryCycling
         [DllImport("__Internal")] private static extern void CCDevicesConnect(string id, string role);
         [DllImport("__Internal")] private static extern void CCDevicesDisconnect(string role);
         [DllImport("__Internal")] private static extern void CCDevicesShutdown();
+        [DllImport("__Internal")] private static extern void CCDevicesTrainerCommand(string base64);
 #endif
         private void Awake() { gameObject.name = "Cape Crown Devices"; }
         public void Scan(string role)
         {
-            if(role=="trainer"?TrainerConnected:HeartConnected)return;
+            if(role=="trainer"?TrainerConnected:role=="click"?ClickConnected:HeartConnected)return;
             Candidates.RemoveAll(x => x.role == role); Revision++;
 #if UNITY_IOS && !UNITY_EDITOR
             CCDevicesInit(gameObject.name); CCDevicesScan(role);
@@ -62,7 +74,8 @@ namespace StoryCycling
         }
         private void SetState(string role, string state)
         {
-            if (role == "trainer") { TrainerState = state; TrainerConnected = state == "Bereit"; if (!TrainerConnected) speedAt = powerAt = cadenceAt = -100; }
+            if (role == "trainer") { TrainerState = state; TrainerConnected = state == "Bereit"; if (!TrainerConnected) { speedAt = powerAt = cadenceAt = -100; ControlReady = false; ControlState = "—"; } }
+            else if (role == "click") { ClickState = state; ClickConnected = state == "Bereit"; clickPlus = clickMinus = false; }
             else { HeartState = state; HeartConnected = state == "Bereit"; if (!HeartConnected) heartAt = -100; }
             Revision++;
         }
@@ -80,8 +93,9 @@ namespace StoryCycling
                 else if (e.type == "state")
                 {
                     SetState(e.role,e.state);
-                    if (!string.IsNullOrEmpty(e.name)) { if(e.role=="trainer") TrainerName=e.name; else HeartName=e.name; }
+                    if (!string.IsNullOrEmpty(e.name)) { if(e.role=="trainer") TrainerName=e.name; else if(e.role=="click") ClickName=e.name; else HeartName=e.name; }
                 }
+                else if (e.type == "control") { ControlState = e.state; ControlReady = false; Revision++; }
                 else if (e.type == "data") ApplyPacket(e.characteristic, Convert.FromBase64String(e.data));
             }
             catch (Exception e) { Debug.LogWarning("BLE packet rejected: " + e.GetType().Name); }
@@ -96,7 +110,46 @@ namespace StoryCycling
                 if(data.hasCadence) { cadence=data.cadence; cadenceAt=now; }
             }
             if(characteristic == "2A37" && HeartConnected && CapeCrownTelemetry.TryHeart(bytes,out int bpm)) { heart=bpm; heartAt=now; }
+            if(characteristic == "2AD9" && bytes != null && bytes.Length >= 3 && bytes[0] == 0x80) ApplyControlResponse(bytes[1], bytes[2]);
+            if(characteristic == ClickAsyncUuid && ClickConnected && CapeCrownTelemetry.TryClick(bytes, out bool plus, out bool minus))
+            {
+                if (plus && !clickPlus) Shift?.Invoke(true);                   // nur beim Drücken (Flanke), nicht beim Halten/Loslassen
+                if (minus && !clickMinus) Shift?.Invoke(false);
+                clickPlus = plus; clickMinus = minus;
+            }
         }
+        // Antwort auf einen Steuerbefehl: 0x80, Befehl, Ergebnis (1 = ok, 2 = nicht unterstützt, 3 = ungültiger Wert, 4 = fehlgeschlagen, 5 = Steuerung nicht erlaubt)
+        private void ApplyControlResponse(byte op, byte result)
+        {
+            if (result == 1) { ControlReady = true; if (ControlState != "Widerstand aktiv") { ControlState = "Widerstand aktiv"; Revision++; } return; }
+            string what = op == 0x11 ? "Steigung" : op == 0x05 ? "Wattvorgabe" : op == 0x00 ? "Steuerung" : "Befehl 0x" + op.ToString("X2");
+            ControlState = what + (result == 2 ? " nicht unterstützt" : result == 3 ? ": ungültiger Wert" : result == 5 ? " nicht erlaubt (andere App verbunden?)" : " fehlgeschlagen");
+            if (op == 0x00) ControlReady = false;
+            Revision++;
+        }
+
+        // Simulationsmodus (FTMS 0x11): Steigung in %, Rollwiderstand Crr, Luftwiderstand Cw (kg/m = 0,5 · Luftdichte · CdA), Wind m/s
+        public void SendSimulation(float gradePercent, float crr, float cw, float windMps = 0f)
+        {
+            int wind = Mathf.Clamp(Mathf.RoundToInt(windMps * 1000f), short.MinValue, short.MaxValue), grade = Mathf.Clamp(Mathf.RoundToInt(gradePercent * 100f), short.MinValue, short.MaxValue);
+            var b = new byte[] { 0x11, (byte)(wind & 0xFF), (byte)((wind >> 8) & 0xFF), (byte)(grade & 0xFF), (byte)((grade >> 8) & 0xFF),
+                                 (byte)Mathf.Clamp(Mathf.RoundToInt(crr * 10000f), 0, 255), (byte)Mathf.Clamp(Mathf.RoundToInt(cw * 100f), 0, 255) };
+            LastCommand = $"Steigung {gradePercent:0.0} %"; Send(b);
+        }
+        // ERG (FTMS 0x05): Zielleistung in W
+        public void SendTargetPower(int watts)
+        {
+            int w = Mathf.Clamp(watts, 0, 2000);
+            LastCommand = $"ERG {w} W"; Send(new byte[] { 0x05, (byte)(w & 0xFF), (byte)((w >> 8) & 0xFF) });
+        }
+        private void Send(byte[] command)
+        {
+            if (IsTestFeed || !TrainerConnected) return;
+#if UNITY_IOS && !UNITY_EDITOR
+            CCDevicesTrainerCommand(Convert.ToBase64String(command));
+#endif
+        }
+
         private void OnApplicationPause(bool paused) { if(paused) speedAt=powerAt=cadenceAt=heartAt=-100; }
         private void OnDestroy()
         {
@@ -167,6 +220,13 @@ namespace StoryCycling
             }
             if(result.speed>120 || result.cadence>300 || result.power>4000)return false;
             data=result;return true;
+        }
+        // Zwift Click: Nachricht 0x37 (Tastenstatus), danach Feld/Wert-Paare: 0x08 = Plus, 0x10 = Minus; Wert 0 = gedrückt, 1 = los
+        public static bool TryClick(byte[] b,out bool plus,out bool minus)
+        {
+            plus=minus=false; if(b==null || b.Length<3 || b[0]!=0x37) return false;
+            for(int i=1;i+1<b.Length;i+=2) { if(b[i]==0x08) plus=b[i+1]==0; else if(b[i]==0x10) minus=b[i+1]==0; }
+            return true;
         }
         public static bool TryHeart(byte[] b,out int bpm)
         {

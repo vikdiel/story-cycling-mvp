@@ -30,6 +30,8 @@ namespace StoryCycling
         [SerializeField] private float demoSpeedPeriod = 120f;
 
         private CapeCrownDevices devices;
+        private TrainerControl trainer;
+        private float physV;                                   // m/s, Fahrphysik
         private CapeCrownMusic music;
         private Camera rideCameraComponent;
         private float speedKph, routeDistance, totalMetres, demoSpeed, demoElapsed, demoSpeedTarget;
@@ -39,7 +41,7 @@ namespace StoryCycling
         public bool Started { get; private set; }
         public bool IsPaused => paused;
         public string PauseReason { get; private set; } = "";
-        public bool CanStart => devices != null && devices.FreshSpeed;
+        public bool CanStart => devices != null && (devices.FreshSpeed || devices.FreshPower);
         public bool IsDemo => devices != null && devices.IsTestFeed;
         public string RouteLabel => routeLabel;
         public string RouteDescription => $"GPX-Welt · {Length / 1000f:0.0} km" + (laps > 0 ? $"\nZiel erreicht · {laps}× gefahren" : "");
@@ -95,12 +97,14 @@ namespace StoryCycling
             var test = GetComponent<GpxTestHud>(); if (test != null) test.enabled = false;
             devices = FindAnyObjectByType<CapeCrownDevices>();
             if (devices == null) devices = new GameObject("Cape Crown Devices").AddComponent<CapeCrownDevices>();
+            if (FindAnyObjectByType<CapeCrownMusic>() == null) gameObject.AddComponent<CapeCrownMusic>();          // Fahrmusik auch in älteren Szenen
             if (FindAnyObjectByType<CapeCrownMobileHud>() == null) gameObject.AddComponent<CapeCrownMobileHud>();
+            trainer = GetComponent<TrainerControl>(); if (trainer == null) trainer = gameObject.AddComponent<TrainerControl>();
         }
 
         private void Start()
         {
-            music = GetComponent<CapeCrownMusic>();
+            music = FindAnyObjectByType<CapeCrownMusic>();
             GpxRide.Load(gpxRelPath);
             if (GpxRide.IsLoaded)
             {
@@ -132,7 +136,11 @@ namespace StoryCycling
                 devices.TickDemo(demoSpeed);
             }
             if (Started && !paused && !CanStart) Pause("Trainerdaten fehlen – bitte Verbindung prüfen");
-            speedKph = Started && !paused && CanStart ? Mathf.Min(devices.Speed, MaxSpeedKph) : 0f;
+            // Tempo: mit Leistungsmesser (Trainer) aus der Fahrphysik (Leistung, Steigung, Luft- und Rollwiderstand) — wie bei Zwift, und nötig für ERG;
+            // Demo-Fahrt bzw. Trainer ohne Leistungswert: Tempo direkt übernehmen
+            bool riding = Started && !paused && CanStart;
+            if (riding && !devices.IsTestFeed && devices.FreshPower && trainer != null) { physV = trainer.StepSpeed(physV, devices.Watts, CurrentGrade, Time.deltaTime); speedKph = physV * 3.6f; }
+            else { speedKph = riding ? Mathf.Min(devices.Speed, MaxSpeedKph) : 0f; physV = speedKph / 3.6f; }
             bool pedalling = speedKph > .1f && (devices.FreshCadence ? devices.Cadence > 0f : devices.FreshPower && devices.Watts > 0f);
 
             float metres = speedKph / 3.6f * Time.deltaTime;
