@@ -1,5 +1,4 @@
 using System.IO;
-using UnityEditor;
 using UnityEngine;
 
 namespace StoryCycling.WorldGen.Editor
@@ -251,47 +250,35 @@ namespace StoryCycling.WorldGen.Editor
             }
         };
 
+        [Header("Weltbau auf dem Gerät (Prototyp)")]
+        [Tooltip("An: der Editor baut nur Licht, Fahrer, Kamera und Menü; Gelände, Straßen, Gebäude, Vegetation und Verkehr entstehen beim Start auf dem Gerät " +
+                 "aus den Rohdaten in StreamingAssets/WorldGen/<Route> (GPX, OSM, Höhen, Landbedeckung).")]
+        public bool buildWorldOnDevice = false;
+        public string DeviceDataDir => "Assets/StreamingAssets/WorldGen/" + routeName;
+
         public string BakedRoutePath => Path.ChangeExtension(gpxPath, ".route.txt");
         public string BakedTrafficPath => Path.ChangeExtension(gpxPath, ".traffic.txt");
 
         public const string DefaultPath = "Assets/StoryCycling/WorldGenData/Nordhoek.route.asset";
 
+#if UNITY_EDITOR
         public static RouteWorldConfig LoadOrCreateDefault()
         {
-            var cfg = AssetDatabase.LoadAssetAtPath<RouteWorldConfig>(DefaultPath);
+            var cfg = UnityEditor.AssetDatabase.LoadAssetAtPath<RouteWorldConfig>(DefaultPath);
             if (cfg != null) return cfg;
             cfg = CreateInstance<RouteWorldConfig>();
             Directory.CreateDirectory(Path.GetDirectoryName(DefaultPath));
-            AssetDatabase.CreateAsset(cfg, DefaultPath);
-            AssetDatabase.SaveAssets();
+            UnityEditor.AssetDatabase.CreateAsset(cfg, DefaultPath);
+            UnityEditor.AssetDatabase.SaveAssets();
             return cfg;
         }
 
         public static RouteWorldConfig Selected()
         {
-            var cfg = Selection.activeObject as RouteWorldConfig;
+            var cfg = UnityEditor.Selection.activeObject as RouteWorldConfig;
             if (cfg == null) Debug.LogWarning("Keine Route-Config im Project-Fenster ausgewählt — nehme Nordhoek.");
             return cfg != null ? cfg : LoadOrCreateDefault();
         }
-
-        [MenuItem("Story Cycling/WorldGen/Fetch DEM for Selected Route")]
-        private static void FetchDem() { var c = Selected(); DemFetcher.Fetch(c.gpxPath, c.demPath); }
-
-        [MenuItem("Story Cycling/WorldGen/Fetch Land Cover for Selected Route")]
-        private static void FetchLandCover() { var c = Selected(); LandCoverFetcher.Fetch(c.gpxPath, c.LandCoverFile); }
-
-        [MenuItem("Story Cycling/WorldGen/Fetch OSM for Selected Route")]
-        private static void FetchOsm() { var c = Selected(); OsmFetcher.Fetch(c.gpxPath, c.osmPath); }
-
-        [MenuItem("Story Cycling/WorldGen/Build OSM2Streets Geometry for Selected Route")]
-        private static void FetchOsm2Streets()
-        {
-            var c = Selected();
-            if (Osm2StreetsGeometry.TryRun(c.gpxPath, c.osmPath, c.Osm2StreetsPath, out string msg)) Debug.Log(msg);
-            else Debug.LogWarning(msg);
-        }
-
-        [MenuItem("Story Cycling/WorldGen/Build Selected Route World")]
-        private static void Build() => GpxSceneBuilder.Build(Selected());
+#endif
     }
 }

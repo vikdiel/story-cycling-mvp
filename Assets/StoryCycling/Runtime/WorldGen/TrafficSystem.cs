@@ -18,6 +18,7 @@ namespace StoryCycling.WorldGen
         [Tooltip("Lackvarianten der Autos (vom Generator gesetzt); leer = Originalfarbe.")]
         public CarPaintSet carPaint;
         [Range(0, 64)] public int carCount = 24;
+        [System.NonSerialized] public TrafficGraph preloaded;   // Weltbau auf dem Gerät: Spurgraph direkt aus dem Speicher statt aus der Datei
         public float spawnMin = 120f, spawnMax = 450f, despawn = 500f;
         [Tooltip("0 = bei jedem Start anderer Zufall")] public int seed = 0;
         [Tooltip("Gesamtschalter zur Laufzeit (z. B. für schwache Geräte)")] public bool enableTraffic = true;
@@ -45,11 +46,14 @@ namespace StoryCycling.WorldGen
 
         public bool Init()
         {
-            string path = Path.Combine(Application.streamingAssetsPath, trafficRelPath);
-            if (!File.Exists(path)) { Debug.LogWarning("Verkehr: Datei fehlt (" + path + ") — kein Verkehr."); return false; }
-            TrafficGraph graph;
-            try { graph = TrafficGraph.Parse(File.ReadAllText(path)); }
-            catch (Exception e) { Debug.LogWarning("Verkehr: Datei nicht lesbar — kein Verkehr. " + e.Message); return false; }
+            TrafficGraph graph = preloaded;
+            if (graph == null)
+            {
+                string path = Path.Combine(Application.streamingAssetsPath, trafficRelPath);
+                if (!File.Exists(path)) { Debug.LogWarning("Verkehr: Datei fehlt (" + path + ") — kein Verkehr."); return false; }
+                try { graph = TrafficGraph.Parse(File.ReadAllText(path)); }
+                catch (Exception e) { Debug.LogWarning("Verkehr: Datei nicht lesbar — kein Verkehr. " + e.Message); return false; }
+            }
             if (graph == null || graph.Lanes.Count == 0) return false;
 
             int n = Mathf.Min(carCount, transform.childCount);

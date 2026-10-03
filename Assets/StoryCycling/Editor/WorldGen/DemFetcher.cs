@@ -17,7 +17,7 @@ namespace StoryCycling.WorldGen.Editor
         private const string TileUrl = "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{0}/{1}/{2}.png";
         private const string CacheDir = "Library/StoryCyclingDemCache";
         private const int Zoom = 13;          // ~16 m/px bei 34° Süd, entspricht der Quelldaten-Auflösung
-        public const float Margin = 5000f;    // Gelände rund um die Route (Berge im Hintergrund!)
+        public const float Margin = DemGrid.FetchMargin;   // Gelände rund um die Route (Berge im Hintergrund!)
         private const float Cell = 15f;
         private const double R = 6371000.0;   // muss zu GpxParser.ProjectToLocalMeters passen
 

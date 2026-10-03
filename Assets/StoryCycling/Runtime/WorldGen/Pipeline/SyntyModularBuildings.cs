@@ -222,7 +222,7 @@ namespace StoryCycling.WorldGen.Editor
             }
             // GPU-Instancing muss am Material aktiv sein (ändert das Synty-Material einmalig).
             foreach (var mat in instancedMats)
-                if (mat != null && !mat.enableInstancing) { mat.enableInstancing = true; UnityEditor.EditorUtility.SetDirty(mat); }
+                if (mat != null && !mat.enableInstancing) { mat.enableInstancing = true; WorldSpawn.MarkDirty(mat); }
             Debug.Log($"Synty-Baukasten: {count} Häuser, {instances} Modul-Instanzen in {field.batches.Count} Batches " +
                       $"(als kopierte Meshes wären es {totalVerts / 1000}k Vertices), " +
                       $"weggelassen: Fahrbahn {skipRoad}, zu steil {skipSteep}, Überlappung {skipOverlap}.");

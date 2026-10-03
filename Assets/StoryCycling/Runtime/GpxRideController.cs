@@ -41,7 +41,7 @@ namespace StoryCycling
         public bool Started { get; private set; }
         public bool IsPaused => paused;
         public string PauseReason { get; private set; } = "";
-        public bool CanStart => devices != null && (devices.FreshSpeed || devices.FreshPower);
+        public bool CanStart => !RuntimeWorldBuilder.Building && devices != null && (devices.FreshSpeed || devices.FreshPower);
         public bool IsDemo => devices != null && devices.IsTestFeed;
         public string RouteLabel => routeLabel;
         public string RouteDescription => $"GPX-Welt · {Length / 1000f:0.0} km" + (laps > 0 ? $"\nZiel erreicht · {laps}× gefahren" : "");
@@ -106,15 +106,25 @@ namespace StoryCycling
         {
             music = FindAnyObjectByType<CapeCrownMusic>();
             GpxRide.Load(gpxRelPath);
-            if (GpxRide.IsLoaded)
-            {
-                Vector3 a = GpxRide.Spline.SamplePosition(0f), b = GpxRide.Spline.SamplePosition(Length); a.y = b.y = 0f;
-                closedLoop = (a - b).sqrMagnitude < 30f * 30f;
-            }
+            CheckLoop();
             if (rideCamera != null) rideCameraComponent = rideCamera.GetComponent<Camera>();
             if (cyclistAnimation != null) CapeCrownCyclistAnimation.ForwardOverride = GpxRideForward;
             PlaceRider();
             UpdateCamera(true);
+        }
+
+        private void CheckLoop()
+        {
+            if (!GpxRide.IsLoaded) return;
+            Vector3 a = GpxRide.Spline.SamplePosition(0f), b = GpxRide.Spline.SamplePosition(Length); a.y = b.y = 0f;
+            closedLoop = (a - b).sqrMagnitude < 30f * 30f;
+        }
+
+        // Weltbau auf dem Gerät fertig: Fahrlinie liegt jetzt auf dem OSM-Netz -> Fahrer an den Start, Kamera dazu
+        public void OnRouteChanged()
+        {
+            routeDistance = 0f; CheckLoop();
+            PlaceRider(); UpdateCamera(true);
         }
 
         private void OnDestroy() { CapeCrownCyclistAnimation.ForwardOverride = null; GpxRide.ClearRide(); }

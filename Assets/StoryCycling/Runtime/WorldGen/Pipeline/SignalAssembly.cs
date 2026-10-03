@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using UnityEditor;
 using UnityEngine;
 
 namespace StoryCycling.WorldGen.Editor
@@ -104,7 +103,7 @@ namespace StoryCycling.WorldGen.Editor
         private static void AddPart(Kit kit, GameObject prefab, string name, Transform mast, bool lens, List<PartInfo> parts)
         {
             if (prefab == null) return;
-            var go = (GameObject)PrefabUtility.InstantiatePrefab(prefab, mast);
+            var go = WorldSpawn.Spawn(prefab, mast);
             go.transform.localPosition = Vector3.zero;            // Synty: alle Teile teilen den Ursprung
             go.transform.localRotation = Quaternion.identity;
             go.transform.localScale = Vector3.one;

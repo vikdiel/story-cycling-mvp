@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
-using UnityEditor;
 using UnityEngine;
 
 namespace StoryCycling.WorldGen.Editor
@@ -120,7 +119,7 @@ namespace StoryCycling.WorldGen.Editor
             var result = new List<Sized>();
             foreach (var p in prefabs)
             {
-                var tmp = (GameObject)PrefabUtility.InstantiatePrefab(p);
+                var tmp = WorldSpawn.Spawn(p, null);
                 tmp.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
                 Bounds b = WorldPlacement.BoundsOf(tmp);
                 Object.DestroyImmediate(tmp);

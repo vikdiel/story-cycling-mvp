@@ -109,7 +109,7 @@ namespace StoryCycling.WorldGen.Editor
                 var p = s[rng.Next(s.Count)];
                 Vector3 q = p.pos + p.side * WorldPlacement.Range(rng, -150f, 150f);
                 if (terrain.DemY(q.x, q.z) - terrain.SeaY > 25f) continue;                   // nur an der Küste
-                var go = (GameObject)UnityEditor.PrefabUtility.InstantiatePrefab(WorldPlacement.Pick(a.Birds, rng), parent);
+                var go = WorldSpawn.Spawn(WorldPlacement.Pick(a.Birds, rng), parent);
                 go.transform.position = new Vector3(q.x, Mathf.Max(p.pos.y, terrain.SeaY) + WorldPlacement.Range(rng, 25f, 60f), q.z);
                 placed++;
             }
@@ -140,7 +140,7 @@ namespace StoryCycling.WorldGen.Editor
                 Vector3 p = s[rng.Next(s.Count)].pos;
                 var pos = new Vector3(p.x + WorldPlacement.Range(rng, -2500f, 2500f), terrain.SeaY + WorldPlacement.Range(rng, 420f, 650f),
                                       p.z + WorldPlacement.Range(rng, -2500f, 2500f));
-                var go = (GameObject)UnityEditor.PrefabUtility.InstantiatePrefab(WorldPlacement.Pick(clouds, rng), parent);
+                var go = WorldSpawn.Spawn(WorldPlacement.Pick(clouds, rng), parent);
                 go.transform.SetPositionAndRotation(pos, Quaternion.Euler(0f, WorldPlacement.Range(rng, 0f, 360f), 0f));
                 go.transform.localScale = Vector3.one * WorldPlacement.Range(rng, 25f, 50f);
                 foreach (var c in go.GetComponentsInChildren<Collider>()) c.enabled = false;

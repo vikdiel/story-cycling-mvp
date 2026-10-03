@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using System.IO;
-using UnityEditor;
 using UnityEngine;
 
 namespace StoryCycling.WorldGen.Editor
@@ -67,7 +66,11 @@ namespace StoryCycling.WorldGen.Editor
         public static Color32[] ReadPixels(Texture2D tex, out int w, out int h)
         {
             w = tex.width; h = tex.height;
-            string path = AssetDatabase.GetAssetPath(tex);
+#if UNITY_EDITOR
+            string path = Application.isPlaying ? null : UnityEditor.AssetDatabase.GetAssetPath(tex);
+#else
+            string path = null;
+#endif
             if (!string.IsNullOrEmpty(path) && path.EndsWith(".png", System.StringComparison.OrdinalIgnoreCase) && File.Exists(path))
             {
                 var t = new Texture2D(2, 2, TextureFormat.RGBA32, false, false);
@@ -159,11 +162,13 @@ namespace StoryCycling.WorldGen.Editor
             else
             {
                 // Rückfall: die Synty-Atlas-Varianten (Materials/Alts/PolygonCity_0x_A/B/C) färben den ganzen Atlas anders.
-                foreach (string guid in AssetDatabase.FindAssets("PolygonCity_0 t:Material"))
+#if UNITY_EDITOR
+                foreach (string guid in UnityEditor.AssetDatabase.FindAssets("PolygonCity_0 t:Material"))
                 {
-                    var m = AssetDatabase.LoadAssetAtPath<Material>(AssetDatabase.GUIDToAssetPath(guid));
+                    var m = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>(UnityEditor.AssetDatabase.GUIDToAssetPath(guid));
                     if (m != null && System.Text.RegularExpressions.Regex.IsMatch(m.name, @"^PolygonCity_0[1-4]_[ABC]$")) { variants.Add(m); weights.Add(1f); names.Add(m.name); }
                 }
+#endif
                 Debug.LogWarning($"Autolack: keine Lack-Pixel im Atlas gefunden — Rückfall auf {variants.Count} Synty-Atlas-Varianten.");
             }
             set.variants = variants.ToArray(); set.weights = weights.ToArray(); set.names = names.ToArray();

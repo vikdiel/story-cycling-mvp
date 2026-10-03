@@ -233,7 +233,7 @@ namespace StoryCycling.WorldGen.Editor
                 float centerDist = float.MaxValue;
                 foreach (var p in coarse) centerDist = Mathf.Min(centerDist, (p - c).sqrMagnitude);
                 float rectDist = Mathf.Max(0f, Mathf.Sqrt(centerDist) - halfDiag);
-                if (rectDist > DemFetcher.Margin) continue;
+                if (rectDist > DemGrid.FetchMargin) continue;
 
                 float cell = rectDist < NearRectDistance ? 5f : rectDist < 700f ? 10f : rectDist < 2000f ? 20f : 40f;
                 Mesh mesh = BuildChunk(x0, z0, cell, cell <= 5f, near, out bool allUnderwater);

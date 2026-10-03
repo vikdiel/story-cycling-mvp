@@ -11,6 +11,7 @@ namespace StoryCycling.WorldGen.Editor
     // Datei: gzip( "SCDEM1" | w | h | minX | minZ | cell | lat0 | lon0 | short[w*h] Dezimeter ).
     public sealed class DemGrid
     {
+        public const float FetchMargin = 5000f;    // Gelände rund um die Route (Berge im Hintergrund!) — DemFetcher holt so viel, WorldTerrain nutzt es
         public int Width, Height;
         public float MinX, MinZ, Cell;
         public double OriginLat, OriginLon;

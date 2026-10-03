@@ -27,11 +27,12 @@ namespace StoryCycling.WorldGen.Editor
         [MenuItem("Story Cycling/WorldGen/Build Nordhoek GPX Ride")]
         public static void BuildNordhoek() => Build(RouteWorldConfig.LoadOrCreateDefault());
 
-        // Baut die Welt für eine beliebige Strecke (RouteWorldConfig).
+        // Baut die Szene einer beliebigen Strecke (RouteWorldConfig). Die Welt selbst (Gelände, Straßen, Gebäude, Vegetation) entsteht mit
+        // RouteWorldBuild — hier im Editor (als Assets gespeichert) oder, mit 'buildWorldOnDevice', erst beim Start auf dem Gerät (RuntimeWorldBuilder).
         public static void Build(RouteWorldConfig cfg)
         {
             Cfg = cfg;
-            string GpxPath = cfg.gpxPath, OsmPath = cfg.osmPath, ScenePath = cfg.scenePath;
+            string GpxPath = cfg.gpxPath, ScenePath = cfg.scenePath;
             OutDir = "Assets/StoryCycling/Generated/" + cfg.routeName;
             if (EditorApplication.isPlaying) throw new InvalidOperationException("Stop Play Mode first.");
             if (!Application.isBatchMode && !EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
@@ -44,208 +45,32 @@ namespace StoryCycling.WorldGen.Editor
             AssetDatabase.Refresh();
             assetId = 0;
             meshStore = null;
-            OsmDetailPlacer.LastParked.Clear();
             AssetDatabase.DeleteAsset(MeshStorePath);
             AssetDatabase.DeleteAsset("Assets/StoryCycling/GeneratedGpx/NordhoekWorldMeshes.asset");   // Altlast (mehrere GB Text)
 
             try
             {
-                Progress("GPX + Gelände laden", .02f);
-                var pts = GpxParser.Parse(File.ReadAllText(GpxPath));
-                var dem = DemGrid.Load(cfg.demPath);
-                if (!dem.MatchesOrigin(pts[0]))
-                    Debug.LogWarning("DEM wurde für einen anderen GPX-Start erzeugt — bitte 'Fetch DEM' neu ausführen.");
-                OsmContext osm = File.Exists(OsmPath) ? OsmContext.Load(File.ReadAllText(OsmPath), pts[0]) : null;
-                if (osm == null) Debug.LogWarning("OSM fehlt — erst 'Fetch OSM'. Gebäude/Details/Biome werden übersprungen.");
-
-                // Fahrlinie: auf das OSM-Straßennetz gelegt (eine Straße für Hin/Rück, saubere Einmündungen)
-                Progress("Route auf OSM-Straßennetz legen", .04f);
-                float ele0 = (float)pts[0].Ele, seaY = -ele0 + WorldTerrain.SeaLevelOffset;
-                RouteMatcher.Result matched = null;
-                if (cfg.useOsmRoadNetwork && osm != null && osm.Streets.Count > 0)
-                {
-                    double lat0 = pts[0].Lat * Math.PI / 180.0, lon0 = pts[0].Lon * Math.PI / 180.0, Re = 6371000.0;
-                    Func<float, float, bool> inZone = (x, z) =>
-                    {
-                        if (cfg.wideShoulderZones == null || cfg.wideShoulderZones.Length == 0) return true;
-                        double lat = (lat0 + z / Re) * 180.0 / Math.PI, lon = (lon0 + x / (Re * Math.Cos(lat0))) * 180.0 / Math.PI;
-                        foreach (var zb in cfg.wideShoulderZones)
-                            if (lat >= zb.minLat && lat <= zb.maxLat && lon >= zb.minLon && lon <= zb.maxLon) return true;
-                        return false;
-                    };
-                    matched = RouteMatcher.Match(GpxParser.ProjectToLocalMeters(pts), osm, (x, z) => dem.Sample(x, z) - ele0, seaY,
-                                                 new System.Text.RegularExpressions.Regex(cfg.wideShoulderRoads), inZone);
-                    Debug.Log($"Map-Matching: {matched.MatchedShare:P0} der GPX-Spur auf OSM-Straßen, {matched.WaysUsed} Wege, {matched.Points.Count} Punkte.");
-                    if (matched.MatchedShare < .85f || matched.Points.Count < 10)
-                    { Debug.LogWarning("Map-Matching unvollständig — nutze die GPX-Linie."); matched = null; }
-                }
-                var spline = new RouteSpline();
-                RoadField road;
-                // Straßennetz: Route + Querstraßen als ein Modell mit echten Kreuzungen (Fahrlinie liegt darauf)
-                RoadNet net = null;
-                List<Vector2[]> o2sJunctions = null;
-                List<Vector3> driveLine = null;
-                if (matched != null && cfg.useRoadNetwork)
-                {
-                    Progress("Straßennetz & Kreuzungen", .05f);
-                    var centroids = new List<Vector2>(); foreach (var b in osm.Buildings) centroids.Add(b.centroid);
-                    // Querstraßen auf das an die Route angepasste Höhenmodell setzen (wie das Gelände)
-                    var demFix = new DemCorrection(dem, ele0, matched.Points);
-                    net = RoadNet.Build(osm, matched.Points, (x, z) => dem.Sample(x, z) - ele0 - demFix.At(x, z),
-                                        new System.Text.RegularExpressions.Regex(cfg.wideShoulderRoads), centroids,
-                                        cfg.roadRules, cfg.WideShoulderZone(pts[0].Lat, pts[0].Lon));
-                    // osm2streets-Fahrbahnflächen (optionales Zusatzwerkzeug, siehe Tools/osm2streets/README.md):
-                    // robuster für Doppelfahrbahnen, "Dog-Leg"-Kreuzungen, Kreisverkehre mit Bypass-Spuren als
-                    // unsere eigene Ecken-Konstruktion. Fehlt node/npm install, baut die Pipeline automatisch
-                    // ohne weiter — nie blockierend.
-                    if (cfg.useOsm2StreetsJunctions)
-                    {
-                        string o2sOut = cfg.Osm2StreetsPath;
-                        if (Osm2StreetsGeometry.NeedsRefresh(cfg.gpxPath, cfg.osmPath, o2sOut) &&
-                            Osm2StreetsGeometry.TryRun(cfg.gpxPath, cfg.osmPath, o2sOut, out string o2sMsg))
-                            Debug.Log(o2sMsg);
-                        o2sJunctions = Osm2StreetsGeometry.TryLoad(o2sOut);
-                        Debug.Log(o2sJunctions != null
-                            ? $"osm2streets-Kreuzungsflächen geladen: {o2sJunctions.Count} aus {System.IO.Path.GetFileName(o2sOut)}."
-                            : "osm2streets-Geometrie nicht verfügbar — baue Fahrbahn/Kreuzungen mit der eigenen Flächenvereinigung.");
-                    }
-                    var onNet = RoadNetRoute.Build(net, matched.Points);
-                    Debug.Log($"Straßennetz: {net.Segs.Count} Abschnitte, {net.Junctions.Count} Kreuzungen; Fahrlinie {onNet.OnNetShare:P0} auf dem Netz.");
-                    if (onNet.OnNetShare < .9f) { Debug.LogWarning("Fahrlinie liegt zu wenig auf dem Netz — alter Straßenbau."); net = null; }
-                    else
-                    {
-                        matched.Points = onNet.Points; matched.Lane = onNet.Lane; matched.Half = onNet.Half; matched.Inset = onNet.Inset;
-                        // wo die Fahrlinie kein Netz hat (GPX abseits jeder OSM-Straße): Ersatzfahrbahn — nie ohne Straße
-                        int fb = net.AddRouteFallback(onNet.Points, onNet.Half, onNet.Inset, onNet.OffNet);
-                        if (fb > 0) Debug.Log($"Straßennetz: {fb} Ersatzfahrbahn(en) für Fahrlinien-Stücke ohne OSM-Straße.");
-                        driveLine = onNet.Points;
-                    }
-                }
-                if (matched != null)
-                {
-                    if (!cfg.edgeLinesOnNormalRoads)
-                        for (int i = 0; i < matched.Inset.Count; i++) if (matched.Inset[i] < 1f) matched.Inset[i] = -1f;   // -1 = keine Randlinie
-                    File.WriteAllText(cfg.BakedRoutePath, BakedRoute.Write(matched.Points, matched.Lane, matched.Half, matched.Inset));
-                    spline.Define(matched.Points);
-                    var cum = new float[matched.Points.Count];
-                    for (int i = 1; i < cum.Length; i++) cum[i] = cum[i - 1] + Vector3.Distance(matched.Points[i - 1], matched.Points[i]);
-                    road = new RoadField(spline, d => StyleAt(matched, cum, d / spline.Length * cum[cum.Length - 1]));
-                }
-                else
-                {
-                    if (File.Exists(cfg.BakedRoutePath)) File.Delete(cfg.BakedRoutePath);     // keine veraltete Route zur Laufzeit
-                    spline.Define(RoutePreprocessor.Clean(GpxParser.ProjectToLocalMeters(pts)));
-                    road = new RoadField(spline);
-                }
-                AssetDatabase.Refresh();
-
                 var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
-                Transform world = new GameObject("World").transform;
-                Func<string, Transform> Group = n => { var t = new GameObject(n).transform; t.SetParent(world, false); return t; };
-
-                Progress("Straßen-Index", .06f);
-                var terrain = new WorldTerrain(dem, road, ele0, osm);
-                RouteHeightField.Terrain = terrain.HeightAt;
-
-                // Querstraßen/Kreuzungen/Kreisverkehre VOR dem Gelände: sie schneiden sich mit ein.
-                Progress("Querstraßen & Kreisverkehre", .08f);
-                var streets = net != null ? StreetNetwork.FromNet(net, osm, terrain) : StreetNetwork.Build(osm, road, terrain);
-                terrain.Streets = streets.Field;
-
-                // Landbedeckung (ESA WorldCover) + OSM + Gelände -> Ökotope; Geländefarbe und Vegetation lesen dieselbe Karte.
-                Progress("Landbedeckung & Ökotope", .09f);
-                LandCoverGrid landCover = LoadLandCover(cfg, pts[0]);
-                EcotopeMap eco = EcotopeMap.Build(terrain, osm, landCover);
-                Debug.Log("Ökotope (Streifen 800 m um die Route): " + eco.CoverageText(800f) + (landCover == null ? " [ohne Landbedeckung: OSM + Gelände-Heuristik]" : " [mit ESA WorldCover]"));
-
-                Progress("Gelände einfärben", .1f);
-                Texture2D terrainTex = SaveTexture(terrain.BuildColorTexture(eco), OutDir + "/TerrainColors.png", false, 4096);
-                Material terrainMat = Mat("GpxTerrain", Color.white, .06f, terrainTex);
-                // Detailtextur (Bodenkorn, 6-m-Kachel) multipliziert über die 10-m-Farbtextur: im Nahbereich keine glatte Fläche mehr
-                Texture2D detailTex = SaveTexture(TerrainPaint.BuildDetail(256), OutDir + "/TerrainDetail.png", true, 256);
-                Vector2 ext = terrain.ColorTextureExtent;
-                terrainMat.EnableKeyword("_DETAIL_MULX2");
-                terrainMat.SetTexture("_DetailAlbedoMap", detailTex);
-                terrainMat.SetTextureScale("_DetailAlbedoMap", new Vector2(ext.x / 6f, ext.y / 6f));
-                terrainMat.SetFloat("_DetailAlbedoMapScale", 1f);
-                EditorUtility.SetDirty(terrainMat);
-
-                Progress("Gelände-Kacheln", .2f);
-                terrain.BuildChunks(Group("Terrain"), terrainMat, SaveMesh);
-                terrain.BuildWater(world, OceanMaterial(), SaveMesh);
-
-                Progress("Straßen", .4f);
-                Texture2D asphaltTex = SaveTexture(AsphaltTexture(), OutDir + "/Asphalt.png", true, 512);
-                var roadMats = new RoadMaterials
-                {
-                    Asphalt = Mat("GpxAsphalt", Color.white, .18f, asphaltTex),
-                    Shoulder = Mat("GpxShoulder", new Color(.62f, .45f, .33f), .05f),       // rotbrauner Schotter wie am Kap
-                    Yellow = Mat("GpxLineYellow", new Color(.95f, .76f, .18f), .3f),
-                    White = Mat("GpxLineWhite", new Color(.95f, .95f, .92f), .3f),
-                    Rail = Mat("GpxGuardrail", new Color(.74f, .76f, .78f), .55f, null, .6f),
-                    Sidewalk = Mat("GpxSidewalk", new Color(.72f, .71f, .68f), .08f),
-                    IslandGrass = Mat("GpxIslandGrass", new Color(.33f, .50f, .22f), .05f),
-                };
-                Transform streetGroup = Group("Streets");
-                RoadSurface.Result roadSurface = null;
-                if (net != null)
-                {
-                    // EIN Generator für Route, Querstraßen und Kreuzungen; Leitplanken weiterhin entlang der Route
-                    var surf = RoadNetMesher.Build(net, Group("Road"), roadMats, SaveMesh,
-                        t => !Application.isBatchMode && EditorUtility.DisplayCancelableProgressBar("Nordhoek bauen", $"Straßenoberfläche {t:P0}", t),
-                        o2sJunctions);
-                    if (cfg.buildGalleries) GalleryBuilder.Build(net, (x, z) => dem.Sample(x, z) - ele0, Group("Galleries"), roadMats, SaveMesh);
-                    roadSurface = surf;
-                    WorldCheck.Run(net, driveLine, surf, osm);
-                    new RoadMeshBuilder(road, terrain).Build(Group("Guardrails"), roadMats, streets, SaveMesh, railsOnly: true);
-                    // Kreisverkehr-Inseln ergeben sich aus der vereinigten Fläche (Loch im Asphalt) -> kein Extra-Mesh
-                    if (!RoadNetMesher.UseSurfaceUnion) StreetMeshBuilder.BuildIslandsOnly(streets, road, streetGroup, roadMats, SaveMesh);
-                }
-                else
-                {
-                    new RoadMeshBuilder(road, terrain).Build(Group("Road"), roadMats, streets, SaveMesh);
-                    StreetMeshBuilder.Build(streets, terrain, road, streetGroup, roadMats, SaveMesh);
-                }
-
-                var occupied = new Occupancy();
-                foreach (var isl in streets.Islands) occupied.Add(isl.Center.x, isl.Center.z, isl.Radius + 1f);
-                Progress("Landmarks", .5f);
-                PlaceLandmarks(spline, terrain, occupied, Group("Landmarks"));
-
-                CarPaintSet carPaint = null;
                 var catalog = AssetDatabase.LoadAssetAtPath<AssetCatalog>(AssetCatalogBuilder.CatalogPath);
-                if (catalog == null) Debug.LogWarning("WorldGen-Katalog fehlt — erst 'Build Catalog from Synty'. Keine Gebäude/Vegetation.");
-                else
+                RouteWorldResult world = null;
+                if (!cfg.buildWorldOnDevice)
                 {
-                    var assets = WorldAssets.From(catalog);
-                    assets.Log();
-                    // Autolack: Varianten des Atlas (nur Karosserie umgefärbt) für parkende UND fahrende Autos
-                    carPaint = CarPaint.Build(OsmDetailPlacer.CarPrefabs(catalog),
-                        (tex, name) => SaveTexture(tex, OutDir + "/" + name + ".png", false, 1024), m => Save(m));
-                    if (osm != null)
+                    var input = new RouteWorldInputs
                     {
-                        Progress("Gebäude (OSM)", .58f);
-                        PlaceBuildings(osm, terrain, catalog, road, occupied, Group("Buildings"));
-                        Progress("Details (OSM)", .66f);
-                        OsmDetailPlacer.Place(road, terrain, osm, catalog, assets, occupied, Group("StreetDetails"), net, carPaint: carPaint);
-                        RoadSigns.Place(road, terrain, streets, catalog, occupied, Group("RoadSigns"));
-                    }
-                    Progress("Vegetation & Küste", .74f);
-                    VegetationPlacer.PlaceAvenue(terrain, assets, occupied, Group("PalmAvenue"));
-                    VegetationPlacer.PlaceIslands(streets, road, assets, streetGroup);
-                    if (net != null) VegetationPlacer.PlaceMedianPalms(net, assets, occupied, Group("MedianPalms"));
-                    Progress("Pflanzengruppen (Ökotope)", .82f);
-                    var scatterCfg = new ScatterSettings
-                    {
-                        nearEnd = Cfg.vegetationNearDistance, midEnd = Cfg.vegetationMidDistance, farEnd = Cfg.farTreeDistance,
-                        farSilhouettes = Cfg.farTreeDistance > Cfg.vegetationMidDistance, maxFar = Cfg.farTreeMax, density = Cfg.vegetationDensity,
+                        Gpx = cfg.gpxPath, Osm = cfg.osmPath, Dem = cfg.demPath, LandCover = cfg.LandCoverFile,
+                        Osm2StreetsJunctions = cfg.useOsm2StreetsJunctions ? Osm2Streets(cfg) : null,
                     };
-                    var scatter = VegetationScatter.Run(terrain, eco, occupied, scatterCfg);
-                    Debug.Log(scatter.Summary());
-                    VegetationBuilder.Build(scatter, assets, Group("Vegetation"), scatterCfg, SaveMesh, m => Save(m));
-                    VegetationPlacer.PlaceBirds(terrain, assets, Group("Birds"));
-                    VegetationPlacer.PlaceClouds(terrain, assets, Group("Clouds"));
+                    world = new RouteWorldResult();
+                    var it = RouteWorldBuild.Run(cfg, input, catalog, new EditorSink(), world, checks: true);
+                    while (it.MoveNext()) { }
+                    if (world.BakedRoute != null) File.WriteAllText(cfg.BakedRoutePath, world.BakedRoute);
+                    else if (File.Exists(cfg.BakedRoutePath)) File.Delete(cfg.BakedRoutePath);     // keine veraltete Route zur Laufzeit
+                    var sb = new System.Text.StringBuilder($"Weltbau im Editor: {world.TotalSeconds:0.0} s —");
+                    foreach (var kv in world.Timings) sb.Append($" {kv.Key} {kv.Value:0.0} s ·");
+                    Debug.Log(sb.ToString());
                 }
+                else PrepareDeviceBuild(cfg, catalog);
+                AssetDatabase.Refresh();
 
                 Progress("Licht, Himmel, Grading", .9f);
                 var look = cfg.ActiveLighting;
@@ -254,8 +79,11 @@ namespace StoryCycling.WorldGen.Editor
 
                 StoryCycling.Editor.CapeCrownSceneBuilder.Generated = OutDir;
                 Transform rider = StoryCycling.Editor.CapeCrownSceneBuilder.AnimatedCyclist(out Transform[] wheels, out CapeCrownCyclistAnimation animation);
-                Progress("Verkehr", .93f);
-                TrafficSceneBuilder.Build(cfg, net, roadSurface, catalog, carPaint, rider);
+                if (world != null)
+                {
+                    Progress("Verkehr", .93f);
+                    TrafficSceneBuilder.Build(cfg, world.Net, world.Surface, catalog, world.CarPaint, rider);
+                }
                 GameObject camGo = new GameObject("Ride Camera", typeof(Camera), typeof(AudioListener));
                 camGo.tag = "MainCamera";
                 Camera cam = camGo.GetComponent<Camera>();
@@ -288,99 +116,115 @@ namespace StoryCycling.WorldGen.Editor
                 var hudData = new SerializedObject(hud);
                 hudData.FindProperty("gpxRide").objectReferenceValue = director;
                 hudData.ApplyModifiedPropertiesWithoutUndo();
+                if (cfg.buildWorldOnDevice) AddRuntimeBuilder(cfg, catalog, director.gameObject, rider);
 
                 AssetDatabase.SaveAssets();
                 EditorSceneManager.SaveScene(scene, ScenePath);
                 EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(ScenePath, true) };
-                Debug.Log(ScenePath + " saved. GPX ride ready — length " + (spline.Length / 1000f).ToString("0.00") + " km.");
+                Debug.Log(ScenePath + " saved. " + (world != null ? "GPX ride ready — length " + (world.Spline.Length / 1000f).ToString("0.00") + " km."
+                                                                   : "Welt entsteht beim Start auf dem Gerät (Rohdaten: " + cfg.DeviceDataDir + ")."));
             }
             finally
             {
-                RouteHeightField.Terrain = null;
                 EditorUtility.ClearProgressBar();
             }
         }
 
-        // Landbedeckung der Strecke; fehlt/passt sie nicht, baut die Welt mit OSM + Gelände-Heuristik weiter.
-        private static LandCoverGrid LoadLandCover(RouteWorldConfig cfg, GeoPoint origin)
+        // osm2streets-Kreuzungsflächen (optionales Node-Werkzeug, siehe Tools/osm2streets/README.md) — nur im Editor
+        private static List<Vector2[]> Osm2Streets(RouteWorldConfig cfg)
         {
-            string path = cfg.LandCoverFile;
-            if (!File.Exists(path))
-            {
-                Debug.LogWarning($"Landbedeckung fehlt ({path}) — erst 'Story Cycling/WorldGen/Fetch Land Cover for Selected Route' ausführen. Bis dahin: OSM + Gelände-Heuristik (weniger genau).");
-                return null;
-            }
-            try
-            {
-                var g = LandCoverGrid.Load(path);
-                if (!g.MatchesOrigin(origin))
-                {
-                    Debug.LogWarning("Landbedeckung wurde für einen anderen GPX-Start erzeugt — bitte 'Fetch Land Cover' neu ausführen. Nutze OSM + Gelände-Heuristik.");
-                    return null;
-                }
-                Debug.Log($"Landbedeckung geladen: {g.Width}×{g.Height} @ {g.Cell} m (ESA WorldCover 10 m 2021, CC BY 4.0).");
-                return g;
-            }
-            catch (Exception e)
-            {
-                Debug.LogWarning("Landbedeckung nicht lesbar (" + e.Message + ") — nutze OSM + Gelände-Heuristik.");
-                return null;
-            }
+            string o2sOut = cfg.Osm2StreetsPath;
+            if (Osm2StreetsGeometry.NeedsRefresh(cfg.gpxPath, cfg.osmPath, o2sOut) &&
+                Osm2StreetsGeometry.TryRun(cfg.gpxPath, cfg.osmPath, o2sOut, out string o2sMsg))
+                Debug.Log(o2sMsg);
+            var j = Osm2StreetsGeometry.TryLoad(o2sOut);
+            Debug.Log(j != null ? $"osm2streets-Kreuzungsflächen geladen: {j.Count} aus {Path.GetFileName(o2sOut)}."
+                                : "osm2streets-Geometrie nicht verfügbar — baue Fahrbahn/Kreuzungen mit der eigenen Flächenvereinigung.");
+            return j;
         }
 
-        private static Vector2 StyleAt(RouteMatcher.Result r, float[] cum, float x)
+        // ------------------------------------------------------------------ Weltbau auf dem Gerät
+        // Rohdaten nach StreamingAssets/WorldGen/<Route>, alte gebackene Dateien weg, Instancing an den Katalog-Materialien (sonst fehlt die
+        // Instancing-Variante im Build und die Vegetation bleibt unsichtbar), URP-Lit-Vorlage mit Detail-Variante.
+        private static void PrepareDeviceBuild(RouteWorldConfig cfg, AssetCatalog catalog)
         {
-            int lo = 0, hi = cum.Length - 1;
-            while (hi - lo > 1) { int mid = (lo + hi) / 2; if (cum[mid] <= x) lo = mid; else hi = mid; }
-            float t = cum[hi] > cum[lo] ? Mathf.Clamp01((x - cum[lo]) / (cum[hi] - cum[lo])) : 0f;
-            return new Vector2(Mathf.Lerp(r.Half[lo], r.Half[hi], t), Mathf.Lerp(r.Inset[lo], r.Inset[hi], t));
+            string dir = cfg.DeviceDataDir;
+            Directory.CreateDirectory(dir);
+            File.Copy(cfg.gpxPath, dir + "/route.gpx", true);
+            File.Copy(cfg.demPath, dir + "/dem.bytes", true);
+            if (File.Exists(cfg.osmPath)) File.Copy(cfg.osmPath, dir + "/osm.xml", true); else Debug.LogWarning("OSM fehlt — die Welt auf dem Gerät hat keine Gebäude/Details.");
+            if (File.Exists(cfg.LandCoverFile)) File.Copy(cfg.LandCoverFile, dir + "/landcover.bytes", true); else Debug.LogWarning("Landbedeckung fehlt — Gerät nutzt OSM + Gelände-Heuristik.");
+            foreach (string stale in new[] { cfg.BakedRoutePath, cfg.BakedTrafficPath }) if (File.Exists(stale)) AssetDatabase.DeleteAsset(stale);
+            int changed = 0;
+            if (catalog != null && catalog.entries != null)
+                foreach (var e in catalog.entries)
+                {
+                    if (e == null || e.prefab == null) continue;
+                    foreach (var r in e.prefab.GetComponentsInChildren<Renderer>(true))
+                        foreach (var m in r.sharedMaterials)
+                            if (m != null && !m.enableInstancing && AssetDatabase.Contains(m)) { m.enableInstancing = true; EditorUtility.SetDirty(m); changed++; }
+                }
+            if (changed > 0) Debug.Log($"Weltbau auf dem Gerät: GPU-Instancing an {changed} Katalog-Materialien eingeschaltet.");
+            long bytes = 0; foreach (var f in Directory.GetFiles(dir)) if (!f.EndsWith(".meta")) bytes += new FileInfo(f).Length;
+            Debug.Log($"Weltbau auf dem Gerät: Rohdaten in {dir} ({bytes / 1048576f:0.0} MB).");
+        }
+
+        private static void AddRuntimeBuilder(RouteWorldConfig cfg, AssetCatalog catalog, GameObject host, Transform rider)
+        {
+            var template = new Material(Shader.Find("Universal Render Pipeline/Lit")) { name = "GpxLitTemplate" };
+            template.EnableKeyword("_DETAIL_MULX2");
+            template.SetTexture("_DetailAlbedoMap", SaveTexture(TerrainPaint.BuildDetail(64), OutDir + "/TemplateDetail.png", true, 64));
+            template = Save(template);
+            var rb = host.AddComponent<RuntimeWorldBuilder>();
+            var so = new SerializedObject(rb);
+            so.FindProperty("config").objectReferenceValue = cfg;
+            so.FindProperty("catalog").objectReferenceValue = catalog;
+            so.FindProperty("litTemplate").objectReferenceValue = template;
+            so.FindProperty("oceanSource").objectReferenceValue = FindOceanSource();
+            so.FindProperty("rider").objectReferenceValue = rider;
+            var names = so.FindProperty("landmarkNames"); var prefabs = so.FindProperty("landmarks");
+            names.arraySize = prefabs.arraySize = RouteWorldBuild.Landmarks.Length;
+            for (int i = 0; i < RouteWorldBuild.Landmarks.Length; i++)
+            {
+                string n = RouteWorldBuild.Landmarks[i].name;
+                names.GetArrayElementAtIndex(i).stringValue = n;
+                prefabs.GetArrayElementAtIndex(i).objectReferenceValue = AssetDatabase.LoadAssetAtPath<GameObject>(LandmarkPath(n));
+            }
+            so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        private static string LandmarkPath(string name) => "Assets/WorldAssets/Landmarks/" + name + ".prefab";
+
+        private static Material FindOceanSource()
+        {
+            foreach (string guid in AssetDatabase.FindAssets("Water_Ocean_Day t:Material"))
+            {
+                var m = AssetDatabase.LoadAssetAtPath<Material>(AssetDatabase.GUIDToAssetPath(guid));
+                if (m != null) return m;
+            }
+            return null;
+        }
+
+        // Ausgabe des Weltbaus im Editor: alles als Assets unter OutDir (Meshes gebündelt in einer Datei)
+        private sealed class EditorSink : IWorldSink
+        {
+            public Mesh Mesh(Mesh mesh) => SaveMesh(mesh);
+            public Texture2D Texture(Texture2D tex, string name, bool repeat, int maxSize) => SaveTexture(tex, OutDir + "/" + name + ".png", repeat, maxSize);
+            public T Asset<T>(T asset) where T : UnityEngine.Object => Save(asset);
+            public Material NewLit()
+            {
+                Shader shader = Shader.Find("Universal Render Pipeline/Lit");
+                if (shader == null) throw new InvalidOperationException("URP Lit shader unavailable.");
+                return new Material(shader);
+            }
+            public Material OceanSource() => FindOceanSource();
+            public GameObject Landmark(string name) => AssetDatabase.LoadAssetAtPath<GameObject>(LandmarkPath(name));
+            public void Progress(string what, float t) => GpxSceneBuilder.Progress(what, t);
         }
 
         private static void Progress(string what, float t)
         {
-            if (!Application.isBatchMode) EditorUtility.DisplayProgressBar("Nordhoek bauen", what, t);
-        }
-
-        // ------------------------------------------------------------------ Landmarks
-        private static void PlaceLandmarks(RouteSpline spline, WorldTerrain terrain, Occupancy occupied, Transform parent)
-        {
-            // Ungefähre Distanzen entlang der Route; mit echten km-Markern verfeinerbar.
-            var landmarks = new (string name, float frac)[]
-            {
-                ("Landmark_HoutBayHarbour", .28f), ("Landmark_EastFort", .36f), ("Landmark_ChapmansLookout", .40f),
-                ("Landmark_KakapoShipwreck", .52f), ("Landmark_SlangkopLighthouse", .60f), ("Landmark_ConstantiaManor", .88f)
-            };
-            foreach (var lm in landmarks)
-            {
-                string path = "Assets/WorldAssets/Landmarks/" + lm.name + ".prefab";
-                var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
-                if (prefab == null) { Debug.LogWarning("Landmark missing: " + path); continue; }
-                float d = lm.frac * spline.Length;
-                Vector3 p = spline.SamplePosition(d);
-                Vector3 t = spline.SampleTangent(d); t.y = 0f; t.Normalize();
-                Vector3 right = Vector3.Cross(Vector3.up, t).normalized;
-
-                var go = (GameObject)PrefabUtility.InstantiatePrefab(prefab, parent);
-                go.name = lm.name;
-                go.transform.SetPositionAndRotation(p, Quaternion.LookRotation(t, Vector3.up));
-                Bounds b = WorldPlacement.BoundsOf(go);
-                float half = Mathf.Max(b.extents.x, b.extents.z);
-                float offset = Mathf.Max(16f, half + RoadMeshBuilder.HalfWidth + 4f);
-
-                // Seite mit dem flacheren Gelände (nicht in die Klippe, nicht ins Meer).
-                Vector3 l = p - right * offset, r = p + right * offset;
-                float dl = Mathf.Abs(terrain.HeightAt(l.x, l.z) - p.y) + (terrain.DemY(l.x, l.z) < terrain.SeaY + 1f ? 100f : 0f);
-                float dr = Mathf.Abs(terrain.HeightAt(r.x, r.z) - p.y) + (terrain.DemY(r.x, r.z) < terrain.SeaY + 1f ? 100f : 0f);
-                Vector3 target = dl < dr ? l : r;
-
-                // Mitte der Bounds auf das Ziel schieben, Unterkante auf den tiefsten Geländepunkt.
-                go.transform.position += new Vector3(target.x - b.center.x, 0f, target.z - b.center.z);
-                b = WorldPlacement.BoundsOf(go);
-                float ground = terrain.LowestUnder(b.center, Vector3.right, Vector3.forward, b.extents.x, b.extents.z);
-                go.transform.position += Vector3.up * (ground - .2f - b.min.y);
-                foreach (var c in go.GetComponentsInChildren<Collider>()) c.enabled = false;
-                occupied.Add(b.center.x, b.center.z, half + 3f);
-            }
+            if (!Application.isBatchMode) EditorUtility.DisplayProgressBar("Welt bauen", what, t);
         }
 
         // ------------------------------------------------------------------ Licht & Stimmung
@@ -458,120 +302,6 @@ namespace StoryCycling.WorldGen.Editor
             volume.sharedProfile = profile;
         }
 
-        // Gebäude-Modus:
-        //   Synty      = Häuser aus dem PolygonCity-Baukasten (Etagen/Ecken/Türen/Läden/Dach) nach OSM-Grundriss
-        //   Procedural = eigene verputzte Kap-Häuser aus den OSM-Grundrissen
-        //   Offices    = alte Variante mit fertigen Synty-Bürotürmen
-        private enum BuildingMode { Synty, Procedural, Offices }
-        private const BuildingMode Buildings = BuildingMode.Synty;
-
-        // Erste Reihe an der Route (≤ 55 m): gemischt Synty-Baukasten (~70 %) und verputzte Villen.
-        // Dahinter: einfache prozedurale Häuser aus OSM-Grundrissen, dann Hintergrund-Füllung der Wohngebiete.
-        private static float FrontRow => Cfg != null ? Cfg.frontRowDistance : 55f;
-
-        private static void PlaceBuildings(OsmContext osm, WorldTerrain terrain, AssetCatalog catalog, RoadField road,
-                                           Occupancy occupied, Transform parent)
-        {
-            if (Buildings == BuildingMode.Offices) { OsmBuildingPlacer.Place(road, terrain, osm, catalog, occupied, parent); return; }
-            var mats = HouseMaterials();
-            var built = new HashSet<OsmContext.Building>();
-            // Große/hohe Gebäude (Wohntürme, Geschäftshäuser) teils als Synty-Glas-/Bürobauten: die Mischung macht's
-            System.Func<OsmContext.Building, bool> tower = b =>
-                (b.heightTagged && b.heightM >= 12f || Mathf.Abs(b.area) >= 450f &&
-                 (b.kind == "apartments" || b.kind == "commercial" || b.kind == "office" || b.kind == "retail" || b.kind == "hotel")) &&
-                HashPercent(b.centroid + Vector2.one * 3.7f) < Cfg.glassTowerShare;
-            OsmBuildingPlacer.Place(road, terrain, osm, catalog, occupied, parent, tower, built);
-            if (Buildings == BuildingMode.Synty)
-            {
-                var kit = SyntyModularBuildings.LoadKit(catalog);
-                if (kit.Complete)
-                {
-                    System.Func<OsmContext.Building, bool> frontRow = b => !built.Contains(b) &&
-                        road.Distance(b.centroid.x, b.centroid.y, FrontRow + 1f) <= FrontRow && HashPercent(b.centroid) < Cfg.syntyModularShare;
-                    SyntyModularBuildings.Build(osm, terrain, occupied, kit, mats.Plinth,
-                                                Mat("HouseFar", new Color(.80f, .70f, .60f), .05f), parent, SaveMesh, frontRow, built);
-                }
-                else Debug.LogWarning("PolygonCity-Baukasten unvollständig im Katalog — nur prozedurale Häuser.");
-            }
-            ProceduralHouses.Build(osm, terrain, occupied, parent, mats, SaveMesh, b => !built.Contains(b));
-            if (Cfg.backgroundFill) ProceduralHouses.BuildFill(terrain, occupied, parent, mats, SaveMesh);
-        }
-
-        private static int HashPercent(Vector2 c)
-        {
-            unchecked { uint h = (uint)Mathf.RoundToInt(c.x * 7f) * 2654435761u ^ (uint)Mathf.RoundToInt(c.y * 7f) * 40503u; h ^= h >> 15; return (int)(h % 100u); }
-        }
-
-        private static ProceduralHouses.Materials HouseMaterials()
-        {
-            Texture2D facade = SaveTexture(ProceduralHouses.FacadeTexture(), OutDir + "/Facade.png", true, 256);
-            return new ProceduralHouses.Materials
-            {
-                Walls = new[]
-                {
-                    Mat("HouseWhite", new Color(.96f, .95f, .92f), .08f, facade),
-                    Mat("HouseCream", new Color(.95f, .89f, .76f), .08f, facade),
-                    Mat("HouseGrey", new Color(.84f, .84f, .82f), .08f, facade),
-                    Mat("HouseSand", new Color(.90f, .82f, .68f), .08f, facade),
-                },
-                RoofTile = Mat("RoofTerracotta", new Color(.68f, .34f, .23f), .12f),
-                RoofDark = Mat("RoofCharcoal", new Color(.28f, .29f, .31f), .15f),
-                RoofFlat = Mat("RoofFlat", new Color(.66f, .66f, .64f), .05f),
-                Plinth = Mat("HousePlinth", new Color(.60f, .58f, .54f), .05f),
-            };
-        }
-
-        // ------------------------------------------------------------------ Meer
-        // Wasser-Shader aus POLYGON Nature Biomes (Wellen, Uferschaum, Tiefenfarbe); Farben ans
-        // kühlere Atlantikwasser am Kap angepasst. Ohne Pack: schlichtes URP-Lit-Wasser.
-        private static Material OceanMaterial()
-        {
-            Material source = null;
-            foreach (string guid in AssetDatabase.FindAssets("Water_Ocean_Day t:Material"))
-            {
-                source = AssetDatabase.LoadAssetAtPath<Material>(AssetDatabase.GUIDToAssetPath(guid));
-                if (source != null) break;
-            }
-            if (source == null)
-            {
-                Debug.LogWarning("Water_Ocean_Day (Nature Biomes) nicht gefunden — einfaches Wasser.");
-                return Mat("GpxOcean", new Color(.05f, .33f, .45f), .82f);
-            }
-            var mat = new Material(source) { name = "GpxOceanCape" };
-            SetColorIfPresent(mat, "_Very_Deep_Color", new Color(.03f, .25f, .38f));
-            SetColorIfPresent(mat, "_Water_Very_Deep_Color", new Color(.02f, .22f, .34f));
-            SetColorIfPresent(mat, "_Distant_Water_Color", new Color(.02f, .16f, .28f));
-            SetColorIfPresent(mat, "_Deep_Color", new Color(.10f, .42f, .48f));
-            return Save(mat);
-        }
-
-        private static void SetColorIfPresent(Material m, string prop, Color c)
-        {
-            if (m.HasProperty(prop)) m.SetColor(prop, c);
-        }
-
-        // ------------------------------------------------------------------ Assets
-        private static Texture2D AsphaltTexture()
-        {
-            const int n = 256;
-            var rng = new System.Random(99);
-            var px = new Color32[n * n];
-            for (int y = 0; y < n; y++)
-            for (int x = 0; x < n; x++)
-            {
-                // kachelbar: Sinus-Wolken + Körnung
-                float u = x / (float)n * Mathf.PI * 2f, v = y / (float)n * Mathf.PI * 2f;
-                float cloud = .5f + .25f * Mathf.Sin(u * 2f + Mathf.Sin(v * 3f)) * Mathf.Cos(v * 2f + Mathf.Sin(u));
-                float grain = (float)rng.NextDouble();
-                float g = .20f + cloud * .05f + (grain - .5f) * .07f + (grain > .985f ? .12f : 0f);
-                px[y * n + x] = new Color(g, g * 1.02f, g * 1.06f, 1f);
-            }
-            var tex = new Texture2D(n, n, TextureFormat.RGBA32, true) { name = "Asphalt" };
-            tex.SetPixels32(px);
-            tex.Apply();
-            return tex;
-        }
-
         private static Texture2D SaveTexture(Texture2D tex, string path, bool repeat, int maxSize)
         {
             File.WriteAllBytes(path, tex.EncodeToPNG());
@@ -600,17 +330,6 @@ namespace StoryCycling.WorldGen.Editor
             }
             AssetDatabase.AddObjectToAsset(mesh, meshStore);
             return mesh;
-        }
-
-        private static Material Mat(string name, Color color, float smoothness, Texture2D baseMap = null, float metallic = 0f)
-        {
-            Shader shader = Shader.Find("Universal Render Pipeline/Lit");
-            if (shader == null) throw new InvalidOperationException("URP Lit shader unavailable.");
-            var mat = new Material(shader) { name = name, color = color };
-            mat.SetFloat("_Smoothness", smoothness);
-            mat.SetFloat("_Metallic", metallic);
-            if (baseMap != null) { mat.SetTexture("_BaseMap", baseMap); mat.mainTexture = baseMap; }
-            return Save(mat);
         }
 
         private static T Save<T>(T asset) where T : UnityEngine.Object

@@ -23,22 +23,26 @@ namespace StoryCycling
             string path = Path.Combine(Application.streamingAssetsPath, streamingAssetsRelPath);
             string baked = Path.ChangeExtension(path, ".route.txt");
             laneAt = null; cumDist = null;
-            if (File.Exists(baked) && BakedRoute.TryRead(File.ReadAllText(baked), out var bp, out var lanes))
-            {
-                Spline = new RouteSpline();
-                Spline.Define(bp);
-                laneAt = lanes.ToArray();
-                cumDist = new float[bp.Count];
-                for (int i = 1; i < bp.Count; i++) cumDist[i] = cumDist[i - 1] + Vector3.Distance(bp[i - 1], bp[i]);
-                Debug.Log($"GpxRide: gebackene OSM-Route {bp.Count} Punkte, {Spline.Length / 1000f:0.00} km");
-                return;
-            }
+            if (File.Exists(baked) && LoadBaked(File.ReadAllText(baked))) return;
             if (!File.Exists(path)) { Debug.LogError("GPX not found: " + path); Spline = null; return; }
             var pts = GpxParser.Parse(File.ReadAllText(path));
             var local = RoutePreprocessor.Clean(GpxParser.ProjectToLocalMeters(pts));
             Spline = new RouteSpline();
             Spline.Define(local);
             Debug.Log($"GpxRide loaded {local.Count} points, {Spline.Length / 1000f:0.00} km");
+        }
+
+        // Fahrlinie aus dem BakedRoute-Text (Datei oder Weltbau auf dem Gerät); false = nicht lesbar
+        public static bool LoadBaked(string text)
+        {
+            if (string.IsNullOrEmpty(text) || !BakedRoute.TryRead(text, out var bp, out var lanes)) return false;
+            Spline = new RouteSpline();
+            Spline.Define(bp);
+            laneAt = lanes.ToArray();
+            cumDist = new float[bp.Count];
+            for (int i = 1; i < bp.Count; i++) cumDist[i] = cumDist[i - 1] + Vector3.Distance(bp[i - 1], bp[i]);
+            Debug.Log($"GpxRide: gebackene OSM-Route {bp.Count} Punkte, {Spline.Length / 1000f:0.00} km");
+            return true;
         }
 
         // Seitlicher Versatz des Fahrers an Streckenposition d (Seitenstreifen bzw. Fahrspur-Rand).

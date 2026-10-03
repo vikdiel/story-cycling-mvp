@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
-using UnityEditor;
 using UnityEngine;
 using UnityEngine.Rendering;
 
@@ -68,7 +67,7 @@ namespace StoryCycling.WorldGen.Editor
         public static GameObject Spawn(GameObject prefab, Transform parent, Vector3 pos, Quaternion rot, float scale,
                                        float groundY, float sink)
         {
-            var go = (GameObject)PrefabUtility.InstantiatePrefab(prefab, parent);
+            var go = WorldSpawn.Spawn(prefab, parent);
             go.name = prefab.name;
             go.transform.SetPositionAndRotation(pos, rot);
             go.transform.localScale = Vector3.one * scale;
